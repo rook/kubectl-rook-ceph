@@ -1,4 +1,4 @@
-<img alt="Rook" src="Documentation/media/logo.svg" width="50%" height="50%">
+<img alt="Rook" src="media/logo.svg" width="50%" height="50%">
 
 # kubectl-rook-ceph
 
