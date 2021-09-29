@@ -6,7 +6,18 @@ Provide common management and troubleshooting tools for the Rook Ceph storage pr
 
 ## Install
 
-TBD
+To install tool without krew
+
+1. Download the [kubectl-rook-ceph.sh](kubectl-rook-ceph.sh)
+2. ```sudo install kubectl-rook-ceph.sh /usr/local/bin/kubectl-rook_ceph```
+
+Now, use the tool with `kubectl`
+
+```console
+# example: `kubectl rook_ceph` as prefix with `ceph` command
+kubectl rook_ceph ceph status
+```
+
 
 ## Commands
 
