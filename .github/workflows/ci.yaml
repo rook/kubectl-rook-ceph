@@ -38,18 +38,27 @@ jobs:
     - name: wait for operator pod to be ready
       run: tests/github-action-helper.sh wait_for_pod_to_be_ready_state
 
+    - name: install krew
+      run: tests/github-action-helper.sh install_krew
+
+    - name: download tool zip file
+      run: |
+        curl -OJL https://github.com/rook/kubectl-rook-ceph/archive/v0.0.1.zip
+        export PATH="${PATH}:${HOME}/.krew/bin"
+        kubectl krew install --manifest=rook-ceph.yaml --archive=kubectl-rook-ceph-0.0.1.zip
+
     - name: Test pluging with ceph commands
       run: |
-        # when we have the kubectl krew plugin available we can use like `kubectl rook-ceph` but for now in local deployment we have to use `kubectl rook_ceph` as kubectl plugin has this limitation.
-        # Doc link to clear the comment above:
-          # https://krew.sigs.k8s.io/docs/developer-guide/develop/naming-guide/
-          # https://kubernetes.io/docs/tasks/extend-kubectl/kubectl-plugins/#naming-a-plugin
-          # https://krew.sigs.k8s.io/docs/developer-guide/distributing-with-krew/
-        sudo install kubectl-rook-ceph.sh /usr/local/bin/kubectl-rook_ceph
-        # run ceph commands with the plugin
-        kubectl rook_ceph ceph status
-        kubectl rook_ceph ceph status -f json
-        kubectl rook_ceph ceph status --format json-pretty
-        kubectl rook_ceph ceph mon dump
-        kubectl rook_ceph ceph mon stat
-        kubectl rook_ceph ceph osd tree
+        export PATH="${PATH}:${HOME}/.krew/bin"
+        # run ceph commands with the krew plugin
+        kubectl rook-ceph ceph status
+        kubectl rook-ceph ceph status -f json
+        kubectl rook-ceph ceph status --format json-pretty
+        kubectl rook-ceph ceph mon dump
+        kubectl rook-ceph ceph mon stat
+        kubectl rook-ceph ceph osd tree
+
+    - name: setup tmate session
+      if: failure()
+      uses: mxschmitt/action-tmate@v3
+      timeout-minutes: 180
