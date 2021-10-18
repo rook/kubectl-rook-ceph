@@ -41,12 +41,6 @@ jobs:
     - name: install krew
       run: tests/github-action-helper.sh install_krew
 
-    - name: download tool zip file
-      run: |
-        curl -OJL https://github.com/rook/kubectl-rook-ceph/archive/v0.0.1.zip
-        export PATH="${PATH}:${HOME}/.krew/bin"
-        kubectl krew install --manifest=rook-ceph.yaml --archive=kubectl-rook-ceph-0.0.1.zip
-
     - name: Test pluging with ceph commands
       run: |
         export PATH="${PATH}:${HOME}/.krew/bin"
