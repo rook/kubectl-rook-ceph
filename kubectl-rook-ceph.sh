@@ -32,13 +32,33 @@ EOF
 }
 
 ceph_command() {
-  kubectl --namespace rook-ceph exec deploy/rook-ceph-operator -- /bin/bash -c "${*} --conf=/var/lib/rook/rook-ceph/rook-ceph.config"
+  if [ $# -ge 2 ]; then
+    kubectl --namespace "$2" exec deploy/rook-ceph-operator -- /bin/bash -c "$1 --conf=/var/lib/rook/$2/$2.config"
+  else
+    kubectl --namespace rook-ceph exec deploy/rook-ceph-operator -- /bin/bash -c "$1 --conf=/var/lib/rook/rook-ceph/rook-ceph.config"
+  fi
 }
 
 main() {
   if [ $# -ge 2 ]; then
-    if [ "$1" = "ceph" ]; then
-      ceph_command "$@"
+    if [[ $* =~ "ceph" ]] && [[ $* =~ "-n"  || $* =~ "--namespace" ]];  then
+      index=0
+      # This loop is interating arguments to read namespace flag and it's value
+      for val in "$@"; do
+        ((++index))
+        if [[ $val == "-n" ]] || [[ $val == "--namespace" ]]; then
+          remove_namespace_arg_from_command="${*:$index:2}"
+          namespace="${*:$index+1:1}"
+          break
+        fi
+      done
+
+      # shellcheck disable=SC2001 # not without sed
+      command=$(echo "$*" | sed s/"$remove_namespace_arg_from_command"//)
+      ceph_command "$command" "$namespace"
+    elif [ "$1" = "ceph" ]; then
+      command="$*"
+      ceph_command "$command"
     fi
   else
     usages

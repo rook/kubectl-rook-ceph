@@ -1,6 +1,15 @@
 name: kubectl plugin test
 on:
+  push:
+    tags:
+      - v*
+    branches:
+      - master
+      - release-*
   pull_request:
+    branches:
+      - master
+      - release-*
 
 defaults:
   run:
@@ -39,9 +48,11 @@ jobs:
       run: tests/github-action-helper.sh wait_for_pod_to_be_ready_state
 
     - name: install krew
+      if: startsWith(github.ref, 'refs/tags/v')
       run: tests/github-action-helper.sh install_krew
 
-    - name: Test pluging with ceph commands
+    - name: Test pluging with ceph commands when tag is pushed
+      if: startsWith(github.ref, 'refs/tags/v')
       run: |
         export PATH="${PATH}:${HOME}/.krew/bin"
         # run ceph commands with the krew plugin
@@ -51,6 +62,24 @@ jobs:
         kubectl rook-ceph ceph mon dump
         kubectl rook-ceph ceph mon stat
         kubectl rook-ceph ceph osd tree
+
+      # This part is required to test during PR as latest changes will not present with krew until next version of tool is released with krew
+    - name: Test pluging with ceph commands
+      run: |
+        # when we have the kubectl krew plugin available we can use like `kubectl rook-ceph` but for now in local deployment we have to use `kubectl rook_ceph` as kubectl plugin has this limitation.
+        # Doc link to clear the comment above:
+          # https://krew.sigs.k8s.io/docs/developer-guide/develop/naming-guide/
+          # https://kubernetes.io/docs/tasks/extend-kubectl/kubectl-plugins/#naming-a-plugin
+          # https://krew.sigs.k8s.io/docs/developer-guide/distributing-with-krew/
+        sudo install kubectl-rook-ceph.sh /usr/local/bin/kubectl-rook_ceph
+        # run ceph commands with the plugin
+        kubectl rook_ceph ceph status
+        kubectl rook_ceph ceph status -f json
+        kubectl rook_ceph ceph status --format json-pretty
+        kubectl rook_ceph ceph mon dump
+        kubectl rook_ceph ceph mon stat
+        kubectl rook_ceph ceph osd tree
+
 
     - name: setup tmate session
       if: failure()
