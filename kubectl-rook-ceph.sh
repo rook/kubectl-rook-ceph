@@ -53,6 +53,12 @@ main() {
         fi
       done
 
+      # Validate if namespace if exists and redirect stderr to stdout in Bash
+      if ! kubectl get namespace "$namespace" >/dev/null 2>&1; then
+        echo "namespace $namespace not found"
+        return
+      fi
+
       # shellcheck disable=SC2001 # not without sed
       command=$(echo "$*" | sed s/"$remove_namespace_arg_from_command"//)
       ceph_command "$command" "$namespace"
