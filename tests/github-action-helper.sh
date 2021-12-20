@@ -27,10 +27,10 @@ use_local_disk() {
 }
 
 deploy_rook() {
-  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/cluster/examples/kubernetes/ceph/common.yaml
-  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/cluster/examples/kubernetes/ceph/crds.yaml
-  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/cluster/examples/kubernetes/ceph/operator.yaml
-  curl https://raw.githubusercontent.com/rook/rook/master/cluster/examples/kubernetes/ceph/cluster-test.yaml -o cluster-test.yaml
+  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/common.yaml
+  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/crds.yaml
+  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/operator.yaml
+  curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/cluster-test.yaml -o cluster-test.yaml
   sed -i "s|#deviceFilter:|deviceFilter: $(lsblk|awk '/14G/ {print $1}'| head -1)|g" cluster-test.yaml
   kubectl create -f cluster-test.yaml
 }
