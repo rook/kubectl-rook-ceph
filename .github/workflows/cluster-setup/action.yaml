@@ -1,0 +1,35 @@
+name: Cluster Setup
+description: Cluster setup for plugin test
+inputs:
+  github-token:
+    description: GITHUB_TOKEN from the calling workflow
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: setup minikube
+      uses: manusa/actions-setup-minikube@v2.4.2
+      with:
+        minikube version: 'v1.23.2'
+        kubernetes version: 'v1.22.2'
+        start args: --memory 6g --cpus=2
+        github token: ${{ inputs.github-token }}
+
+    - name: print k8s cluster status
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run:  |
+        minikube status
+        kubectl get nodes
+
+    - name: use local disk
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: tests/github-action-helper.sh use_local_disk
+
+    - name: deploy rook cluster
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: tests/github-action-helper.sh deploy_rook
+
+    - name: wait for operator pod to be ready
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: tests/github-action-helper.sh wait_for_pod_to_be_ready_state
