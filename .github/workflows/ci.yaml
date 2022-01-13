@@ -8,7 +8,7 @@ defaults:
     shell: bash --noprofile --norc -eo pipefail -x {0}
 
 jobs:
-  Plugin-test:
+  test-with-plugin:
     runs-on: ubuntu-latest
     steps:
     - name: checkout
@@ -16,27 +16,10 @@ jobs:
       with:
         fetch-depth: 0
 
-    - name: setup minikube
-      uses: manusa/actions-setup-minikube@v2.4.2
+    - name: setup cluster
+      uses: ./.github/workflows/cluster-setup
       with:
-        minikube version: 'v1.23.2'
-        kubernetes version: 'v1.22.2'
-        start args: --memory 6g --cpus=2
-        github token: ${{ secrets.GITHUB_TOKEN }}
-
-    - name: print k8s cluster status
-      run:  |
-        minikube status
-        kubectl get nodes
-
-    - name: use local disk
-      run: tests/github-action-helper.sh use_local_disk
-
-    - name: deploy rook cluster
-      run: tests/github-action-helper.sh deploy_rook
-
-    - name: wait for operator pod to be ready
-      run: tests/github-action-helper.sh wait_for_pod_to_be_ready_state
+        github-token: ${{ secrets.GITHUB_TOKEN }}
 
     - name: install krew
       run: tests/github-action-helper.sh install_krew
@@ -48,11 +31,36 @@ jobs:
         kubectl rook-ceph ceph status
         kubectl rook-ceph ceph status -f json
         kubectl rook-ceph ceph status --format json-pretty
-        kubectl rook-ceph ceph mon dump
         kubectl rook-ceph ceph mon stat
-        kubectl rook-ceph ceph osd tree
 
     - name: setup tmate session
       if: failure()
       uses: mxschmitt/action-tmate@v3
       timeout-minutes: 180
+
+  # This test is required to test latest changes or the changes that not present
+  # with current version of rook-ceph krew plugin
+  test-with-pr-changes:
+    runs-on: ubuntu-latest
+    steps:
+    - name: checkout
+      uses: actions/checkout@v2
+      with:
+        fetch-depth: 0
+
+    - name: setup cluster
+      uses: ./.github/workflows/cluster-setup
+      with:
+        github-token: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: install script
+      run: sudo install kubectl-rook-ceph.sh /usr/local/bin/kubectl-rook_ceph
+
+    - name: Test Plugin
+      run: |
+        # run ceph commands with the plugin
+        kubectl rook_ceph ceph status
+        kubectl rook_ceph ceph status -f json
+        kubectl rook_ceph ceph status --format json-pretty
+        # run command operator restart
+        kubectl rook_ceph operator restart
