@@ -34,6 +34,7 @@ function print_usage () {
   echo "  ceph <args>    : call a 'ceph' CLI command with arbitrary args"
   echo "  operator <subcommand>..."
   echo "    restart      : restart the Rook-Ceph operator"
+  echo "  mon-endpoints  : output mon endpoints"
   echo ""
 }
 
@@ -180,6 +181,15 @@ function run_operator_restart_command () {
 }
 
 ####################################################################################################
+# 'kubectl rook-ceph mon-endpoints' commands
+####################################################################################################
+
+function fetch_mon_endpoints (){
+  end_of_command_parsing "$@" # end of command tree
+  kubectl --namespace "$NAMESPACE" get cm rook-ceph-mon-endpoints -o json | jq --monochrome-output '.data.data'| tr -d '"' | tr -d '='|sed 's/[A-Za-z]*//g'
+}
+
+####################################################################################################
 # 'kubectl rook-ceph status' command
 ####################################################################################################
 # Disabling it for now, will enable once it is ready implementation
@@ -231,6 +241,9 @@ function run_main_command () {
       ;;
     operator)
       run_operator_command "$@"
+      ;;
+    mon-endpoints)
+      fetch_mon_endpoints "$@"
       ;;
     # status)
     #   run_status_command "$@"
