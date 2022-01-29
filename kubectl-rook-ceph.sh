@@ -32,6 +32,7 @@ function print_usage () {
   echo "COMMANDS"
   echo "  help           : output help text"
   echo "  ceph <args>    : call a 'ceph' CLI command with arbitrary args"
+  echo "  rbd <args>     : Call a 'rbd' CLI command with arbitrary args"
   echo "  mon-endpoints  : output mon endpoints"
   echo "  operator <subcommand>..."
   echo "    restart             : restart the Rook-Ceph operator"
@@ -162,6 +163,15 @@ function run_ceph_command () {
 }
 
 ####################################################################################################
+# 'kubectl rook-ceph rbd ...' command
+####################################################################################################
+
+function run_rbd_command () {
+  # do not call end_of_command_parsing here because all remaining input is passed directly to 'ceph'
+  kubectl --namespace "$NAMESPACE" exec deploy/rook-ceph-operator -- rbd "$@" --conf=/var/lib/rook/rook-ceph/rook-ceph.config
+}
+
+####################################################################################################
 # 'kubectl rook-ceph operator ...' commands
 ####################################################################################################
 
@@ -282,6 +292,9 @@ function run_main_command () {
       ;;
     ceph)
       run_ceph_command "$@"
+      ;;
+    rbd)
+      run_rbd_command "$@"
       ;;
     operator)
       run_operator_command "$@"
