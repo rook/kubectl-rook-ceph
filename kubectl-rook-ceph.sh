@@ -34,7 +34,8 @@ function print_usage () {
   echo "  ceph <args>    : call a 'ceph' CLI command with arbitrary args"
   echo "  mon-endpoints  : output mon endpoints"
   echo "  operator <subcommand>..."
-  echo "    restart      : restart the Rook-Ceph operator"
+  echo "    restart             : restart the Rook-Ceph operator"
+  echo "    <property> <value>  : Set the property in the rook-ceph-operator-config configmap."
   echo "  rook <subcommand>..."
   echo "    version             : print the version of Rook"
   echo "    status <args>       : print the phase of CR in the namespace. Default is CephCluster CR status"
@@ -165,22 +166,26 @@ function run_ceph_command () {
 ####################################################################################################
 
 function run_operator_command () {
-  [[ -z "${1:-""}" ]] && fail_error "Missing 'operator' subcommand"
-  subcommand="$1"
-  shift # remove the subcommand from the front of the arg list
-  case "$subcommand" in
-    restart)
-      run_operator_restart_command "$@"
-      ;;
-    *)
-      fail_error "'operator' subcommand '$subcommand' does not exist"
-      ;;
-  esac
+if [ "$#" -eq 1 ] && [ "$1" = "restart" ]; then
+  shift
+  run_operator_restart_command "$@"
+elif [[ "$#" -eq 2 ]]; then
+  path_cm_rook_ceph_operator_config "$@"
+else
+  fail_error "'operator' subcommand '$*' does not exist"
+fi
 }
 
 function run_operator_restart_command () {
   end_of_command_parsing "$@" # end of command tree
   kubectl --namespace "$NAMESPACE" rollout restart deploy/rook-ceph-operator
+}
+
+function path_cm_rook_ceph_operator_config() {
+  if [[ "$#" -ne 2 ]]; then
+    fail_error "require exactly 2 subcommand: $*"
+  fi
+  kubectl --namespace "$NAMESPACE" patch configmaps rook-ceph-operator-config --type json --patch  "[{ op: replace, path: /data/$1, value: $2 }]"
 }
 
 ####################################################################################################
