@@ -11,56 +11,55 @@ jobs:
   test-with-plugin:
     runs-on: ubuntu-latest
     steps:
-    - name: checkout
-      uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
+      - name: checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
 
-    - name: setup cluster
-      uses: ./.github/workflows/cluster-setup
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: setup cluster
+        uses: ./.github/workflows/cluster-setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: install krew
-      run: tests/github-action-helper.sh install_krew
+      - name: install krew
+        run: tests/github-action-helper.sh install_krew
 
-    - name: Test pluging with ceph commands
-      run: |
-        export PATH="${PATH}:${HOME}/.krew/bin"
-        # run ceph commands with the krew plugin
-        kubectl rook-ceph ceph status
-        kubectl rook-ceph ceph status -f json
-        kubectl rook-ceph ceph status --format json-pretty
-        kubectl rook-ceph ceph mon stat
-
-    - name: setup tmate session
-      if: failure()
-      uses: mxschmitt/action-tmate@v3
-      timeout-minutes: 180
+      - name: Test pluging with ceph commands
+        run: |
+          export PATH="${PATH}:${HOME}/.krew/bin"
+          # run ceph commands with the krew plugin
+          kubectl rook-ceph ceph status
+          kubectl rook-ceph ceph status -f json
+          kubectl rook-ceph ceph status --format json-pretty
+          kubectl rook-ceph ceph mon stat
 
   # This test is required to test latest changes or the changes that not present
   # with current version of rook-ceph krew plugin
   test-with-pr-changes:
     runs-on: ubuntu-latest
     steps:
-    - name: checkout
-      uses: actions/checkout@v2
-      with:
-        fetch-depth: 0
+      - name: checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
 
-    - name: setup cluster
-      uses: ./.github/workflows/cluster-setup
-      with:
-        github-token: ${{ secrets.GITHUB_TOKEN }}
+      - name: setup cluster
+        uses: ./.github/workflows/cluster-setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
 
-    - name: install script
-      run: sudo install kubectl-rook-ceph.sh /usr/local/bin/kubectl-rook_ceph
+      - name: install script
+        run: sudo install kubectl-rook-ceph.sh /usr/local/bin/kubectl-rook_ceph
 
-    - name: Test Plugin
-      run: |
-        # run ceph commands with the plugin
-        kubectl rook_ceph ceph status
-        kubectl rook_ceph ceph status -f json
-        kubectl rook_ceph ceph status --format json-pretty
-        # run command operator restart
-        kubectl rook_ceph operator restart
+      - name: Test Plugin
+        run: |
+          kubectl rook_ceph ceph status
+          kubectl rook_ceph ceph status -f json
+          kubectl rook_ceph ceph status --format json-pretty
+          kubectl rook_ceph rbd ls replicapool
+          kubectl rook_ceph operator restart
+          sleep 5
+          kubectl rook_ceph operator ROOK_LOG_LEVEL DEBUG
+          kubectl rook_ceph mon-endpoints
+          kubectl rook_ceph rook version
+          kubectl rook_ceph rook status

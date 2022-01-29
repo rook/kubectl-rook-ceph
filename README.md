@@ -21,13 +21,21 @@ To install the plugin, run:
 
 ### Commands
 
-- `ceph`: Run a Ceph CLI command. Supports any arguments the `ceph` command supports. See [Ceph docs](https://docs.ceph.com/en/pacific/start/intro/) for more.
+- `ceph <args>` : Run a Ceph CLI command. Supports any arguments the `ceph` command supports. See [Ceph docs](https://docs.ceph.com/en/pacific/start/intro/) for more.
 
-- `operator`: run sub-commands against the Rook-Ceph operator
-  -  `restart`: restart the Rook-Ceph operator
+- `rbd <args>` : Call a 'rbd' CLI command with arbitrary args"
 
-- `help`: Output help text
+- `mon-endpoints` : print mon endpoints"
 
+- `operator <subcommands>` : run sub-commands against the Rook-Ceph operator mentioned below
+  - `restart` : restart the Rook-Ceph operator
+  - `<property> <value>` : Set the property in the rook-ceph-operator-config configmap.
+
+- `rook <subcommands>` : run sub-commands mentioned below
+  - `version` : print the version of Rook and the Ceph daemons version from the CephCluster CR status"
+  - `status` : print the phase and/or conditions of every CR in the namespace"
+
+- `help` : Output help text
 
 ## Examples
 
@@ -70,6 +78,41 @@ kubectl rook-ceph operator restart
 >```text
 >deployment.apps/rook-ceph-operator restarted
 >```
+
+### Output Rook version
+
+```console
+kubectl rook-ceph rook version
+```
+
+```text
+rook: v1.8.0-alpha.0.267.g096dabfa6
+go: go1.16.13
+```
+
+### Output all Ceph daemons version
+
+```console
+kubectl rook_ceph ceph versions
+```
+
+```text
+{
+    "mon": {
+        "ceph version 16.2.7 (dd0603118f56ab514f133c8d2e3adfc983942503) pacific (stable)": 1
+    },
+    "mgr": {
+        "ceph version 16.2.7 (dd0603118f56ab514f133c8d2e3adfc983942503) pacific (stable)": 1
+    },
+    "osd": {
+        "ceph version 16.2.7 (dd0603118f56ab514f133c8d2e3adfc983942503) pacific (stable)": 1
+    },
+    "mds": {},
+    "overall": {
+        "ceph version 16.2.7 (dd0603118f56ab514f133c8d2e3adfc983942503) pacific (stable)": 3
+    }
+}
+```
 
 ## Contributing
 
