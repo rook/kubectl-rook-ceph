@@ -6,9 +6,22 @@ Provide common management and troubleshooting tools for the [Rook Ceph](https://
 
 ## Install
 
-To install the plugin, run:
+### To install the plugin with krew, run:
 
   ```kubectl krew install rook-ceph```
+
+### To install the plugin as script (has auto-completion), run:
+
+1) `curl -O https://github.com/rook/kubectl-rook-ceph/blob/master/kubectl-rook-ceph.sh`
+
+2) ```console
+    # `PATH` is where command binaries are installed. Ex: `/usr/local/bin`, `/usr/bin` or run `echo $PATH` to get all `PATH`
+    sudo install kubectl-rook-ceph.sh <PATH/rook-ceph>
+   ```
+
+3) `curl -O https://github.com/rook/kubectl-rook-ceph/blob/v0.0.1/kubectl-rook-ceph-completion.sh`
+
+4) `source <source <path-to-the-script>/kubectl-rook-ceph-completion.sh>`
 
 ## Usage
 
