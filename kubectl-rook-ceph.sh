@@ -30,10 +30,18 @@ function print_usage () {
   echo "  -h, --help                  : output help text"
   echo "  -n, --namespace='rook-ceph' : the namespace of the CephCluster"
   echo "COMMANDS"
-  echo "  help           : output help text"
-  echo "  ceph <args>    : call a 'ceph' CLI command with arbitrary args"
+  echo "  help                        : output help text"
+  echo "  ceph <args>                 : call a 'ceph' CLI command with arbitrary args"
+  echo " rbd <args>                   : call a 'rbd' CLI command with arbitrary args"
   echo "  operator <subcommand>..."
-  echo "    restart      : restart the Rook-Ceph operator"
+  echo "    restart                   : restart the Rook-Ceph operator"
+  echo "    set <property> <value>    : Set the property in the rook-ceph-operator-config configmap."
+  echo "  mon                         : output mon endpoints"
+  echo "  rook <subcommand>..."
+  echo "    version                   : print the version of Rook"
+  echo "    status                    : print the phase and conditions of the CephCluster CR"
+  echo "    status all                : print the phase and conditions of all CRs"
+  echo "    status <CR>               : print the phase and conditions of CRs of a specific type, such as 'cephobjectstore', 'cephfilesystem', etc"
   echo ""
 }
 
@@ -157,26 +165,92 @@ function run_ceph_command () {
 }
 
 ####################################################################################################
+# 'kubectl rook-ceph rbd ...' command
+####################################################################################################
+
+function run_rbd_command () {
+  # do not call end_of_command_parsing here because all remaining input is passed directly to 'ceph'
+  kubectl --namespace "$NAMESPACE" exec deploy/rook-ceph-operator -- rbd "$@" --conf=/var/lib/rook/rook-ceph/rook-ceph.config
+}
+
+####################################################################################################
 # 'kubectl rook-ceph operator ...' commands
 ####################################################################################################
 
 function run_operator_command () {
-  [[ -z "${1:-""}" ]] && fail_error "Missing 'operator' subcommand"
-  subcommand="$1"
+  if [ "$#" -eq 1 ] && [ "$1" = "restart" ]; then
   shift # remove the subcommand from the front of the arg list
-  case "$subcommand" in
-    restart)
-      run_operator_restart_command "$@"
-      ;;
-    *)
-      fail_error "'operator' subcommand '$subcommand' does not exist"
-      ;;
-  esac
+ run_operator_restart_command "$@"
+elif [ "$#" -eq 3 ] && [ "$1" = "set" ]; then
+  shift # remove the subcommand from the front of the arg list
+  path_cm_rook_ceph_operator_config "$@"
+else
+  fail_error "'operator' subcommand '$*' does not exist"
+fi
 }
 
 function run_operator_restart_command () {
   end_of_command_parsing "$@" # end of command tree
   kubectl --namespace "$NAMESPACE" rollout restart deploy/rook-ceph-operator
+}
+
+function path_cm_rook_ceph_operator_config() {
+  if [[ "$#" -ne 2 ]]; then
+    fail_error "require exactly 2 subcommand: $*"
+  fi
+  kubectl --namespace "$NAMESPACE" patch configmaps rook-ceph-operator-config --type json --patch  "[{ op: replace, path: /data/$1, value: $2 }]"
+}
+
+####################################################################################################
+# 'kubectl rook-ceph mon-endpoints' commands
+####################################################################################################
+
+function fetch_mon_endpoints (){
+  end_of_command_parsing "$@" # end of command tree
+  kubectl --namespace "$NAMESPACE" get cm rook-ceph-mon-endpoints -o json | jq --monochrome-output '.data.data'| tr -d '"' | tr -d '='|sed 's/[A-Za-z]*//g'
+}
+
+####################################################################################################
+# 'kubectl rook-ceph rook ...' commands
+####################################################################################################
+
+function rook_version () {
+  [[ -z "${1:-""}" ]] && fail_error "Missing 'version' subcommand"
+  subcommand="$1"
+  shift # remove the subcommand from the front of the arg list
+  case "$subcommand" in
+    version)
+      run_rook_version "$@"
+      ;;
+    status)
+      run_rook_cr_status "$@"
+      ;;
+    *)
+      fail_error "'rook' subcommand '$subcommand' does not exist"
+      ;;
+  esac
+}
+
+function run_rook_version () {
+  end_of_command_parsing "$@" # end of command tree
+  kubectl --namespace "$NAMESPACE" exec deploy/rook-ceph-operator -- rook version
+}
+
+function run_rook_cr_status() {
+  if [ "$#" -eq 1 ] && [ "$1" = "all" ]; then
+    cr_list=$(kubectl --namespace "$NAMESPACE" get crd | awk '{print $1}'| sed '1d')
+    echo "CR status"
+    for cr in $cr_list
+    do
+      echo "$cr": "$(kubectl --namespace "$NAMESPACE" get "$cr" -ojson| jq --monochrome-output '.items[].status')"
+    done
+  elif [[ "$#" -eq 1 ]];then
+    kubectl --namespace "$NAMESPACE" get "$1" -ojson| jq --monochrome-output '.items[].status'
+  elif [[ "$#" -eq 0 ]]; then
+    kubectl --namespace "$NAMESPACE" get cephclusters.ceph.rook.io -ojson| jq --monochrome-output '.items[].status'
+  else
+    fail_error "$# does not exist"
+  fi
 }
 
 ####################################################################################################
@@ -229,8 +303,17 @@ function run_main_command () {
     ceph)
       run_ceph_command "$@"
       ;;
+    rbd)
+      run_rbd_command "$@"
+      ;;
     operator)
       run_operator_command "$@"
+      ;;
+    mons)
+      fetch_mon_endpoints "$@"
+      ;;
+    rook)
+      rook_version "$@"
       ;;
     # status)
     #   run_status_command "$@"
