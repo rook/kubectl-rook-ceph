@@ -33,6 +33,8 @@ deploy_rook() {
   curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/cluster-test.yaml -o cluster-test.yaml
   sed -i "s|#deviceFilter:|deviceFilter: $(lsblk|awk '/14G/ {print $1}'| head -1)|g" cluster-test.yaml
   kubectl create -f cluster-test.yaml
+  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/storageclass-test.yaml
+  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/pvc.yaml
 }
 
 # wait_for_pod_to_be_ready_state check for operator pod to in ready state
@@ -40,6 +42,15 @@ wait_for_pod_to_be_ready_state() {
   timeout 200 bash <<-'EOF'
     until [ $(kubectl get pod -l app=rook-ceph-osd -n rook-ceph -o jsonpath='{.items[*].metadata.name}' -o custom-columns=READY:status.containerStatuses[*].ready | grep -c true) -eq 1 ]; do
       echo "waiting for the pods to be in ready state"
+      sleep 1
+    done
+EOF
+}
+
+wait_for_operator_pod_to_be_ready_state() {
+  timeout 10 bash <<-'EOF'
+    until [ $(kubectl get pod -l app=rook-ceph-operator -n rook-ceph -o jsonpath='{.items[*].metadata.name}' -o custom-columns=READY:status.containerStatuses[*].ready | grep -c true) -eq 1 ]; do
+      echo "waiting for the operator to be in ready state"
       sleep 1
     done
 EOF
