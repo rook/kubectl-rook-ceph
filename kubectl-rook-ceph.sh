@@ -35,6 +35,11 @@ function print_usage () {
   echo "  operator <subcommand>..."
   echo "    restart                   : restart the Rook-Ceph operator"
   echo "  mon                         : output mon endpoints"
+  echo "  rook <subcommand>..."
+  echo "    version                   : print the version of Rook"
+  echo "    status                    : print the phase and conditions of the CephCluster CR"
+  echo "    status all                : print the phase and conditions of all CRs"
+  echo "    status <CR>               : print the phase and conditions of CRs of a specific type, such as 'cephobjectstore', 'cephfilesystem', etc"
   echo ""
 }
 
@@ -190,6 +195,49 @@ function fetch_mon_endpoints (){
 }
 
 ####################################################################################################
+# 'kubectl rook-ceph rook ...' commands
+####################################################################################################
+
+function rook_version () {
+  [[ -z "${1:-""}" ]] && fail_error "Missing 'version' subcommand"
+  subcommand="$1"
+  shift # remove the subcommand from the front of the arg list
+  case "$subcommand" in
+    version)
+      run_rook_version "$@"
+      ;;
+    status)
+      run_rook_cr_status "$@"
+      ;;
+    *)
+      fail_error "'rook' subcommand '$subcommand' does not exist"
+      ;;
+  esac
+}
+
+function run_rook_version () {
+  end_of_command_parsing "$@" # end of command tree
+  kubectl --namespace "$NAMESPACE" exec deploy/rook-ceph-operator -- rook version
+}
+
+function run_rook_cr_status() {
+  if [ "$#" -eq 1 ] && [ "$1" = "all" ]; then
+    cr_list=$(kubectl --namespace "$NAMESPACE" get crd | awk '{print $1}'| sed '1d')
+    echo "CR status"
+    for cr in $cr_list
+    do
+      echo "$cr": "$(kubectl --namespace "$NAMESPACE" get "$cr" -ojson| jq --monochrome-output '.items[].status')"
+    done
+  elif [[ "$#" -eq 1 ]];then
+    kubectl --namespace "$NAMESPACE" get "$1" -ojson| jq --monochrome-output '.items[].status'
+  elif [[ "$#" -eq 0 ]]; then
+    kubectl --namespace "$NAMESPACE" get cephclusters.ceph.rook.io -ojson| jq --monochrome-output '.items[].status'
+  else
+    fail_error "$# does not exist"
+  fi
+}
+
+####################################################################################################
 # 'kubectl rook-ceph status' command
 ####################################################################################################
 # Disabling it for now, will enable once it is ready implementation
@@ -244,6 +292,9 @@ function run_main_command () {
       ;;
     mons)
       fetch_mon_endpoints "$@"
+      ;;
+    rook)
+      rook_version "$@"
       ;;
     # status)
     #   run_status_command "$@"
