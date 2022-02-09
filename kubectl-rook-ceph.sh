@@ -161,7 +161,7 @@ function run_help_command () {
 
 function run_ceph_command () {
   # do not call end_of_command_parsing here because all remaining input is passed directly to 'ceph'
-  kubectl --namespace "$NAMESPACE" exec deploy/rook-ceph-operator -- ceph "$@" --conf=/var/lib/rook/rook-ceph/rook-ceph.config
+  kubectl --namespace "$NAMESPACE" exec deploy/rook-ceph-operator -- ceph "$@" --conf="$CEPH_CONF_PATH"
 }
 
 ####################################################################################################
@@ -170,7 +170,7 @@ function run_ceph_command () {
 
 function run_rbd_command () {
   # do not call end_of_command_parsing here because all remaining input is passed directly to 'ceph'
-  kubectl --namespace "$NAMESPACE" exec deploy/rook-ceph-operator -- rbd "$@" --conf=/var/lib/rook/rook-ceph/rook-ceph.config
+  kubectl --namespace "$NAMESPACE" exec deploy/rook-ceph-operator -- rbd "$@" --conf="$CEPH_CONF_PATH"
 }
 
 ####################################################################################################
@@ -328,8 +328,9 @@ function run_main_command () {
 # MAIN: PARSE MAIN ARGS AND CALL MAIN COMMAND HANDLER
 ####################################################################################################
 
-# Default values for flag-controlled settings.
+# Default values
 NAMESPACE='rook-ceph' # namespace of the cluster
+CEPH_CONF_PATH="/var/lib/rook/$NAMESPACE/$NAMESPACE.config"
 
 # set_value_function for parsing flags for the main rook-ceph plugin.
 function parse_main_flag () {
@@ -339,6 +340,7 @@ function parse_main_flag () {
     "-n"|"--namespace")
       val_exists "$val" || return 1 # val should exist
       NAMESPACE="${val}"
+      CEPH_CONF_PATH="/var/lib/rook/$NAMESPACE/$NAMESPACE.config"
       ;;
     "-h"|"--help")
       flag_no_value "$flag" "$val"
