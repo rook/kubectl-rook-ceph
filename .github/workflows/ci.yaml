@@ -67,3 +67,7 @@ jobs:
           kubectl rook_ceph rook status
           kubectl rook_ceph rook status all
           kubectl rook_ceph rook status cephobjectstores
+
+      - name: setup tmate session for debugging when event is PR
+        if: failure() && github.event_name == 'pull_request'
+        uses: mxschmitt/action-tmate@v3
