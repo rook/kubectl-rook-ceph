@@ -1,4 +1,4 @@
-name: kubectl plugin test
+name: Plugin test
 on:
   pull_request:
 
@@ -8,7 +8,7 @@ defaults:
     shell: bash --noprofile --norc -eo pipefail -x {0}
 
 jobs:
-  test-with-plugin:
+  with-krew:
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -35,7 +35,7 @@ jobs:
 
   # This test is required to test latest changes or the changes that not present
   # with current version of rook-ceph krew plugin
-  test-with-pr-changes:
+  with-pr-changes-in-default-namespace:
     runs-on: ubuntu-latest
     steps:
       - name: checkout
@@ -60,7 +60,7 @@ jobs:
           kubectl rook_ceph operator restart
 
           # let's wait for operator pod to be restart
-          tests/github-action-helper.sh wait_for_operator_pod_to_be_ready_state
+          tests/github-action-helper.sh wait_for_operator_pod_to_be_ready_state_default
           kubectl rook_ceph operator set ROOK_LOG_LEVEL DEBUG
           kubectl rook_ceph mons
           kubectl rook_ceph rook version
