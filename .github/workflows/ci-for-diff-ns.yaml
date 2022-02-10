@@ -1,0 +1,49 @@
+name: Plugin test
+on:
+  pull_request:
+
+defaults:
+  run:
+    # reference: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#using-a-specific-shell
+    shell: bash --noprofile --norc -eo pipefail -x {0}
+
+jobs:
+  # This test is required to test latest changes or the changes that not present
+  # with current version of rook-ceph krew plugin
+  with-pr-changes-in-custom-namespace:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: setup cluster
+        uses: ./.github/workflows/cluster-setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          custom-ns: "true"
+
+      - name: install script
+        run: sudo install kubectl-rook-ceph.sh /usr/local/bin/kubectl-rook_ceph
+
+      - name: Test Plugin
+        run: |
+          kubectl rook_ceph -n rook ceph status
+          kubectl rook_ceph -n rook ceph status -f json
+          kubectl rook_ceph -n rook ceph status --format json-pretty
+          kubectl rook_ceph -n rook rbd ls replicapool
+          kubectl rook_ceph -n rook operator restart
+
+          # let's wait for operator pod to be restart
+          tests/github-action-helper.sh wait_for_operator_pod_to_be_ready_state_custom
+          kubectl rook_ceph -n rook operator set ROOK_LOG_LEVEL DEBUG
+          kubectl rook_ceph -n rook mons
+          kubectl rook_ceph -n rook rook version
+          kubectl rook_ceph -n rook rook status
+          kubectl rook_ceph -n rook rook status all
+          kubectl rook_ceph -n rook rook status cephobjectstores
+
+      - name: setup tmate session for debugging when event is PR
+        if: failure() && github.event_name == 'pull_request'
+        uses: mxschmitt/action-tmate@v3
