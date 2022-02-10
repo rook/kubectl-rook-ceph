@@ -96,7 +96,7 @@ go: go1.16.13
 ### Ceph Versions
 
 ```console
-kubectl rook_ceph ceph versions
+kubectl rook-ceph ceph versions
 ```
 
 ```text
