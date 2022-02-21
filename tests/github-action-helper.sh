@@ -33,12 +33,40 @@ deploy_rook() {
   curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/cluster-test.yaml -o cluster-test.yaml
   sed -i "s|#deviceFilter:|deviceFilter: $(lsblk|awk '/14G/ {print $1}'| head -1)|g" cluster-test.yaml
   kubectl create -f cluster-test.yaml
+  wait_for_pod_to_be_ready_state_default
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/storageclass-test.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/pvc.yaml
 }
 
-# wait_for_pod_to_be_ready_state check for operator pod to in ready state
-wait_for_pod_to_be_ready_state() {
+deploy_rook_in_custom_namespace() {
+  OPERATOR_NS=$1
+  CLUSTER_NS=$2
+  : "${OPERATOR_NS:=test-operator}"
+  : "${CLUSTER_NS:=test-cluster}"
+
+  kubectl create namespace test-operator # creating namespace manually because rook common.yaml create one namespace and here we need 2
+  curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/common.yaml -o common.yaml
+  deploy_with_custom_ns "$1" "$2" common.yaml
+  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/crds.yaml
+  curl -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/operator.yaml -o operator.yaml
+  deploy_with_custom_ns "$1" "$2" operator.yaml
+  curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/cluster-test.yaml -o cluster-test.yaml
+  sed -i "s|#deviceFilter:|deviceFilter: $(lsblk|awk '/14G/ {print $1}'| head -1)|g" cluster-test.yaml
+  deploy_with_custom_ns "$1" "$2" cluster-test.yaml
+  wait_for_pod_to_be_ready_state_custom
+  curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/storageclass-test.yaml -o storageclass-test.yaml
+  sed -i "s|provisioner: rook-ceph.rbd.csi.ceph.com |provisioner: test-operator.rbd.csi.ceph.com |g" storageclass-test.yaml
+  deploy_with_custom_ns "$1" "$2" storageclass-test.yaml
+  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/pvc.yaml
+}
+
+deploy_with_custom_ns(){
+  sed -i "s|rook-ceph # namespace:operator|$1 # namespace:operator|g" "$3"
+  sed -i "s|rook-ceph # namespace:cluster|$2 # namespace:cluster|g" "$3"
+  kubectl create -f "$3"
+}
+
+wait_for_pod_to_be_ready_state_default() {
   timeout 200 bash <<-'EOF'
     until [ $(kubectl get pod -l app=rook-ceph-osd -n rook-ceph -o jsonpath='{.items[*].metadata.name}' -o custom-columns=READY:status.containerStatuses[*].ready | grep -c true) -eq 1 ]; do
       echo "waiting for the pods to be in ready state"
@@ -47,9 +75,27 @@ wait_for_pod_to_be_ready_state() {
 EOF
 }
 
-wait_for_operator_pod_to_be_ready_state() {
+wait_for_pod_to_be_ready_state_custom() {
+  timeout 200 bash <<-'EOF'
+    until [ $(kubectl get pod -l app=rook-ceph-osd -n test-cluster -o jsonpath='{.items[*].metadata.name}' -o custom-columns=READY:status.containerStatuses[*].ready | grep -c true) -eq 1 ]; do
+      echo "waiting for the pods to be in ready state"
+      sleep 1
+    done
+EOF
+}
+
+wait_for_operator_pod_to_be_ready_state_default() {
   timeout 10 bash <<-'EOF'
     until [ $(kubectl get pod -l app=rook-ceph-operator -n rook-ceph -o jsonpath='{.items[*].metadata.name}' -o custom-columns=READY:status.containerStatuses[*].ready | grep -c true) -eq 1 ]; do
+      echo "waiting for the operator to be in ready state"
+      sleep 1
+    done
+EOF
+}
+
+wait_for_operator_pod_to_be_ready_state_custom() {
+  timeout 10 bash <<-'EOF'
+    until [ $(kubectl get pod -l app=rook-ceph-operator -n test-operator -o jsonpath='{.items[*].metadata.name}' -o custom-columns=READY:status.containerStatuses[*].ready | grep -c true) -eq 1 ]; do
       echo "waiting for the operator to be in ready state"
       sleep 1
     done

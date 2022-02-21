@@ -17,6 +17,7 @@ To install the plugin, run:
 ### Root args
 
 - `--namespace` | `-n`: the Kubernetes namespace in which the CephCluster resides (default: rook-ceph)
+- `--operator-namespace` | `-o`: the Kubernetes namespace in which the rook operator resides (default: rook-ceph)
 - `--help` | `-h`: Output help text
 
 ### Commands
@@ -95,7 +96,7 @@ go: go1.16.13
 ### Ceph Versions
 
 ```console
-kubectl rook_ceph ceph versions
+kubectl rook-ceph ceph versions
 ```
 
 ```text
