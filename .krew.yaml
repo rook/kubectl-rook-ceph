@@ -20,7 +20,7 @@ spec:
     {{addURIAndSha "https://github.com/rook/kubectl-rook-ceph/archive/{{ .TagName }}.zip" .TagName }}
     files:
     - from: "kubectl-rook-ceph-*/kubectl-rook-ceph.sh"
-      to: "kubect-rook-ceph.sh"
+      to: "*"
     - from: "kubectl-rook-ceph-*/LICENSE"
       to: "."
-    bin: kubect-rook-ceph.sh
+    bin: kubectl-rook-ceph.sh
