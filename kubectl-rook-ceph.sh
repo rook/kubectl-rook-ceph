@@ -37,7 +37,7 @@ function print_usage () {
   echo "  operator <subcommand>..."
   echo "    restart                                 : restart the Rook-Ceph operator"
   echo "    set <property> <value>                  : Set the property in the rook-ceph-operator-config configmap."
-  echo "  mon                                       : output mon endpoints"
+  echo "  mons                                      : output mon endpoints"
   echo "  rook <subcommand>..."
   echo "    version                                 : print the version of Rook"
   echo "    status                                  : print the phase and conditions of the CephCluster CR"
