@@ -18,6 +18,7 @@ To install the plugin, run:
 
 - `--namespace` | `-n`: the Kubernetes namespace in which the CephCluster resides (default: rook-ceph)
 - `--operator-namespace` | `-o`: the Kubernetes namespace in which the rook operator resides (default: rook-ceph)
+- `--context`: the name of the Kubernetes context to be used
 - `--help` | `-h`: Output help text
 
 ### Commands
