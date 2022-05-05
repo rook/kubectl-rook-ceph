@@ -30,6 +30,7 @@ function print_usage () {
   echo "  -h, --help                                : output help"
   echo "  -n, --namespace='rook-ceph'               : the namespace of the CephCluster"
   echo "  -o, --operator-namespace='rook-ceph'      : the namespace of the rook operator"
+  echo " --context=<context_name>                   : the name of the Kubernetes context to be used"
 
   echo "COMMANDS"
   echo "  ceph <args>                               : call a 'ceph' CLI command with arbitrary args"
@@ -37,7 +38,7 @@ function print_usage () {
   echo "  operator <subcommand>..."
   echo "    restart                                 : restart the Rook-Ceph operator"
   echo "    set <property> <value>                  : Set the property in the rook-ceph-operator-config configmap."
-  echo "  mon                                       : output mon endpoints"
+  echo "  mons                                      : output mon endpoints"
   echo "  rook <subcommand>..."
   echo "    version                                 : print the version of Rook"
   echo "    status                                  : print the phase and conditions of the CephCluster CR"
@@ -153,7 +154,7 @@ function end_of_command_parsing () {
 
 function run_ceph_command () {
   # do not call end_of_command_parsing here because all remaining input is passed directly to 'ceph'
-  kubectl --namespace "$ROOK_OPERATOR_NAMESPACE" exec deploy/rook-ceph-operator -- ceph "$@" --conf="$CEPH_CONF_PATH"
+  $TOP_LEVEL_COMMAND --namespace "$ROOK_OPERATOR_NAMESPACE" exec deploy/rook-ceph-operator -- ceph "$@" --conf="$CEPH_CONF_PATH"
 }
 
 ####################################################################################################
@@ -162,7 +163,7 @@ function run_ceph_command () {
 
 function run_rbd_command () {
   # do not call end_of_command_parsing here because all remaining input is passed directly to 'ceph'
-  kubectl --namespace "$ROOK_OPERATOR_NAMESPACE" exec deploy/rook-ceph-operator -- rbd "$@" --conf="$CEPH_CONF_PATH"
+  $TOP_LEVEL_COMMAND --namespace "$ROOK_OPERATOR_NAMESPACE" exec deploy/rook-ceph-operator -- rbd "$@" --conf="$CEPH_CONF_PATH"
 }
 
 ####################################################################################################
@@ -183,14 +184,14 @@ fi
 
 function run_operator_restart_command () {
   end_of_command_parsing "$@" # end of command tree
-  kubectl --namespace "$ROOK_OPERATOR_NAMESPACE" rollout restart deploy/rook-ceph-operator
+  $TOP_LEVEL_COMMAND --namespace "$ROOK_OPERATOR_NAMESPACE" rollout restart deploy/rook-ceph-operator
 }
 
 function path_cm_rook_ceph_operator_config() {
   if [[ "$#" -ne 2 ]]; then
     fail_error "require exactly 2 subcommand: $*"
   fi
-  kubectl --namespace "$ROOK_OPERATOR_NAMESPACE" patch configmaps rook-ceph-operator-config --type json --patch  "[{ op: replace, path: /data/$1, value: $2 }]"
+  $TOP_LEVEL_COMMAND --namespace "$ROOK_OPERATOR_NAMESPACE" patch configmaps rook-ceph-operator-config --type json --patch  "[{ op: replace, path: /data/$1, value: $2 }]"
 }
 
 ####################################################################################################
@@ -199,7 +200,7 @@ function path_cm_rook_ceph_operator_config() {
 
 function fetch_mon_endpoints (){
   end_of_command_parsing "$@" # end of command tree
-  kubectl --namespace "$ROOK_CLUSTER_NAMESPACE" get cm rook-ceph-mon-endpoints -o json | jq --monochrome-output '.data.data'| tr -d '"' | tr -d '='|sed 's/[A-Za-z]*//g'
+  $TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get cm rook-ceph-mon-endpoints -o json | jq --monochrome-output '.data.data'| tr -d '"' | tr -d '='|sed 's/[A-Za-z]*//g'
 }
 
 ####################################################################################################
@@ -225,21 +226,21 @@ function rook_version () {
 
 function run_rook_version () {
   end_of_command_parsing "$@" # end of command tree
-  kubectl --namespace "$ROOK_OPERATOR_NAMESPACE" exec deploy/rook-ceph-operator -- rook version
+  $TOP_LEVEL_COMMAND --namespace "$ROOK_OPERATOR_NAMESPACE" exec deploy/rook-ceph-operator -- rook version
 }
 
 function run_rook_cr_status() {
   if [ "$#" -eq 1 ] && [ "$1" = "all" ]; then
-    cr_list=$(kubectl --namespace "$ROOK_CLUSTER_NAMESPACE" get crd | awk '{print $1}'| sed '1d')
+    cr_list=$($TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get crd | awk '{print $1}'| sed '1d')
     echo "CR status"
     for cr in $cr_list
     do
-      echo "$cr": "$(kubectl --namespace "$ROOK_CLUSTER_NAMESPACE" get "$cr" -ojson| jq --monochrome-output '.items[].status')"
+      echo "$cr": "$($TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get "$cr" -ojson| jq --monochrome-output '.items[].status')"
     done
   elif [[ "$#" -eq 1 ]];then
-    kubectl --namespace "$ROOK_CLUSTER_NAMESPACE" get "$1" -ojson| jq --monochrome-output '.items[].status'
+    $TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get "$1" -ojson| jq --monochrome-output '.items[].status'
   elif [[ "$#" -eq 0 ]]; then
-    kubectl --namespace "$ROOK_CLUSTER_NAMESPACE" get cephclusters.ceph.rook.io -ojson| jq --monochrome-output '.items[].status'
+    $TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get cephclusters.ceph.rook.io -ojson| jq --monochrome-output '.items[].status'
   else
     fail_error "$# does not exist"
   fi
@@ -316,6 +317,7 @@ function run_main_command () {
 # Default values
 : "${ROOK_CLUSTER_NAMESPACE:=rook-ceph}"
 : "${ROOK_OPERATOR_NAMESPACE:=$ROOK_CLUSTER_NAMESPACE}"
+: "${TOP_LEVEL_COMMAND:=kubectl}"
 
 ####################################################################################################
 # MAIN: PARSE MAIN ARGS AND CALL MAIN COMMAND HANDLER
@@ -338,6 +340,10 @@ function parse_main_flag () {
     "-o"| "--operator-namespace")
       val_exists "$val" || return 1 # val should exist
       ROOK_OPERATOR_NAMESPACE="${val}"
+      ;;
+      "--context")
+      val_exists "$val" || return 1 # val should exist
+      TOP_LEVEL_COMMAND="kubectl --context=${val}"
       ;;
     *)
       fail_error "Flag $flag is not supported"

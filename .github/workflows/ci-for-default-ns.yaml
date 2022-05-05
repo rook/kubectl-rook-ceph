@@ -62,7 +62,7 @@ jobs:
           # let's wait for operator pod to be restart
           tests/github-action-helper.sh wait_for_operator_pod_to_be_ready_state_default
           kubectl rook_ceph operator set ROOK_LOG_LEVEL DEBUG
-          kubectl rook_ceph mons
+          kubectl rook_ceph --context=$(kubectl config current-context) mons
           kubectl rook_ceph rook version
           kubectl rook_ceph rook status
           kubectl rook_ceph rook status all
