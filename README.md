@@ -38,7 +38,7 @@ To install the plugin, run:
   - `status`      : Print the phase and/or conditions of every CR in the namespace"
   - `status all`  : Print the phase and conditions of all CRs
   - `status <CR>` : Print the phase and conditions of CRs of a specific type, such as `cephobjectstore`, `cephfilesystem`, etc
-  - `purge-osd <osd-id> [--force=true]` : Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs. By default `--force` is false"
+  - `purge-osd <osd-id> [--force]` : Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs."
 
 - `help` : Output help text
 

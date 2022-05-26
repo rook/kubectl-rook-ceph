@@ -44,7 +44,7 @@ function print_usage() {
   echo "    status                                  : print the phase and conditions of the CephCluster CR"
   echo "    status all                              : print the phase and conditions of all CRs"
   echo "    status <CR>                             : print the phase and conditions of CRs of a specific type, such as 'cephobjectstore', 'cephfilesystem', etc"
-  echo " purge-osd <osd-id> [--force=true]          : Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs. By default '--force' is false"
+  echo "    purge-osd <osd-id> [--force]            : Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs."
   echo ""
 }
 
@@ -250,19 +250,17 @@ function run_rook_cr_status() {
 }
 
 function run_purge_osd() {
-  re="^[0-9]+(,[0-9]+)*$" # regex to check --osd-ids args input, valid regex 0 or 0,1
-  if [ "$#" -ge 1 ] && [[ $1 =~ $re ]]; then
-    mon_endpoints=$($TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get cm rook-ceph-mon-endpoints -o jsonpath='{.data.data}' | cut -d "," -f1)
-    ceph_secret=$($TOP_LEVEL_COMMAND --namespace "$ROOK_OPERATOR_NAMESPACE" exec deploy/rook-ceph-operator -- cat /var/lib/rook/"$ROOK_CLUSTER_NAMESPACE"/client.admin.keyring | grep "key" | awk '{print $3}')
-    echo $ceph_secret
-    $TOP_LEVEL_COMMAND --namespace "$ROOK_OPERATOR_NAMESPACE" exec deploy/rook-ceph-operator -- sh -c "export ROOK_MON_ENDPOINTS=$mon_endpoints \
+  force_removal=false
+  if [ "$#" -eq 2 ] && [ "$2" = "--force" ]; then
+    force_removal=true
+  fi
+  mon_endpoints=$($TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get cm rook-ceph-mon-endpoints -o jsonpath='{.data.data}' | cut -d "," -f1)
+  ceph_secret=$($TOP_LEVEL_COMMAND --namespace "$ROOK_OPERATOR_NAMESPACE" exec deploy/rook-ceph-operator -- cat /var/lib/rook/"$ROOK_CLUSTER_NAMESPACE"/client.admin.keyring | grep "key" | awk '{print $3}')
+  $TOP_LEVEL_COMMAND --namespace "$ROOK_OPERATOR_NAMESPACE" exec deploy/rook-ceph-operator -- sh -c "export ROOK_MON_ENDPOINTS=$mon_endpoints \
       ROOK_CEPH_USERNAME=client.admin \
       ROOK_CEPH_SECRET=$ceph_secret \
       ROOK_CONFIG_DIR=/var/lib/rook && \
-    rook ceph osd remove --osd-ids=$1 --force-osd-removal=$FORCE"
-  else
-    fail_error "$* does not exist"
-  fi
+    rook ceph osd remove --osd-ids=$1 --force-osd-removal=$force_removal"
 }
 
 ####################################################################################################
@@ -336,7 +334,6 @@ function run_main_command() {
 : "${ROOK_CLUSTER_NAMESPACE:=rook-ceph}"
 : "${ROOK_OPERATOR_NAMESPACE:=$ROOK_CLUSTER_NAMESPACE}"
 : "${TOP_LEVEL_COMMAND:=kubectl}"
-: "${FORCE=false}"
 
 ####################################################################################################
 # MAIN: PARSE MAIN ARGS AND CALL MAIN COMMAND HANDLER
@@ -363,10 +360,6 @@ function parse_main_flag() {
   "--context")
     val_exists "$val" || return 1 # val should exist
     TOP_LEVEL_COMMAND="kubectl --context=${val}"
-    ;;
-  "--force")
-    val_exists "$val"
-    FORCE="${val}"
     ;;
   *)
     fail_error "Flag $flag is not supported"
