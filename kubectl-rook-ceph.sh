@@ -44,6 +44,7 @@ function print_usage() {
   echo "    status                                  : print the phase and conditions of the CephCluster CR"
   echo "    status all                              : print the phase and conditions of all CRs"
   echo "    status <CR>                             : print the phase and conditions of CRs of a specific type, such as 'cephobjectstore', 'cephfilesystem', etc"
+  echo "    purge-osd <osd-id> [--force=true]       : Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs. By default '--force' is false"
   echo ""
 }
 
@@ -89,6 +90,8 @@ function flag_no_value() {
 # When a non-flag arg is reached, stop parsing and return the remaining args in REMAINING_ARGS.
 REMAINING_ARGS=()
 function parse_flags() {
+  echo "$@"
+  echo $1
   local set_value_function="$1"
   shift # pop set_value_function arg from the arg list
   while (($#)); do
@@ -100,6 +103,7 @@ function parse_flags() {
     --*=*)              # long flag with a value, e.g., '--namespace=my-ns'
       FLAG="${arg%%=*}" # left of first equal
       VAL="${arg#*=}"   # right of first equal
+      # echo $set_value_function "$FLAG" "$VAL" $FLAG $VAL
       val_exists "$VAL" || fail_error "Flag '$FLAG' does not specify a value"
       ;;
     --*) # long flag without a value, e.g., '--help' or '--namespace my-ns'
@@ -218,6 +222,9 @@ function rook_version() {
   status)
     run_rook_cr_status "$@"
     ;;
+  purge-osd)
+    run_purge_osd "$@"
+    ;;
   *)
     fail_error "'rook' subcommand '$subcommand' does not exist"
     ;;
@@ -242,6 +249,21 @@ function run_rook_cr_status() {
     $TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get cephclusters.ceph.rook.io -ojson | jq --monochrome-output '.items[].status'
   else
     fail_error "$# does not exist"
+  fi
+}
+
+function run_purge_osd() {
+  re="^[0-9]+(,[0-9]+)*$" # regex to check --osd-ids args input, valid regex 0 or 0,1
+  if [[ $1 =~ $re ]]; then
+    mon_endpoints=$($TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get cm rook-ceph-mon-endpoints -o jsonpath='{.data.data}' | cut -d "," -f1)
+    ceph_secret=$($TOP_LEVEL_COMMAND --namespace "$ROOK_OPERATOR_NAMESPACE" exec deploy/rook-ceph-operator -- cat /var/lib/rook/"$ROOK_CLUSTER_NAMESPACE"/client.admin.keyring | grep "key" | awk '{print $3}')
+    $TOP_LEVEL_COMMAND --namespace "$ROOK_OPERATOR_NAMESPACE" exec deploy/rook-ceph-operator -- sh -c "export ROOK_MON_ENDPOINTS=$mon_endpoints
+      ROOK_CEPH_USERNAME=client.admin \
+      ROOK_CEPH_SECRET=$ceph_secret \
+      ROOK_CONFIG_DIR=/var/lib/rook && \
+    rook ceph osd remove --osd-ids=$1 --force-osd-removal=$FORCE"
+  else
+    fail_error "$* does not exist"
   fi
 }
 
@@ -316,6 +338,7 @@ function run_main_command() {
 : "${ROOK_CLUSTER_NAMESPACE:=rook-ceph}"
 : "${ROOK_OPERATOR_NAMESPACE:=$ROOK_CLUSTER_NAMESPACE}"
 : "${TOP_LEVEL_COMMAND:=kubectl}"
+: "${FORCE=false}"
 
 ####################################################################################################
 # MAIN: PARSE MAIN ARGS AND CALL MAIN COMMAND HANDLER
@@ -342,6 +365,10 @@ function parse_main_flag() {
   "--context")
     val_exists "$val" || return 1 # val should exist
     TOP_LEVEL_COMMAND="kubectl --context=${val}"
+    ;;
+  "--force")
+    val_exists "$val"
+    FORCE="${val}"
     ;;
   *)
     fail_error "Flag $flag is not supported"
