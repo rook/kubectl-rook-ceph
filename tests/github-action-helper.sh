@@ -22,7 +22,7 @@ use_local_disk() {
   sudo swapoff --all --verbose
   sudo umount /mnt
   # search for the device since it keeps changing between sda and sdb
-  sudo wipefs --all --force /dev/"$(lsblk|awk '/14G/ {print $1}'| head -1)"1
+  sudo wipefs --all --force /dev/"$(lsblk | awk '/14G/ {print $1}' | head -1)"1
   sudo lsblk
 }
 
@@ -31,7 +31,7 @@ deploy_rook() {
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/crds.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/operator.yaml
   curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/cluster-test.yaml -o cluster-test.yaml
-  sed -i "s|#deviceFilter:|deviceFilter: $(lsblk|awk '/14G/ {print $1}'| head -1)|g" cluster-test.yaml
+  sed -i "s|#deviceFilter:|deviceFilter: $(lsblk | awk '/14G/ {print $1}' | head -1)|g" cluster-test.yaml
   kubectl create -f cluster-test.yaml
   wait_for_pod_to_be_ready_state_default
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/storageclass-test.yaml
@@ -51,7 +51,7 @@ deploy_rook_in_custom_namespace() {
   curl -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/operator.yaml -o operator.yaml
   deploy_with_custom_ns "$1" "$2" operator.yaml
   curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/cluster-test.yaml -o cluster-test.yaml
-  sed -i "s|#deviceFilter:|deviceFilter: $(lsblk|awk '/14G/ {print $1}'| head -1)|g" cluster-test.yaml
+  sed -i "s|#deviceFilter:|deviceFilter: $(lsblk | awk '/14G/ {print $1}' | head -1)|g" cluster-test.yaml
   deploy_with_custom_ns "$1" "$2" cluster-test.yaml
   wait_for_pod_to_be_ready_state_custom
   curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/storageclass-test.yaml -o storageclass-test.yaml
@@ -60,7 +60,7 @@ deploy_rook_in_custom_namespace() {
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/pvc.yaml
 }
 
-deploy_with_custom_ns(){
+deploy_with_custom_ns() {
   sed -i "s|rook-ceph # namespace:operator|$1 # namespace:operator|g" "$3"
   sed -i "s|rook-ceph # namespace:cluster|$2 # namespace:cluster|g" "$3"
   kubectl create -f "$3"

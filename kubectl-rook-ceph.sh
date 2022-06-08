@@ -20,7 +20,7 @@ set -eEuo pipefail
 # HELPER FUNCTIONS
 ####################################################################################################
 
-function print_usage () {
+function print_usage() {
   echo ""
   echo "DESCRIPTION"
   echo "kubectl rook-ceph provides common management and troubleshooting tools for Ceph."
@@ -47,25 +47,25 @@ function print_usage () {
   echo ""
 }
 
-function fail_error () {
+function fail_error() {
   print_usage >&2
   echo "ERROR: $*" >&2
   exit 1
 }
 
 # return failure if the input is not a flag
-function is_flag () {
+function is_flag() {
   [[ "$1" == -* ]]
 }
 
 # return failure if the input (a flag value) doesn't exist
-function val_exists () {
+function val_exists() {
   local val="$1"
   [[ -n "$val" ]]
 }
 
 # fail with an error if the value is set
-function flag_no_value () {
+function flag_no_value() {
   local flag="$1"
   local value="$2"
   val_exists "$value" && fail_error "Flag '$flag' does not take a value"
@@ -88,39 +88,39 @@ function flag_no_value () {
 # The 'set_value_function' should record the config specified by the flag/value if it is valid.
 # When a non-flag arg is reached, stop parsing and return the remaining args in REMAINING_ARGS.
 REMAINING_ARGS=()
-function parse_flags () {
+function parse_flags() {
   local set_value_function="$1"
   shift # pop set_value_function arg from the arg list
-  while (( $# )); do
+  while (($#)); do
     arg="$1"
     shift
     FLAG=""
     VAL=""
     case "$arg" in
-      --*=*) # long flag with a value, e.g., '--namespace=my-ns'
-        FLAG="${arg%%=*}" # left of first equal
-        VAL="${arg#*=}" # right of first equal
-        val_exists "$VAL" || fail_error "Flag '$FLAG' does not specify a value"
-        ;;
-      --*) # long flag without a value, e.g., '--help' or '--namespace my-ns'
+    --*=*)              # long flag with a value, e.g., '--namespace=my-ns'
+      FLAG="${arg%%=*}" # left of first equal
+      VAL="${arg#*=}"   # right of first equal
+      val_exists "$VAL" || fail_error "Flag '$FLAG' does not specify a value"
+      ;;
+    --*) # long flag without a value, e.g., '--help' or '--namespace my-ns'
+      FLAG="$arg"
+      VAL=""
+      ;;
+    -*)                              # short flags
+      if [[ "${#arg}" -eq 2 ]]; then # short flag without a value, e.g., '-h' or '-n my-ns'
         FLAG="$arg"
         VAL=""
-        ;;
-      -*) # short flags
-        if [[ "${#arg}" -eq 2 ]]; then # short flag without a value, e.g., '-h' or '-n my-ns'
-          FLAG="$arg"
-          VAL=""
-        else # short flag with a value, e.g., '-nmy-ns', or '-n=my-ns'
-          FLAG="${arg:0:2}" # first 2 chars
-          VAL="${arg:2:${#arg}}" # remaining chars
-          VAL="${VAL#*=}" # strip first equal from the value
-        fi
-        ;;
-      *)
-        # This is not a flag, so stop parsing and return the stored remaining args
-        REMAINING_ARGS=("$arg" "$@") # store remaining args BEFORE shifting so we still have the
-        break
-        ;;
+      else                     # short flag with a value, e.g., '-nmy-ns', or '-n=my-ns'
+        FLAG="${arg:0:2}"      # first 2 chars
+        VAL="${arg:2:${#arg}}" # remaining chars
+        VAL="${VAL#*=}"        # strip first equal from the value
+      fi
+      ;;
+    *)
+      # This is not a flag, so stop parsing and return the stored remaining args
+      REMAINING_ARGS=("$arg" "$@") # store remaining args BEFORE shifting so we still have the
+      break
+      ;;
     esac
     is_flag "$VAL" && fail_error "Flag '$FLAG' value '$VAL' looks like another flag"
     # run the command with the current value, which may be empty
@@ -142,7 +142,7 @@ function parse_flags () {
 
 # call this at the end of a command tree when there should be no more inputs past a given point.
 # Usage: end_of_command_parsing "$@" # where "$@" contains the remaining args
-function end_of_command_parsing () {
+function end_of_command_parsing() {
   if [[ "$#" -gt 0 ]]; then
     fail_error "Extraneous arguments at end of input: $*"
   fi
@@ -152,7 +152,7 @@ function end_of_command_parsing () {
 # 'kubectl rook-ceph ceph ...' command
 ####################################################################################################
 
-function run_ceph_command () {
+function run_ceph_command() {
   # do not call end_of_command_parsing here because all remaining input is passed directly to 'ceph'
   $TOP_LEVEL_COMMAND --namespace "$ROOK_OPERATOR_NAMESPACE" exec deploy/rook-ceph-operator -- ceph "$@" --conf="$CEPH_CONF_PATH"
 }
@@ -161,7 +161,7 @@ function run_ceph_command () {
 # 'kubectl rook-ceph rbd ...' command
 ####################################################################################################
 
-function run_rbd_command () {
+function run_rbd_command() {
   # do not call end_of_command_parsing here because all remaining input is passed directly to 'ceph'
   $TOP_LEVEL_COMMAND --namespace "$ROOK_OPERATOR_NAMESPACE" exec deploy/rook-ceph-operator -- rbd "$@" --conf="$CEPH_CONF_PATH"
 }
@@ -170,19 +170,19 @@ function run_rbd_command () {
 # 'kubectl rook-ceph operator ...' commands
 ####################################################################################################
 
-function run_operator_command () {
+function run_operator_command() {
   if [ "$#" -eq 1 ] && [ "$1" = "restart" ]; then
-  shift # remove the subcommand from the front of the arg list
- run_operator_restart_command "$@"
-elif [ "$#" -eq 3 ] && [ "$1" = "set" ]; then
-  shift # remove the subcommand from the front of the arg list
-  path_cm_rook_ceph_operator_config "$@"
-else
-  fail_error "'operator' subcommand '$*' does not exist"
-fi
+    shift # remove the subcommand from the front of the arg list
+    run_operator_restart_command "$@"
+  elif [ "$#" -eq 3 ] && [ "$1" = "set" ]; then
+    shift # remove the subcommand from the front of the arg list
+    path_cm_rook_ceph_operator_config "$@"
+  else
+    fail_error "'operator' subcommand '$*' does not exist"
+  fi
 }
 
-function run_operator_restart_command () {
+function run_operator_restart_command() {
   end_of_command_parsing "$@" # end of command tree
   $TOP_LEVEL_COMMAND --namespace "$ROOK_OPERATOR_NAMESPACE" rollout restart deploy/rook-ceph-operator
 }
@@ -191,56 +191,55 @@ function path_cm_rook_ceph_operator_config() {
   if [[ "$#" -ne 2 ]]; then
     fail_error "require exactly 2 subcommand: $*"
   fi
-  $TOP_LEVEL_COMMAND --namespace "$ROOK_OPERATOR_NAMESPACE" patch configmaps rook-ceph-operator-config --type json --patch  "[{ op: replace, path: /data/$1, value: $2 }]"
+  $TOP_LEVEL_COMMAND --namespace "$ROOK_OPERATOR_NAMESPACE" patch configmaps rook-ceph-operator-config --type json --patch "[{ op: replace, path: /data/$1, value: $2 }]"
 }
 
 ####################################################################################################
 # 'kubectl rook-ceph mon-endpoints' commands
 ####################################################################################################
 
-function fetch_mon_endpoints (){
+function fetch_mon_endpoints() {
   end_of_command_parsing "$@" # end of command tree
-  $TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get cm rook-ceph-mon-endpoints -o json | jq --monochrome-output '.data.data'| tr -d '"' | tr -d '='|sed 's/[A-Za-z]*//g'
+  $TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get cm rook-ceph-mon-endpoints -o json | jq --monochrome-output '.data.data' | tr -d '"' | tr -d '=' | sed 's/[A-Za-z]*//g'
 }
 
 ####################################################################################################
 # 'kubectl rook-ceph rook ...' commands
 ####################################################################################################
 
-function rook_version () {
+function rook_version() {
   [[ -z "${1:-""}" ]] && fail_error "Missing 'version' subcommand"
   subcommand="$1"
   shift # remove the subcommand from the front of the arg list
   case "$subcommand" in
-    version)
-      run_rook_version "$@"
-      ;;
-    status)
-      run_rook_cr_status "$@"
-      ;;
-    *)
-      fail_error "'rook' subcommand '$subcommand' does not exist"
-      ;;
+  version)
+    run_rook_version "$@"
+    ;;
+  status)
+    run_rook_cr_status "$@"
+    ;;
+  *)
+    fail_error "'rook' subcommand '$subcommand' does not exist"
+    ;;
   esac
 }
 
-function run_rook_version () {
+function run_rook_version() {
   end_of_command_parsing "$@" # end of command tree
   $TOP_LEVEL_COMMAND --namespace "$ROOK_OPERATOR_NAMESPACE" exec deploy/rook-ceph-operator -- rook version
 }
 
 function run_rook_cr_status() {
   if [ "$#" -eq 1 ] && [ "$1" = "all" ]; then
-    cr_list=$($TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get crd | awk '{print $1}'| sed '1d')
+    cr_list=$($TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get crd | awk '{print $1}' | sed '1d')
     echo "CR status"
-    for cr in $cr_list
-    do
-      echo "$cr": "$($TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get "$cr" -ojson| jq --monochrome-output '.items[].status')"
+    for cr in $cr_list; do
+      echo "$cr": "$($TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get "$cr" -ojson | jq --monochrome-output '.items[].status')"
     done
-  elif [[ "$#" -eq 1 ]];then
-    $TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get "$1" -ojson| jq --monochrome-output '.items[].status'
+  elif [[ "$#" -eq 1 ]]; then
+    $TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get "$1" -ojson | jq --monochrome-output '.items[].status'
   elif [[ "$#" -eq 0 ]]; then
-    $TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get cephclusters.ceph.rook.io -ojson| jq --monochrome-output '.items[].status'
+    $TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get cephclusters.ceph.rook.io -ojson | jq --monochrome-output '.items[].status'
   else
     fail_error "$# does not exist"
   fi
@@ -250,7 +249,6 @@ function run_rook_cr_status() {
 # 'kubectl rook-ceph status' command
 ####################################################################################################
 # Disabling it for now, will enable once it is ready implementation
-
 
 # The status subcommand takes some args
 # LONG_STATUS='false'
@@ -286,31 +284,31 @@ function run_rook_cr_status() {
 # MAIN COMMAND HANDLER (is effectively main)
 ####################################################################################################
 
-function run_main_command () {
+function run_main_command() {
   local command="$1"
   shift # pop first arg off the front of the function arg list
   case "$command" in
-    ceph)
-      run_ceph_command "$@"
-      ;;
-    rbd)
-      run_rbd_command "$@"
-      ;;
-    operator)
-      run_operator_command "$@"
-      ;;
-    mons)
-      fetch_mon_endpoints "$@"
-      ;;
-    rook)
-      rook_version "$@"
-      ;;
-    # status)
-    #   run_status_command "$@"
-    #   ;;
-    *)
-      fail_error "Unknown command '$command'"
-      ;;
+  ceph)
+    run_ceph_command "$@"
+    ;;
+  rbd)
+    run_rbd_command "$@"
+    ;;
+  operator)
+    run_operator_command "$@"
+    ;;
+  mons)
+    fetch_mon_endpoints "$@"
+    ;;
+  rook)
+    rook_version "$@"
+    ;;
+  # status)
+  #   run_status_command "$@"
+  #   ;;
+  *)
+    fail_error "Unknown command '$command'"
+    ;;
   esac
 }
 
@@ -324,30 +322,30 @@ function run_main_command () {
 ####################################################################################################
 
 # set_value_function for parsing flags for the main rook-ceph plugin.
-function parse_main_flag () {
+function parse_main_flag() {
   local flag="$1"
   local val="$2"
   case "$flag" in
-    "-n"|"--namespace")
-      val_exists "$val" || return 1 # val should exist
-      ROOK_CLUSTER_NAMESPACE="${val}"
-      ;;
-    "-h"|"--help")
-      flag_no_value "$flag" "$val"
-      print_usage
-      exit 0 # unique for the help flag; stop parsing everything and exit with success
-      ;;
-    "-o"| "--operator-namespace")
-      val_exists "$val" || return 1 # val should exist
-      ROOK_OPERATOR_NAMESPACE="${val}"
-      ;;
-      "--context")
-      val_exists "$val" || return 1 # val should exist
-      TOP_LEVEL_COMMAND="kubectl --context=${val}"
-      ;;
-    *)
-      fail_error "Flag $flag is not supported"
-      ;;
+  "-n" | "--namespace")
+    val_exists "$val" || return 1 # val should exist
+    ROOK_CLUSTER_NAMESPACE="${val}"
+    ;;
+  "-h" | "--help")
+    flag_no_value "$flag" "$val"
+    print_usage
+    exit 0 # unique for the help flag; stop parsing everything and exit with success
+    ;;
+  "-o" | "--operator-namespace")
+    val_exists "$val" || return 1 # val should exist
+    ROOK_OPERATOR_NAMESPACE="${val}"
+    ;;
+  "--context")
+    val_exists "$val" || return 1 # val should exist
+    TOP_LEVEL_COMMAND="kubectl --context=${val}"
+    ;;
+  *)
+    fail_error "Flag $flag is not supported"
+    ;;
   esac
 }
 
