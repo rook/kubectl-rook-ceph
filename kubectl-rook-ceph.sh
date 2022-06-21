@@ -44,6 +44,7 @@ function print_usage() {
   echo "    status                                  : print the phase and conditions of the CephCluster CR"
   echo "    status all                              : print the phase and conditions of all CRs"
   echo "    status <CR>                             : print the phase and conditions of CRs of a specific type, such as 'cephobjectstore', 'cephfilesystem', etc"
+  echo "    purge-osd <osd-id> [--force]            : Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs."
   echo ""
 }
 
@@ -218,6 +219,9 @@ function rook_version() {
   status)
     run_rook_cr_status "$@"
     ;;
+  purge-osd)
+    run_purge_osd "$@"
+    ;;
   *)
     fail_error "'rook' subcommand '$subcommand' does not exist"
     ;;
@@ -243,6 +247,20 @@ function run_rook_cr_status() {
   else
     fail_error "$# does not exist"
   fi
+}
+
+function run_purge_osd() {
+  force_removal=false
+  if [ "$#" -eq 2 ] && [ "$2" = "--force" ]; then
+    force_removal=true
+  fi
+  mon_endpoints=$($TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get cm rook-ceph-mon-endpoints -o jsonpath='{.data.data}' | cut -d "," -f1)
+  ceph_secret=$($TOP_LEVEL_COMMAND --namespace "$ROOK_OPERATOR_NAMESPACE" exec deploy/rook-ceph-operator -- cat /var/lib/rook/"$ROOK_CLUSTER_NAMESPACE"/client.admin.keyring | grep "key" | awk '{print $3}')
+  $TOP_LEVEL_COMMAND --namespace "$ROOK_OPERATOR_NAMESPACE" exec deploy/rook-ceph-operator -- sh -c "export ROOK_MON_ENDPOINTS=$mon_endpoints \
+      ROOK_CEPH_USERNAME=client.admin \
+      ROOK_CEPH_SECRET=$ceph_secret \
+      ROOK_CONFIG_DIR=/var/lib/rook && \
+    rook ceph osd remove --osd-ids=$1 --force-osd-removal=$force_removal"
 }
 
 ####################################################################################################

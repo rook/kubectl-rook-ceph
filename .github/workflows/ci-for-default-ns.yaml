@@ -56,7 +56,6 @@ jobs:
           kubectl rook_ceph ceph status
           kubectl rook_ceph ceph status -f json
           kubectl rook_ceph ceph status --format json-pretty
-          kubectl rook_ceph rbd ls replicapool
           kubectl rook_ceph operator restart
 
           # let's wait for operator pod to be restart
@@ -67,7 +66,15 @@ jobs:
           kubectl rook_ceph rook status
           kubectl rook_ceph rook status all
           kubectl rook_ceph rook status cephobjectstores
+          # to allow time for reconcile, sleep before listing the pools
+          sleep 5
+          kubectl rook_ceph rbd ls replicapool
 
+          # for testing osd purge scale the osd deplyment
+          kubectl --namespace rook-ceph scale deploy/rook-ceph-osd-0 --replicas=0
+          # we need to sleep so the osd will be marked down before purging the osd
+          sleep 5
+          kubectl-rook_ceph rook purge-osd 0 --force
       - name: setup tmate session for debugging when event is PR
         if: failure() && github.event_name == 'pull_request'
         uses: mxschmitt/action-tmate@v3
