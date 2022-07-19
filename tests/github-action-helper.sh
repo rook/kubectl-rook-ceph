@@ -85,7 +85,7 @@ EOF
 }
 
 wait_for_operator_pod_to_be_ready_state_default() {
-  timeout 10 bash <<-'EOF'
+  timeout 100 bash <<-'EOF'
     until [ $(kubectl get pod -l app=rook-ceph-operator -n rook-ceph -o jsonpath='{.items[*].metadata.name}' -o custom-columns=READY:status.containerStatuses[*].ready | grep -c true) -eq 1 ]; do
       echo "waiting for the operator to be in ready state"
       sleep 1
@@ -94,7 +94,7 @@ EOF
 }
 
 wait_for_operator_pod_to_be_ready_state_custom() {
-  timeout 10 bash <<-'EOF'
+  timeout 100 bash <<-'EOF'
     until [ $(kubectl get pod -l app=rook-ceph-operator -n test-operator -o jsonpath='{.items[*].metadata.name}' -o custom-columns=READY:status.containerStatuses[*].ready | grep -c true) -eq 1 ]; do
       echo "waiting for the operator to be in ready state"
       sleep 1
