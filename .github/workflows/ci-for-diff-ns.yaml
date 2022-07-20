@@ -33,9 +33,11 @@ jobs:
           kubectl rook_ceph -o test-operator -n test-cluster ceph status
           kubectl rook_ceph -o test-operator -n test-cluster ceph status -f json
           kubectl rook_ceph -o test-operator -n test-cluster ceph status --format json-pretty
+          POD=$(kubectl -n test-operator get pod -l app=rook-ceph-operator -o jsonpath="{.items[0].metadata.name}")
           kubectl rook_ceph -o test-operator -n test-cluster operator restart
 
           # let's wait for operator pod to be restart
+          kubectl -n test-operator wait --for=delete pod/$POD --timeout=100s
           tests/github-action-helper.sh wait_for_operator_pod_to_be_ready_state_custom
           kubectl rook_ceph -o test-operator -n test-cluster operator set ROOK_LOG_LEVEL DEBUG
           kubectl rook_ceph -o test-operator -n test-cluster --context=$(kubectl config current-context) mons
