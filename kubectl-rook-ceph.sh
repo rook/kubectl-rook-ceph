@@ -27,24 +27,26 @@ function print_usage() {
   echo "USAGE"
   echo "  kubectl rook-ceph <main args> <command> <command args>"
   echo "MAIN ARGS"
-  echo "  -h, --help                                : output help"
-  echo "  -n, --namespace='rook-ceph'               : the namespace of the CephCluster"
-  echo "  -o, --operator-namespace='rook-ceph'      : the namespace of the rook operator"
-  echo " --context=<context_name>                   : the name of the Kubernetes context to be used"
+  echo "  -h, --help                                 : output help"
+  echo "  -n, --namespace='rook-ceph'                : the namespace of the CephCluster"
+  echo "  -o, --operator-namespace='rook-ceph'       : the namespace of the rook operator"
+  echo " --context=<context_name>                    : the name of the Kubernetes context to be used"
 
   echo "COMMANDS"
-  echo "  ceph <args>                               : call a 'ceph' CLI command with arbitrary args"
-  echo "  rbd <args>                                : call a 'rbd' CLI command with arbitrary args"
+  echo "  ceph <args>                                : call a 'ceph' CLI command with arbitrary args"
+  echo "  rbd <args>                                 : call a 'rbd' CLI command with arbitrary args"
   echo "  operator <subcommand>..."
-  echo "    restart                                 : restart the Rook-Ceph operator"
-  echo "    set <property> <value>                  : Set the property in the rook-ceph-operator-config configmap."
-  echo "  mons                                      : output mon endpoints"
+  echo "    restart                                  : restart the Rook-Ceph operator"
+  echo "    set <property> <value>                   : Set the property in the rook-ceph-operator-config configmap."
+  echo "  mons                                       : output mon endpoints"
   echo "  rook <subcommand>..."
-  echo "    version                                 : print the version of Rook"
-  echo "    status                                  : print the phase and conditions of the CephCluster CR"
-  echo "    status all                              : print the phase and conditions of all CRs"
-  echo "    status <CR>                             : print the phase and conditions of CRs of a specific type, such as 'cephobjectstore', 'cephfilesystem', etc"
-  echo "    purge-osd <osd-id> [--force]            : Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs."
+  echo "    version                                  : print the version of Rook"
+  echo "    status                                   : print the phase and conditions of the CephCluster CR"
+  echo "    status all                               : print the phase and conditions of all CRs"
+  echo "    status <CR>                              : print the phase and conditions of CRs of a specific type, such as 'cephobjectstore', 'cephfilesystem', etc"
+  echo "    purge-osd <osd-id> [--force]             : Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs."
+  echo " create-debug [--osd/mon/mgr/mds deployment] : Make the OSD or mon in debug mode"
+  echo " remove-debug [--osd/mon/mgr/mds deployment] : Make the OSD or mon out of debug mode"
   echo ""
 }
 
@@ -264,6 +266,48 @@ function run_purge_osd() {
 }
 
 ####################################################################################################
+# 'kubectl rook-ceph debug commands
+####################################################################################################
+
+function run_create_debug(){
+  [[ -z "${1:-""}" ]] && fail_error "Missing 'mon/osd/mgr/mds' deployment"
+  deployment_name=$1
+  echo "create debug mode for $deployment_name"
+
+  if output=$(TOP_LEVEL_COMMAND --namespace "$ROOK_OPERATOR_NAMESPACE" get deployment "$deployment_name"); then
+    echo "deployment $deployment_name exist, $output" 
+  else  
+    echo "deployment $deployment_name doesn't exist"
+    exit 1
+  fi
+  # scale the deployment to 0
+  TOP_LEVEL_COMMAND scale deployments --namespace "$ROOK_OPERATOR_NAMESPACE" "$deployment_name" --replicas=0
+  # create debug deployment
+  deployment_spec=$(kubectl get  deployments --namespace "$ROOK_OPERATOR_NAMESPACE"  "$deployment_name"   -o json | jq -r ".spec")
+cat <<eof | kubectl create -f -
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+        name: "$deployment_name-debug"
+        namespace: "$ROOK_OPERATOR_NAMESPACE"
+        labels:
+            ceph.rook.io/debug: "true"
+    spec:
+        $deployment_spec
+eof
+}
+
+function run_remove_debug(){
+  [[ -z "${1:-""}" ]] && fail_error "Missing 'mon/osd' ID"
+  echo "remove debug mode"
+  deployment_name=$1
+  # delete the deployment debug pod
+  TOP_LEVEL_COMMAND --namespace "$ROOK_OPERATOR_NAMESPACE" delete deployment "$deployment_name-debug"
+  # scale the deployment to 1
+  TOP_LEVEL_COMMAND scale deployments --namespace "$ROOK_OPERATOR_NAMESPACE" "$deployment_name" --replicas=1
+}
+
+####################################################################################################
 # 'kubectl rook-ceph status' command
 ####################################################################################################
 # Disabling it for now, will enable once it is ready implementation
@@ -320,6 +364,12 @@ function run_main_command() {
     ;;
   rook)
     rook_version "$@"
+    ;;
+  create-debug)
+    run_create_debug "$@"
+    ;;
+  remove-debug)
+    run_remove_debug "$@"
     ;;
   # status)
   #   run_status_command "$@"
