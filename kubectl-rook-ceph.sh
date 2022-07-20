@@ -31,7 +31,6 @@ function print_usage() {
   echo "  -n, --namespace='rook-ceph'               : the namespace of the CephCluster"
   echo "  -o, --operator-namespace='rook-ceph'      : the namespace of the rook operator"
   echo " --context=<context_name>                   : the name of the Kubernetes context to be used"
-
   echo "COMMANDS"
   echo "  ceph <args>                               : call a 'ceph' CLI command with arbitrary args"
   echo "  rbd <args>                                : call a 'rbd' CLI command with arbitrary args"
@@ -39,6 +38,13 @@ function print_usage() {
   echo "    restart                                 : restart the Rook-Ceph operator"
   echo "    set <property> <value>                  : Set the property in the rook-ceph-operator-config configmap."
   echo "  mons                                      : output mon endpoints"
+  echo "  debug <subcommand>..."
+  echo "    node <svc> <nodeName> [--unset]         : set debug_<svc>=20 for pod/<svc> on nodeName."
+  echo "                                            :   valid <svc> options: {mon,mgr,osd,mds}."
+  echo "                                            :   --unset to remove override."
+  echo "    svc <svc> [--unset]                     : set debug_<svc>=20"
+  echo "                                            :   valid <svc> options: {mon,mgr,osd,mds}."
+  echo "                                            :   --unset to remove override."
   echo "  rook <subcommand>..."
   echo "    version                                 : print the version of Rook"
   echo "    status                                  : print the phase and conditions of the CephCluster CR"
@@ -205,6 +211,81 @@ function fetch_mon_endpoints() {
 }
 
 ####################################################################################################
+# 'kubectl rook-ceph debug ...' commands
+####################################################################################################
+
+function debug() {
+  [[ -z "${1:-""}" ]] && fail_error "'debug <subcommand>' - Missing <subcommand>"
+  subcommand=$1
+  shift
+  case "$subcommand" in
+  node)
+    [[ "$#" -eq 0 ]] && fail_error "'debug node' - Missing svc arg."
+    run_debug_node "$@"
+    ;;
+  svc)
+    run_debug_svc "$@"
+    ;;
+  *)
+    fail_error "'debug' - invalid subcommand: '$subcommand'."
+    ;;
+  esac
+}
+
+function run_debug_node() {
+  svc=$1
+  [[ -z "${2:-""}" ]] && fail_error "'debug node' - Missing nodeName."
+  node=$2
+  nodeSvc=$($TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get pods -l app=rook-ceph-$svc -ojson | jq -r '[.items[].spec.nodeName]')
+  template="
+  {{- range .items -}}
+    {{- if and (eq .kind \"Pod\") (eq .spec.nodeName \"$node\") (.metadata.labels.$svc) -}}
+      {{.metadata.labels.$svc}}{{- \"\\n\" -}}
+    {{- end -}}
+  {{- end -}}"
+  shift
+  case "$svc" in
+  mon|mgr|osd|mds)
+    if [[ "${nodeSvc[*]}" =~ $node ]] && [ "$#" -eq 2 ] && [ "$2" = "--unset" ]; then
+      id=$($TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get pods -o go-template="${template}")
+      for id in $id
+      do
+        run_ceph_command config rm $svc.$id debug_$svc
+      done
+    elif [[ "$#" -eq 1 ]]; then
+      id=$($TOP_LEVEL_COMMAND --namespace "$ROOK_CLUSTER_NAMESPACE" get pods -o go-template="${template}")
+      for id in $id
+      do
+        run_ceph_command config set $svc.$id debug_$svc 20/20
+      done
+    fi
+    ;;
+  *)
+    fail_error "'debug' - invalid svc provided: $svc"
+    ;;
+  esac
+}
+
+function run_debug_svc() {
+  [[ -z "${1:-""}" ]] && fail_error "'debug svc' Missing svc."
+  svc=$1
+  shift
+  case "$svc" in
+  mon|mgr|osd|mds)
+    if [ "$#" -eq 1 ] && [ "$1" = "--unset" ]; then
+      run_ceph_command config rm $svc debug_$svc
+    else
+      end_of_command_parsing "$@"
+      run_ceph_command config set $svc debug_$svc 20/20
+    fi
+    ;;
+  *)
+    fail_error "'debug' - unsupported svc provided: $svc."
+    ;;
+  esac
+}
+
+####################################################################################################
 # 'kubectl rook-ceph rook ...' commands
 ####################################################################################################
 
@@ -317,6 +398,9 @@ function run_main_command() {
     ;;
   mons)
     fetch_mon_endpoints "$@"
+    ;;
+  debug)
+    debug "$@"
     ;;
   rook)
     rook_version "$@"
