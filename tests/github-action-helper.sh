@@ -32,6 +32,7 @@ deploy_rook() {
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/operator.yaml
   curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/cluster-test.yaml -o cluster-test.yaml
   sed -i "s|#deviceFilter:|deviceFilter: $(lsblk | awk '/14G/ {print $1}' | head -1)|g" cluster-test.yaml
+  sed -i '0,/count: 1/ s/count: 1/count: 3/' cluster-test.yaml
   kubectl create -f cluster-test.yaml
   wait_for_pod_to_be_ready_state_default
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/storageclass-test.yaml
@@ -52,6 +53,7 @@ deploy_rook_in_custom_namespace() {
   deploy_with_custom_ns "$1" "$2" operator.yaml
   curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/cluster-test.yaml -o cluster-test.yaml
   sed -i "s|#deviceFilter:|deviceFilter: $(lsblk | awk '/14G/ {print $1}' | head -1)|g" cluster-test.yaml
+  sed -i '0,/count: 1/ s/count: 1/count: 3/' cluster-test.yaml
   deploy_with_custom_ns "$1" "$2" cluster-test.yaml
   wait_for_pod_to_be_ready_state_custom
   curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/storageclass-test.yaml -o storageclass-test.yaml

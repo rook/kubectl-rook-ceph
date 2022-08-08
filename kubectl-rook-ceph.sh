@@ -35,6 +35,7 @@ function print_usage() {
   echo "COMMANDS"
   echo "  ceph <args>                               : call a 'ceph' CLI command with arbitrary args"
   echo "  rbd <args>                                : call a 'rbd' CLI command with arbitrary args"
+  echo "  health                                    : check health of the cluster and common configuration issues"
   echo "  operator <subcommand>..."
   echo "    restart                                 : restart the Rook-Ceph operator"
   echo "    set <property> <value>                  : Set the property in the rook-ceph-operator-config configmap."
@@ -50,7 +51,7 @@ function print_usage() {
 
 function fail_error() {
   print_usage >&2
-  echo "ERROR: $*" >&2
+  error_msg " $*" >&2
   exit 1
 }
 
@@ -149,6 +150,18 @@ function end_of_command_parsing() {
   fi
 }
 
+function info_msg() {
+  echo -e "${INFO_PREFIX}" "$@"
+}
+
+function warn_msg() {
+  echo -e "${WARNING_PREFIX}" "$@"
+}
+
+function error_msg() {
+  echo -e "${ERROR_PREFIX}" "$@"
+}
+
 # run a kubectl command in the operator namespace
 function KUBECTL_NS_OPERATOR() {
   $TOP_LEVEL_COMMAND --namespace "$ROOK_OPERATOR_NAMESPACE" "$@"
@@ -165,7 +178,7 @@ function KUBECTL_NS_CLUSTER() {
 
 function run_ceph_command() {
   # do not call end_of_command_parsing here because all remaining input is passed directly to 'ceph'
-  KUBECTL_NS_OPERATOR exec deploy/rook-ceph-operator -- ceph "$@" --conf="$CEPH_CONF_PATH"
+  KUBECTL_NS_OPERATOR exec deploy/rook-ceph-operator -- ceph "$@" --connect-timeout=10 --conf="$CEPH_CONF_PATH"
 }
 
 ####################################################################################################
@@ -219,7 +232,7 @@ function fetch_mon_endpoints() {
 ####################################################################################################
 
 function rook_version() {
-  [[ -z "${1:-""}" ]] && fail_error "Missing 'version' subcommand"
+  [[ -z "${1:-""}" ]] && fail_error "Missing subcommand"
   subcommand="$1"
   shift # remove the subcommand from the front of the arg list
   case "$subcommand" in
@@ -246,9 +259,9 @@ function run_rook_version() {
 function run_rook_cr_status() {
   if [ "$#" -eq 1 ] && [ "$1" = "all" ]; then
     cr_list=$(KUBECTL_NS_CLUSTER get crd | awk '{print $1}' | sed '1d')
-    echo "CR status"
+    info_msg " CR status"
     for cr in $cr_list; do
-      echo "$cr": "$(KUBECTL_NS_CLUSTER get "$cr" -ojson | jq --monochrome-output '.items[].status')"
+      echo -e "$cr": "$(KUBECTL_NS_CLUSTER get "$cr" -ojson | jq --monochrome-output '.items[].status')"
     done
   elif [[ "$#" -eq 1 ]]; then
     KUBECTL_NS_CLUSTER get "$1" -ojson | jq --monochrome-output '.items[].status'
@@ -271,6 +284,90 @@ function run_purge_osd() {
       ROOK_CEPH_SECRET=$ceph_secret \
       ROOK_CONFIG_DIR=/var/lib/rook && \
     rook ceph osd remove --osd-ids=$1 --force-osd-removal=$force_removal"
+}
+
+function run_cluster_health() {
+  end_of_command_parsing "$@" # end of command tree
+  set +e                      # if there are no pod that are not running, then do no exit
+  check_mon_pods_nodes
+  echo
+  check_mon_quorum
+  echo
+  check_osd_pod_count_and_nodes
+  echo
+  check_all_pods_status
+  echo
+  check_pg_are_active_clean
+  echo
+  check_mgr_pods_status_and_count
+  set -e
+}
+
+function check_mon_pods_nodes() {
+  info_msg " Checking if at least three mon pods are running on different nodes"
+  mon_unique_node_count=$(KUBECTL_NS_CLUSTER get pod | grep mon | grep -v canary | awk '{print $2}' | sort | uniq | wc -l)
+  if [ "$mon_unique_node_count" -lt 3 ]; then
+    warn_msg " At least three mon pods should running on different nodes"
+  fi
+  KUBECTL_NS_CLUSTER get pod | grep mon | grep --invert-match canary
+}
+
+function check_mon_quorum() {
+  info_msg " Checking mon quorum and ceph health details"
+  ceph_health_details=$(KUBECTL_NS_OPERATOR exec deploy/rook-ceph-operator -- ceph health detail --conf="$CEPH_CONF_PATH")
+  if [[ "$ceph_health_details" = "HEALTH_OK" ]]; then
+    echo -e "$ceph_health_details"
+  elif [[ "$ceph_health_details" =~ "HEALTH_WARN" ]]; then
+    warn_msg " $ceph_health_details"
+  elif [[ "$ceph_health_details" =~ "HEALTH_ERR" ]]; then
+    error_msg " $ceph_health_details"
+  fi
+}
+
+function check_osd_pod_count_and_nodes() {
+  info_msg " Checking if at least three osd pods are running on different nodes"
+  osd_unique_node_count=$(KUBECTL_NS_CLUSTER get pod | grep osd | grep -v prepare | awk '{print $2}' | sort | uniq | wc -l)
+  if [ "$osd_unique_node_count" -lt 3 ]; then
+    warn_msg " At least three osd pods should running on different nodes"
+  fi
+  KUBECTL_NS_CLUSTER get pod | grep osd | grep --invert-match prepare
+}
+
+function check_all_pods_status() {
+  info_msg " Pods that are in 'Running' status"
+  KUBECTL_NS_OPERATOR get pod --field-selector status.phase=Running
+  if [ "$ROOK_OPERATOR_NAMESPACE" != "$ROOK_CLUSTER_NAMESPACE" ]; then
+    KUBECTL_NS_CLUSTER get pod --field-selector status.phase=Running
+  fi
+
+  echo
+  warn_msg " Pods that are 'Not' in 'Running' status"
+  KUBECTL_NS_OPERATOR get pod --field-selector status.phase!=Running | grep --invert-match Completed
+  if [ "$ROOK_OPERATOR_NAMESPACE" != "$ROOK_CLUSTER_NAMESPACE" ]; then
+    KUBECTL_NS_CLUSTER get pod --field-selector status.phase!=Running | grep --invert-match Completed
+  fi
+}
+
+function check_pg_are_active_clean() {
+  info_msg " checking placement group status"
+  pg_state=$(KUBECTL_NS_OPERATOR exec deploy/rook-ceph-operator -- ceph pg stat --conf="$CEPH_CONF_PATH")
+  pg_state_code=$(echo "${pg_state}" | awk '{print $4}')
+  if [[ "$pg_state_code" = *"active+clean;"* ]]; then
+    info_msg " $pg_state"
+  elif [[ "$pg_state_code" =~ down || "$pg_state_code" =~ incomplete || "$pg_state_code" =~ snaptrim_error ]]; then
+    error_msg " $pg_state"
+  else
+    warn_msg " $pg_state"
+  fi
+}
+
+function check_mgr_pods_status_and_count() {
+  info_msg " checking if at least one mgr pod is running"
+  mgr_pod_count=$(KUBECTL_NS_CLUSTER get pod -o=custom-columns=NAME:.metadata.name,STATUS:.status.phase | grep mgr | awk '{print $2}' | sort | uniq | wc -l)
+  if [ "$mgr_pod_count" -lt 1 ]; then
+    error_msg " At least one mgr pod should running"
+  fi
+  KUBECTL_NS_CLUSTER get pod -o=custom-columns=NAME:.metadata.name,STATUS:.status.phase,NODE:.spec.nodeName | grep mgr
 }
 
 ####################################################################################################
@@ -331,6 +428,9 @@ function run_main_command() {
   rook)
     rook_version "$@"
     ;;
+  health)
+    run_cluster_health "$@"
+    ;;
   # status)
   #   run_status_command "$@"
   #   ;;
@@ -344,6 +444,10 @@ function run_main_command() {
 : "${ROOK_CLUSTER_NAMESPACE:=rook-ceph}"
 : "${ROOK_OPERATOR_NAMESPACE:=$ROOK_CLUSTER_NAMESPACE}"
 : "${TOP_LEVEL_COMMAND:=kubectl}"
+: "${RESET:=\033[0m}"                           # For no color
+: "${ERROR_PREFIX:=\033[1;31mError:$RESET}"     # \033[1;31m for Red color
+: "${INFO_PREFIX:=\033[1;34mInfo:$RESET}"       # \033[1;34m for Blue color
+: "${WARNING_PREFIX:=\033[1;33mWarning:$RESET}" # \033[1;33m for Yellow color
 
 ####################################################################################################
 # MAIN: PARSE MAIN ARGS AND CALL MAIN COMMAND HANDLER

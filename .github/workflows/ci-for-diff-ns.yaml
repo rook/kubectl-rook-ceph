@@ -54,6 +54,7 @@ jobs:
           # we need to sleep so the osd will be marked down before purging the osd
           sleep 5
           kubectl-rook_ceph -o test-operator -n test-cluster rook purge-osd 0 --force
+          kubectl rook_ceph -o test-operator -n test-cluster health
 
       - name: setup tmate session for debugging when event is PR
         if: failure() && github.event_name == 'pull_request'

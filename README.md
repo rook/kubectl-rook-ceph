@@ -25,20 +25,22 @@ To install the plugin, run:
 
 - `ceph <args>` : Run a Ceph CLI command. Supports any arguments the `ceph` command supports. See [Ceph docs](https://docs.ceph.com/en/pacific/start/intro/) for more.
 
-- `rbd <args>` : Call a 'rbd' CLI command with arbitrary args"
+- `rbd <args>` : Call a 'rbd' CLI command with arbitrary args
 
-- `mons` : Print mon endpoints"
+- `mons` : Print mon endpoints
+
+- `health` : check health of the cluster and common configuration issues
 
 - `operator`
   - `restart` : Restart the Rook-Ceph operator
   - `set <property> <value>` : Set the property in the rook-ceph-operator-config configmap.
 
 - `rook`
-  - `version`     : Print the version of Rook"
-  - `status`      : Print the phase and/or conditions of every CR in the namespace"
+  - `version`     : Print the version of Rook
+  - `status`      : Print the phase and/or conditions of every CR in the namespace
   - `status all`  : Print the phase and conditions of all CRs
   - `status <CR>` : Print the phase and conditions of CRs of a specific type, such as `cephobjectstore`, `cephfilesystem`, etc
-  - `purge-osd <osd-id> [--force]` : Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs."
+  - `purge-osd <osd-id> [--force]` : Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs.
 
 - `help` : Output help text
 
