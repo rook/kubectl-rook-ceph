@@ -165,7 +165,7 @@ function KUBECTL_NS_CLUSTER() {
 
 function run_ceph_command() {
   # do not call end_of_command_parsing here because all remaining input is passed directly to 'ceph'
-  KUBECTL_NS_OPERATOR exec deploy/rook-ceph-operator -- ceph "$@" --conf="$CEPH_CONF_PATH"
+  KUBECTL_NS_OPERATOR exec deploy/rook-ceph-operator -- ceph "$@" --connect-timeout=10 --conf="$CEPH_CONF_PATH"
 }
 
 ####################################################################################################
