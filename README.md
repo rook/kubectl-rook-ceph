@@ -42,6 +42,11 @@ To install the plugin, run:
   - `status <CR>` : Print the phase and conditions of CRs of a specific type, such as `cephobjectstore`, `cephfilesystem`, etc
   - `purge-osd <osd-id> [--force]` : Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs.
 
+- `debug` : [Debug a deployment](#debug-mode)  by scaling it down and creating a debug copy. This is supported for mons and OSDs only
+  - `start  <deployment-name> ` 
+    `[--alternate-image <alternate-image>]` : Start debugging a deployment with an optional alternative ceph container image
+  - `stop  <deployment-name>` : Stop debugging a deployment
+
 - `help` : Output help text
 
 ## Examples
@@ -119,6 +124,52 @@ kubectl rook-ceph ceph versions
         "ceph version 16.2.7 (dd0603118f56ab514f133c8d2e3adfc983942503) pacific (stable)": 3
     }
 }
+```
+
+### Debug Mode
+
+Debug mode can be useful when a mon or OSD needs advanced maintenance operations that require the daemon to be stopped. Ceph tools such as `ceph-objectstore-tool`,`ceph-bluestore-tool`, or `ceph-monstore-tool` are commonly used in these scenarios. Debug mode will set up the mon or OSD so that these commands can be run.
+
+Debug mode will automate the following:
+1. Scale down the existing mon or OSD deployment
+2. Start a new debug deployment where operations can be performed directly against the mon or OSD without that daemon running
+   
+   a. The main container sleeps so you can connect and run the ceph commands
+   
+   b. Liveness and startup probes are removed
+
+   c. If alternate Image is passed by --alternate-image flag then the new debug deployment container will be using alternate Image.
+
+For example, start the debug pod for mon `b`:
+```console
+kubectl rook-ceph debug start rook-ceph-mon-b
+```
+```text
+setting debug mode for "rook-ceph-mon-b"
+setting debug command to main container
+deployment.apps/rook-ceph-mon-b scaled
+deployment.apps/rook-ceph-mon-b-debug created
+```
+
+Now connect to the daemon pod and perform operations:
+```console
+kubectl exec <debug-pod> -- <ceph command>
+```
+
+When finished, stop debug mode and restore the original daemon:
+```console
+kubectl rook-ceph debug stop rook-ceph-mon-b
+```
+```text
+setting debug mode for "rook-ceph-mon-b-debug"
+removing debug mode from "rook-ceph-mon-b-debug"
+deployment.apps "rook-ceph-mon-b-debug" deleted
+deployment.apps/rook-ceph-mon-b scaled
+```
+
+>Note: If you need to update the limits and request of the debug deployment that is created using debug command you can run:
+>```console
+>oc set resources deployment rook-ceph-osd-${osdid}-debug --limits=cpu=8,memory=64Gi --requests=cpu=8,memory=64Gi
 ```
 
 ## Contributing
