@@ -56,6 +56,18 @@ jobs:
           kubectl-rook_ceph -o test-operator -n test-cluster rook purge-osd 0 --force
           kubectl rook_ceph -o test-operator -n test-cluster health
 
+          # for testing start-debug and stop-debug deployment
+          # mon
+          kubectl rook_ceph -o test-operator -n test-cluster debug start rook-ceph-mon-a
+          # sleep till the debug pod get running
+          sleep 5
+          kubectl rook_ceph -o test-operator -n test-cluster debug stop rook-ceph-mon-a
+          # osd
+          kubectl rook_ceph -o test-operator -n test-cluster debug start rook-ceph-osd-0
+          # sleep till the debug pod get running
+          sleep 5
+          kubectl rook_ceph -o test-operator -n test-cluster debug stop rook-ceph-osd-0
+
       - name: setup tmate session for debugging when event is PR
         if: failure() && github.event_name == 'pull_request'
         uses: mxschmitt/action-tmate@v3

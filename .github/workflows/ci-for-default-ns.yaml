@@ -69,15 +69,29 @@ jobs:
           kubectl rook_ceph rook status all
           kubectl rook_ceph rook status cephobjectstores
           # to allow time for reconcile, sleep before listing the pools
-          sleep 5
+          sleep 10
           kubectl rook_ceph rbd ls replicapool
-
+          
+          # for testing start-debug and stop-debug deployment
+          # mons 
+          kubectl rook_ceph debug start rook-ceph-mon-a
+          sleep 5
+          kubectl rook_ceph debug stop rook-ceph-mon-a
+          # osd  
+          kubectl rook_ceph debug start rook-ceph-osd-0
+          sleep 5
+          kubectl rook_ceph debug stop rook-ceph-osd-0
+          
+          # sleep again so OSD can start
+          sleep 5
+          
           # for testing osd purge scale the osd deplyment
           kubectl --namespace rook-ceph scale deploy/rook-ceph-osd-0 --replicas=0
           # we need to sleep so the osd will be marked down before purging the osd
           sleep 5
-          kubectl-rook_ceph rook purge-osd 0 --force
+          kubectl rook_ceph rook purge-osd 0 --force
           kubectl rook_ceph health
+      
       - name: setup tmate session for debugging when event is PR
         if: failure() && github.event_name == 'pull_request'
         uses: mxschmitt/action-tmate@v3
