@@ -8,6 +8,65 @@ defaults:
     shell: bash --noprofile --norc -eo pipefail -x {0}
 
 jobs:
+  with-krew-in-custom-namespace:
+    runs-on: ubuntu-latest
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: setup cluster
+        uses: ./.github/workflows/cluster-setup
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          op-ns: "test-operator"
+          cluster-ns: "test-cluster"
+
+      - name: install krew
+        run: tests/github-action-helper.sh install_krew
+
+      - name: Test pluging with ceph commands
+        run: |
+          export PATH="${PATH}:${HOME}/.krew/bin"
+          # run ceph commands with the krew plugin
+          kubectl rook-ceph -o test-operator -n test-cluster ceph status
+          kubectl rook-ceph -o test-operator -n test-cluster ceph status -f json
+          kubectl rook-ceph -o test-operator -n test-cluster ceph status --format json-pretty
+          POD=$(kubectl -n test-operator get pod -l app=rook-ceph-operator -o jsonpath="{.items[0].metadata.name}")
+          kubectl rook-ceph -o test-operator -n test-cluster operator restart
+
+          # let's wait for operator pod to be restart
+          kubectl -n test-operator wait --for=delete pod/$POD --timeout=100s
+          tests/github-action-helper.sh wait_for_operator_pod_to_be_ready_state_custom
+          kubectl rook-ceph -o test-operator -n test-cluster operator set ROOK_LOG_LEVEL DEBUG
+          kubectl rook-ceph -o test-operator -n test-cluster --context=$(kubectl config current-context) mons
+          kubectl rook-ceph -o test-operator -n test-cluster rook version
+          kubectl rook-ceph -o test-operator -n test-cluster rook status
+          kubectl rook-ceph -o test-operator -n test-cluster rook status all
+          kubectl rook-ceph -o test-operator -n test-cluster rook status cephobjectstores
+          # to allow time for reconcile, sleep before listing the pools
+          sleep 5
+          kubectl rook-ceph -o test-operator -n test-cluster rbd ls replicapool
+
+          # for testing osd purge scale the osd deplyment
+          kubectl --namespace test-cluster scale deploy/rook-ceph-osd-0 --replicas=0
+          # we need to sleep so the osd will be marked down before purging the osd
+          sleep 5
+          kubectl rook-ceph -o test-operator -n test-cluster rook purge-osd 0 --force
+          kubectl rook-ceph -o test-operator -n test-cluster health
+
+          # for testing start-debug and stop-debug deployment
+          # mon
+          kubectl rook-ceph -o test-operator -n test-cluster debug start rook-ceph-mon-a
+          # sleep till the debug pod get running
+          sleep 5
+          kubectl rook-ceph -o test-operator -n test-cluster debug stop rook-ceph-mon-a
+          # osd
+          kubectl rook-ceph -o test-operator -n test-cluster debug start rook-ceph-osd-0
+          # sleep till the debug pod get running
+          sleep 5
+          kubectl rook-ceph -o test-operator -n test-cluster debug stop rook-ceph-osd-0
   # This test is required to test latest changes or the changes that not present
   # with current version of rook-ceph krew plugin
   with-pr-changes-in-custom-namespace:
@@ -30,43 +89,7 @@ jobs:
 
       - name: Test Plugin
         run: |
-          kubectl rook_ceph -o test-operator -n test-cluster ceph status
-          kubectl rook_ceph -o test-operator -n test-cluster ceph status -f json
-          kubectl rook_ceph -o test-operator -n test-cluster ceph status --format json-pretty
-          POD=$(kubectl -n test-operator get pod -l app=rook-ceph-operator -o jsonpath="{.items[0].metadata.name}")
-          kubectl rook_ceph -o test-operator -n test-cluster operator restart
-
-          # let's wait for operator pod to be restart
-          kubectl -n test-operator wait --for=delete pod/$POD --timeout=100s
-          tests/github-action-helper.sh wait_for_operator_pod_to_be_ready_state_custom
-          kubectl rook_ceph -o test-operator -n test-cluster operator set ROOK_LOG_LEVEL DEBUG
-          kubectl rook_ceph -o test-operator -n test-cluster --context=$(kubectl config current-context) mons
-          kubectl rook_ceph -o test-operator -n test-cluster rook version
-          kubectl rook_ceph -o test-operator -n test-cluster rook status
-          kubectl rook_ceph -o test-operator -n test-cluster rook status all
-          kubectl rook_ceph -o test-operator -n test-cluster rook status cephobjectstores
-          # to allow time for reconcile, sleep before listing the pools
-          sleep 5
-          kubectl rook_ceph -o test-operator -n test-cluster rbd ls replicapool
-
-          # for testing osd purge scale the osd deplyment
-          kubectl --namespace test-cluster scale deploy/rook-ceph-osd-0 --replicas=0
-          # we need to sleep so the osd will be marked down before purging the osd
-          sleep 5
-          kubectl-rook_ceph -o test-operator -n test-cluster rook purge-osd 0 --force
-          kubectl rook_ceph -o test-operator -n test-cluster health
-
-          # for testing start-debug and stop-debug deployment
-          # mon
-          kubectl rook_ceph -o test-operator -n test-cluster debug start rook-ceph-mon-a
-          # sleep till the debug pod get running
-          sleep 5
-          kubectl rook_ceph -o test-operator -n test-cluster debug stop rook-ceph-mon-a
-          # osd
-          kubectl rook_ceph -o test-operator -n test-cluster debug start rook-ceph-osd-0
-          # sleep till the debug pod get running
-          sleep 5
-          kubectl rook_ceph -o test-operator -n test-cluster debug stop rook-ceph-osd-0
+          # any new command which is not available with krew release will be added here
 
       - name: setup tmate session for debugging when event is PR
         if: failure() && github.event_name == 'pull_request'
