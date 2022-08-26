@@ -37,7 +37,7 @@ runs:
       if: inputs.op-ns == '' || inputs.cluster-ns == ''
       run: tests/github-action-helper.sh deploy_rook
 
-    - name: deploy rook cluster in cutom namespace
+    - name: deploy rook cluster in custom namespace
       shell: bash --noprofile --norc -eo pipefail -x {0}
       if: inputs.op-ns != '' || inputs.cluster-ns != ''
       run: tests/github-action-helper.sh deploy_rook_in_custom_namespace ${{ inputs.op-ns }} ${{ inputs.cluster-ns }}
