@@ -47,7 +47,7 @@ function print_usage() {
   echo "    status <CR>                             : print the phase and conditions of CRs of a specific type, such as 'cephobjectstore', 'cephfilesystem', etc"
   echo "    purge-osd <osd-id> [--force]            : Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs."
   echo "  debug <subcommand>...                     : Debug a deployment by scaling it down and creating a debug copy. This is supported for mons and OSDs only"
-  echo "    start  <deployment-name>                
+  echo "    start  <deployment-name>
            [--alternate-image <alternate-image>]    : Start debugging a deployment with an optional container image"
   echo "  stop <deployment-name>                    : Stop debugging a deployment"
   echo ""
@@ -378,50 +378,50 @@ function check_mgr_pods_status_and_count() {
 # 'kubectl rook-ceph debug commands
 ####################################################################################################
 
-function remove_probe_from_deployment(){
+function remove_probe_from_deployment() {
   deployment_spec=$1
-  deployment_spec=$(jq 'del(.template.spec.containers[0].livenessProbe)' <<< $deployment_spec)
-  deployment_spec=$(jq 'del(.template.spec.containers[0].startupProbe)' <<< $deployment_spec)
-  echo "$deployment_spec" # for returning the updated deployment_spec 
+  deployment_spec=$(jq 'del(.template.spec.containers[0].livenessProbe)' <<<$deployment_spec)
+  deployment_spec=$(jq 'del(.template.spec.containers[0].startupProbe)' <<<$deployment_spec)
+  echo "$deployment_spec" # for returning the updated deployment_spec
 }
 
-function update_deployment_spec_command(){
+function update_deployment_spec_command() {
   deployment_spec=$1
   main_command='["sleep","infinity"]'
-  deployment_spec=$(jq .template.spec.containers[0].command="$main_command" <<< $deployment_spec)
-  deployment_spec=$(jq .template.spec.containers[0].args=[] <<< $deployment_spec)
-  echo "$deployment_spec" # for returning the updated deployment_spec
-}  
-
-function update_deployment_spec_image(){
-  deployment_spec=$1
-  alternalte_image=\"$2\"
-  deployment_spec=$(jq .template.spec.containers[0].image="$alternalte_image" <<< $deployment_spec)
+  deployment_spec=$(jq .template.spec.containers[0].command="$main_command" <<<$deployment_spec)
+  deployment_spec=$(jq .template.spec.containers[0].args=[] <<<$deployment_spec)
   echo "$deployment_spec" # for returning the updated deployment_spec
 }
 
-function verify_debug_deployment(){
+function update_deployment_spec_image() {
+  deployment_spec=$1
+  alternalte_image=\"$2\"
+  deployment_spec=$(jq .template.spec.containers[0].image="$alternalte_image" <<<$deployment_spec)
+  echo "$deployment_spec" # for returning the updated deployment_spec
+}
+
+function verify_debug_deployment() {
   if [[ $deployment_name != "rook-ceph-mon-"* ]] && [[ $deployment_name != "rook-ceph-osd-"* ]]; then
     fail_error "only mon or osd deployment name can passed for starting debug mode"
   fi
   if KUBECTL_NS_CLUSTER get deployment "$deployment_name" &>/dev/null; then
-    echo "setting debug mode for \"$deployment_name\"" 
-  else  
+    echo "setting debug mode for \"$deployment_name\""
+  else
     fail_error "deployment $deployment_name doesn't exist"
   fi
 }
 
-function run_start_debug(){
+function run_start_debug() {
   [[ -z "${1:-""}" ]] && fail_error "Missing mon or osd deployment name"
   deployment_name="$1"
   alternate_image_flag="${2:-""}"
   alternate_image="${3:-""}"
   verify_debug_deployment "$deployment_name"
-  
+
   # copy the deployment spec before scaling it down
-  deployment_spec=$(KUBECTL_NS_CLUSTER get  deployments  "$deployment_name" -o json | jq -r ".spec")
+  deployment_spec=$(KUBECTL_NS_CLUSTER get deployments "$deployment_name" -o json | jq -r ".spec")
   # copy the deployment labels before scaling it down
-  labels=$(KUBECTL_NS_CLUSTER get  deployments  "$deployment_name" -o json | jq -r ".metadata.labels")
+  labels=$(KUBECTL_NS_CLUSTER get deployments "$deployment_name" -o json | jq -r ".metadata.labels")
   # add debug label to the list
   labels=$(echo "$labels" | jq '. + {"ceph.rook.io/do-not-reconcile": "true"}')
   # remove probes from the deployment
@@ -433,7 +433,7 @@ function run_start_debug(){
         echo "setting debug image to $alternate_image"
         deployment_spec=$(update_deployment_spec_image "$deployment_spec" "$alternate_image")
       else
-        fail_error "if --alternate-image flag is passed then image argument is mandatory"   
+        fail_error "if --alternate-image flag is passed then image argument is mandatory"
       fi
     else
       fail_error "--alternate-image should be passed as flag"
@@ -445,7 +445,7 @@ function run_start_debug(){
 
   # scale the deployment to 0
   KUBECTL_NS_CLUSTER scale deployments "$deployment_name" --replicas=0
-  
+
   # create debug deployment
   cat <<EOF | $TOP_LEVEL_COMMAND create -f -
     apiVersion: apps/v1
@@ -460,7 +460,7 @@ function run_start_debug(){
 EOF
 }
 
-function run_stop_debug(){
+function run_stop_debug() {
   [[ -z "${1:-""}" ]] && fail_error "Missing mon or osd deployment name"
   deployment_name="$1"
   if [[ $deployment_name != *"debug" ]]; then
@@ -477,7 +477,7 @@ function run_stop_debug(){
   KUBECTL_NS_CLUSTER scale deployments "$deployment_name" --replicas=1
 }
 
-function run_debug(){
+function run_debug() {
   [[ -z "${1:-""}" ]] && fail_error "Missing 'debug' subcommand"
   subcommand="$1"
   shift # remove the subcommand from the front of the arg list
@@ -489,9 +489,9 @@ function run_debug(){
     run_stop_debug "$@"
     ;;
   *)
-  fail_error "'debug' subcommand '$subcommand' does not exist"
+    fail_error "'debug' subcommand '$subcommand' does not exist"
     ;;
-  esac  
+  esac
 }
 ####################################################################################################
 # 'kubectl rook-ceph status' command
