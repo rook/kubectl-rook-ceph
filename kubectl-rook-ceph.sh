@@ -95,6 +95,7 @@ function flag_no_value() {
 # When a non-flag arg is reached, stop parsing and return the remaining args in REMAINING_ARGS.
 REMAINING_ARGS=()
 function parse_flags() {
+  REMAINING_ARGS=()
   local set_value_function="$1"
   shift # pop set_value_function arg from the arg list
   while (($#)); do
