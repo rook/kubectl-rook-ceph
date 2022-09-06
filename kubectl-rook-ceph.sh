@@ -443,8 +443,13 @@ function run_start_debug() {
   echo "setting debug command to main container"
   deployment_spec=$(update_deployment_spec_command "$deployment_spec")
 
+  deployment_pod=$(KUBECTL_NS_CLUSTER get pod | grep "$deployment_name" | awk '{ print $1  }')
   # scale the deployment to 0
   KUBECTL_NS_CLUSTER scale deployments "$deployment_name" --replicas=0
+
+  # wait for the deployment pod to be deleted
+  echo "waiting for the deployment pod \"$deployment_pod\" to be deleted"
+  KUBECTL_NS_CLUSTER wait --for=delete pod/"$deployment_pod" --timeout=60s
 
   # create debug deployment
   cat <<EOF | $TOP_LEVEL_COMMAND create -f -
