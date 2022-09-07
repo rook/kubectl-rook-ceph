@@ -318,7 +318,7 @@ function check_mon_pods_nodes() {
 
 function check_mon_quorum() {
   info_msg " Checking mon quorum and ceph health details"
-  ceph_health_details=$(KUBECTL_NS_OPERATOR exec deploy/rook-ceph-operator -- ceph health detail --conf="$CEPH_CONF_PATH")
+  ceph_health_details=$(run_ceph_command health detail)
   if [[ "$ceph_health_details" = "HEALTH_OK" ]]; then
     echo -e "$ceph_health_details"
   elif [[ "$ceph_health_details" =~ "HEALTH_WARN" ]]; then
@@ -354,7 +354,7 @@ function check_all_pods_status() {
 
 function check_pg_are_active_clean() {
   info_msg " checking placement group status"
-  pg_state=$(KUBECTL_NS_OPERATOR exec deploy/rook-ceph-operator -- ceph pg stat --conf="$CEPH_CONF_PATH")
+  pg_state=$(run_ceph_command pg stat)
   pg_state_code=$(echo "${pg_state}" | awk '{print $4}')
   if [[ "$pg_state_code" = *"active+clean;"* ]]; then
     info_msg " $pg_state"
