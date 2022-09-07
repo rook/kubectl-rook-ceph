@@ -309,7 +309,7 @@ function run_cluster_health() {
 
 function check_mon_pods_nodes() {
   info_msg " Checking if at least three mon pods are running on different nodes"
-  mon_unique_node_count=$(KUBECTL_NS_CLUSTER get pod | grep mon | grep -v canary | awk '{print $2}' | sort | uniq | wc -l)
+  mon_unique_node_count=$(KUBECTL_NS_CLUSTER get pod -o wide | grep mon | grep -v canary | awk '{print $7}' | sort | uniq | wc -l)
   if [ "$mon_unique_node_count" -lt 3 ]; then
     warn_msg " At least three mon pods should running on different nodes"
   fi
@@ -330,7 +330,7 @@ function check_mon_quorum() {
 
 function check_osd_pod_count_and_nodes() {
   info_msg " Checking if at least three osd pods are running on different nodes"
-  osd_unique_node_count=$(KUBECTL_NS_CLUSTER get pod | grep osd | grep -v prepare | awk '{print $2}' | sort | uniq | wc -l)
+  osd_unique_node_count=$(KUBECTL_NS_CLUSTER get pod -o wide | grep osd | grep -v prepare | awk '{print $7}' | sort | uniq | wc -l)
   if [ "$osd_unique_node_count" -lt 3 ]; then
     warn_msg " At least three osd pods should running on different nodes"
   fi
