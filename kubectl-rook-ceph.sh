@@ -412,15 +412,15 @@ function verify_debug_deployment() {
   fi
 }
 
-function run_start_debug(){
-  # debug start can be used in different ways 
-  # 1) debug start deploymentName --alternate-image imageName 
+function run_start_debug() {
+  # debug start can be used in different ways
+  # 1) debug start deploymentName --alternate-image imageName
   # 2) debug start --alternate-image imageName deploymentName
   # 3) debug start deploymentName
   parse_flags parse_image_flag "$@" # parse flags before the deployment name
   [[ -z "${REMAINING_ARGS[0]:-""}" ]] && fail_error "Missing mon or osd deployment name"
-  deployment_name="${REMAINING_ARGS[0]}" # get deployment name
-  REMAINING_ARGS=("${REMAINING_ARGS[@]:1}") # remove deploy name from remaining args
+  deployment_name="${REMAINING_ARGS[0]}"              # get deployment name
+  REMAINING_ARGS=("${REMAINING_ARGS[@]:1}")           # remove deploy name from remaining args
   parse_flags parse_image_flag "${REMAINING_ARGS[@]}" # parse flags after the deployment name
   end_of_command_parsing "${REMAINING_ARGS[@]}"
 
@@ -435,7 +435,7 @@ function run_start_debug(){
   # remove probes from the deployment
   deployment_spec=$(remove_probe_from_deployment "$deployment_spec")
   # update the deployment_spec with new image if alternate-image is passed
-  if [ -n "$ALTERNATE_IMAGE" ];then
+  if [ -n "$ALTERNATE_IMAGE" ]; then
     echo "setting debug image to \"$ALTERNATE_IMAGE\""
     deployment_spec=$(update_deployment_spec_image "$deployment_spec" "$ALTERNATE_IMAGE")
   fi
@@ -496,7 +496,7 @@ function parse_image_flag() {
   esac
 }
 
-function run_debug(){
+function run_debug() {
   [[ -z "${1:-""}" ]] && fail_error "Missing 'debug' subcommand"
   subcommand="$1"
   shift # remove the subcommand from the front of the arg list
@@ -512,6 +512,50 @@ function run_debug(){
     ;;
   esac
 }
+
+function run_dr_subcommands() {
+  [[ -z "${1:-""}" ]] && fail_error "Missing subcommand"
+  subcommand="$1"
+  shift # remove the subcommand from the front of the arg list
+  case $subcommand in
+  health)
+    run_dr_health "$@"
+    ;;
+  *)
+    fail_error "'dr' subcommand '$subcommand' does not exist"
+    ;;
+  esac
+}
+
+function run_dr_health() {
+  # do not call end_of_command_parsing here because all remaining input is passed directly to 'ceph'
+  info_msg "fetching the cephblockpools with mirroring enabled"
+  blockpool_List=$(KUBECTL_NS_CLUSTER get cephblockpool | awk '{print $1}' | sed "1 d")
+  blockpool_name=""
+  for blockpool in $blockpool_List; do
+    mirroring_enabled=$(KUBECTL_NS_CLUSTER get cephblockpool "$blockpool" -o jsonpath='{.spec.mirroring.enabled}')
+    if [ "$mirroring_enabled" == "true" ]; then
+      blockpool_name+=$blockpool
+      info_msg "found '$blockpool' cephblockpool with mirroring enabled"
+      break
+    fi
+  done
+
+  [ -z "$blockpool_name" ] && error_msg "DR is not confiqured, cephblockpool with mirroring enabled not found."
+
+  # `sed -e 's/^.//' -e 's/.$//'` is used to remove first and last char. It is used twice below to remove `["` form start and `"]` from end.
+  SECRET_NAME=$(KUBECTL_NS_CLUSTER get cephblockpool "$blockpool_name" -ojsonpath='{.spec.mirroring.peers.secretNames}' | sed -e 's/^.//' -e 's/.$//' | sed -e 's/^.//' -e 's/.$//')
+  MON_HOST=$(KUBECTL_NS_CLUSTER get secret/"$SECRET_NAME" -o jsonpath='{.data.token}' | base64 --decode | base64 --decode | jq '.mon_host' | sed -e 's/^.//' -e 's/.$//' | sed -e 's/^.//' -e 's/.$//')
+  PEER_KEY=$(KUBECTL_NS_CLUSTER get secret/"$SECRET_NAME" -o jsonpath='{.data.token}' | base64 --decode | base64 --decode | jq '.key' | sed -e 's/^.//' -e 's/.$//')
+  # run ceph status command form one cluster to another
+  echo
+  info_msg "running ceph status from other cluster details"
+  run_ceph_command -s --mon-host "$MON_HOST" --id rbd-mirror-peer --key "$PEER_KEY" "$@"
+  # run rbd pool mirror status
+  info_msg "running mirroring daemon health"
+  run_rbd_command -p "$blockpool_name" mirror pool status
+}
+
 ####################################################################################################
 # 'kubectl rook-ceph status' command
 ####################################################################################################
@@ -575,6 +619,9 @@ function run_main_command() {
     ;;
   debug)
     run_debug "$@"
+    ;;
+  dr)
+    run_dr_subcommands "$@"
     ;;
   # status)
   #   run_status_command "$@"
