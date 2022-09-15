@@ -6,9 +6,17 @@ Provide common management and troubleshooting tools for the [Rook Ceph](https://
 
 ## Install
 
+> Note: This required kubectl [krew](https://krew.sigs.k8s.io/docs/user-guide/setup/install/) to be installed.
+
 To install the plugin, run:
 
   ```kubectl krew install rook-ceph```
+
+To check plugin version `kubectl krew list` this will list all krew plugin with their current version.
+
+## Update
+
+  ```kubectl krew upgrade rook-ceph```
 
 ## Usage
 
@@ -16,10 +24,32 @@ To install the plugin, run:
 
 ### Root args
 
-- `--namespace` | `-n`: the Kubernetes namespace in which the CephCluster resides (default: rook-ceph)
-- `--operator-namespace` | `-o`: the Kubernetes namespace in which the rook operator resides (default: rook-ceph)
-- `--context`: the name of the Kubernetes context to be used
-- `--help` | `-h`: Output help text
+These are args currently supported:
+
+1. `-h|--help`: this will print brief command help text.
+
+    ```bash
+    kubectl rook-ceph --help
+    ```
+
+2. `-n|--namespace='rook-ceph'`: the Kubernetes namespace in which the CephCluster resides. (optional,  default: rook-ceph)
+
+    ```bash
+    kubectl rook-ceph -o test-operator -n test-cluster rook version
+    ```
+
+3. `-o|--operator-namespace` : the Kubernetes namespace in which the rook operator resides, when the arg `-n` is passed but `-o` is not then `-o` will equal to the `-n`. (default: rook-ceph)
+
+    ```bash
+    kubectl rook-ceph -o test-operator -n test-cluster rook version
+    ```
+
+4. `--context`: the name of the Kubernetes context to be used (optional).
+
+    ```bash
+    kubectl rook-ceph --context=$(kubectl config current-context) mons
+    ```
+
 
 ### Commands
 
@@ -42,8 +72,8 @@ To install the plugin, run:
   - `status <CR>` : Print the phase and conditions of CRs of a specific type, such as `cephobjectstore`, `cephfilesystem`, etc
   - `purge-osd <osd-id> [--force]` : Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs.
 
-- `debug` : [Debug a deployment](#debug-mode)  by scaling it down and creating a debug copy. This is supported for mons and OSDs only
-  - `start  <deployment-name> `
+- `debug` : [Debug a deployment](docs/debug.md)  by scaling it down and creating a debug copy. This is supported for mons and OSDs only
+  - `start  <deployment-name>`
     `[--alternate-image <alternate-image>]` : Start debugging a deployment with an optional alternative ceph container image
   - `stop  <deployment-name>` : Stop debugging a deployment
 
@@ -51,6 +81,24 @@ To install the plugin, run:
   - `health [ceph status args]`: Print the cluster connection status of a peer cluster in a mirroring-enabled cluster. Ceph status args can be optionally passed, such as to change the log level: `--debug-ms 1`..
 
 - `help` : Output help text
+
+## Documentation
+
+Visit docs below for complete details about each command and their flags uses.
+
+1. [Running ceph commands](docs/ceph.md)
+1. [Running rbd commands](docs/rbd.md)
+1. [Getting mon endpoints](docs/mons.md)
+1. [Get cluster health status](docs/health.md)
+1. [Update configmap rook-ceph-operator-config](docs/operator.md#set)
+1. [Restart operator pod](docs/operator.md#restart)
+1. [Get rook version](docs/rook.md#version)
+1. [Get all CR status](docs/rook.md#status-all)
+1. [Get cephCluster CR status](docs/rook.md#status)
+1. [Get specific CR status](docs/rook.md#status-cr-name)
+1. [To purge OSD](docs/rook.md#operator.md)
+1. [Debug OSDs and Mons](docs/debug.md)
+1. [Disaster Recovery](docs/dr-health.md)
 
 ## Examples
 
@@ -128,52 +176,6 @@ kubectl rook-ceph ceph versions
     }
 }
 ```
-
-### Debug Mode
-
-Debug mode can be useful when a mon or OSD needs advanced maintenance operations that require the daemon to be stopped. Ceph tools such as `ceph-objectstore-tool`,`ceph-bluestore-tool`, or `ceph-monstore-tool` are commonly used in these scenarios. Debug mode will set up the mon or OSD so that these commands can be run.
-
-Debug mode will automate the following:
-1. Scale down the existing mon or OSD deployment
-2. Start a new debug deployment where operations can be performed directly against the mon or OSD without that daemon running
-
-   a. The main container sleeps so you can connect and run the ceph commands
-
-   b. Liveness and startup probes are removed
-
-   c. If alternate Image is passed by --alternate-image flag then the new debug deployment container will be using alternate Image.
-
-For example, start the debug pod for mon `b`:
-```console
-kubectl rook-ceph debug start rook-ceph-mon-b
-```
-```text
-setting debug mode for "rook-ceph-mon-b"
-setting debug command to main container
-deployment.apps/rook-ceph-mon-b scaled
-deployment.apps/rook-ceph-mon-b-debug created
-```
-
-Now connect to the daemon pod and perform operations:
-```console
-kubectl exec <debug-pod> -- <ceph command>
-```
-
-When finished, stop debug mode and restore the original daemon:
-```console
-kubectl rook-ceph debug stop rook-ceph-mon-b
-```
-```text
-setting debug mode for "rook-ceph-mon-b-debug"
-removing debug mode from "rook-ceph-mon-b-debug"
-deployment.apps "rook-ceph-mon-b-debug" deleted
-deployment.apps/rook-ceph-mon-b scaled
-```
-
->Note: If you need to update the limits and request of the debug deployment that is created using debug command you can run:
->```console
->oc set resources deployment rook-ceph-osd-${osdid}-debug --limits=cpu=8,memory=64Gi --requests=cpu=8,memory=64Gi
->```
 
 ## Contributing
 
