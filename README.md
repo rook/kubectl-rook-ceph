@@ -47,6 +47,9 @@ To install the plugin, run:
     `[--alternate-image <alternate-image>]` : Start debugging a deployment with an optional alternative ceph container image
   - `stop  <deployment-name>` : Stop debugging a deployment
 
+- `dr` :
+  - `health [ceph status args]`: Print the cluster connection status of a peer cluster in a mirroring-enabled cluster. Ceph status args can be optionally passed, such as to change the log level: `--debug-ms 1`..
+
 - `help` : Output help text
 
 ## Examples

@@ -49,7 +49,9 @@ function print_usage() {
   echo "  debug <subcommand>...                     : Debug a deployment by scaling it down and creating a debug copy. This is supported for mons and OSDs only"
   echo "    start  <deployment-name>
            [--alternate-image <alternate-image>]    : Start debugging a deployment with an optional container image"
-  echo "  stop <deployment-name>                    : Stop debugging a deployment"
+  echo "    stop <deployment-name>                  : Stop debugging a deployment"
+  echo "  dr <subcommand>"
+  echo "    health [debug args]                     : Print the cluster connection status of a peer cluster in a mirroring-enabled cluster. Optional ceph args such as: '--debug-ms 1'."
   echo ""
 }
 
