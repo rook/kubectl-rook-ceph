@@ -95,6 +95,7 @@ function flag_no_value() {
 # When a non-flag arg is reached, stop parsing and return the remaining args in REMAINING_ARGS.
 REMAINING_ARGS=()
 function parse_flags() {
+  REMAINING_ARGS=()
   local set_value_function="$1"
   shift # pop set_value_function arg from the arg list
   while (($#)); do
@@ -411,11 +412,18 @@ function verify_debug_deployment() {
   fi
 }
 
-function run_start_debug() {
-  [[ -z "${1:-""}" ]] && fail_error "Missing mon or osd deployment name"
-  deployment_name="$1"
-  alternate_image_flag="${2:-""}"
-  alternate_image="${3:-""}"
+function run_start_debug(){
+  # debug start can be used in different ways 
+  # 1) debug start deploymentName --alternate-image imageName 
+  # 2) debug start --alternate-image imageName deploymentName
+  # 3) debug start deploymentName
+  parse_flags parse_image_flag "$@" # parse flags before the deployment name
+  [[ -z "${REMAINING_ARGS[0]:-""}" ]] && fail_error "Missing mon or osd deployment name"
+  deployment_name="${REMAINING_ARGS[0]}" # get deployment name
+  REMAINING_ARGS=("${REMAINING_ARGS[@]:1}") # remove deploy name from remaining args
+  parse_flags parse_image_flag "${REMAINING_ARGS[@]}" # parse flags after the deployment name
+  end_of_command_parsing "${REMAINING_ARGS[@]}"
+
   verify_debug_deployment "$deployment_name"
 
   # copy the deployment spec before scaling it down
@@ -427,17 +435,9 @@ function run_start_debug() {
   # remove probes from the deployment
   deployment_spec=$(remove_probe_from_deployment "$deployment_spec")
   # update the deployment_spec with new image if alternate-image is passed
-  if [ -n "$alternate_image_flag" ]; then
-    if [ "$alternate_image_flag" == "--alternate-image" ]; then
-      if [ "$#" -eq 3 ]; then
-        echo "setting debug image to $alternate_image"
-        deployment_spec=$(update_deployment_spec_image "$deployment_spec" "$alternate_image")
-      else
-        fail_error "if --alternate-image flag is passed then image argument is mandatory"
-      fi
-    else
-      fail_error "--alternate-image should be passed as flag"
-    fi
+  if [ -n "$ALTERNATE_IMAGE" ];then
+    echo "setting debug image to \"$ALTERNATE_IMAGE\""
+    deployment_spec=$(update_deployment_spec_image "$deployment_spec" "$ALTERNATE_IMAGE")
   fi
   # update the deployment_spec main container to be only a placeholder,
   echo "setting debug command to main container"
@@ -482,7 +482,21 @@ function run_stop_debug() {
   KUBECTL_NS_CLUSTER scale deployments "$deployment_name" --replicas=1
 }
 
-function run_debug() {
+function parse_image_flag() {
+  local flag="$1"
+  local val="$2"
+  case "$flag" in
+  "--alternate-image")
+    val_exists "$val" || return 1 # val should exist
+    ALTERNATE_IMAGE="${val}"
+    ;;
+  *)
+    fail_error "Flag $flag is not supported"
+    ;;
+  esac
+}
+
+function run_debug(){
   [[ -z "${1:-""}" ]] && fail_error "Missing 'debug' subcommand"
   subcommand="$1"
   shift # remove the subcommand from the front of the arg list
@@ -570,6 +584,16 @@ function run_main_command() {
     ;;
   esac
 }
+
+# Default values
+: "${ROOK_CLUSTER_NAMESPACE:=rook-ceph}"
+: "${ALTERNATE_IMAGE=}"
+: "${ROOK_OPERATOR_NAMESPACE:=$ROOK_CLUSTER_NAMESPACE}"
+: "${TOP_LEVEL_COMMAND:=kubectl}"
+: "${RESET:=\033[0m}"                           # For no color
+: "${ERROR_PREFIX:=\033[1;31mError:$RESET}"     # \033[1;31m for Red color
+: "${INFO_PREFIX:=\033[1;34mInfo:$RESET}"       # \033[1;34m for Blue color
+: "${WARNING_PREFIX:=\033[1;33mWarning:$RESET}" # \033[1;33m for Yellow color
 
 ####################################################################################################
 # MAIN: PARSE MAIN ARGS AND CALL MAIN COMMAND HANDLER
