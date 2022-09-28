@@ -51,7 +51,7 @@ function print_usage() {
            [--alternate-image <alternate-image>]    : Start debugging a deployment with an optional container image"
   echo "    stop <deployment-name>                  : Stop debugging a deployment"
   echo "  dr"
-  echo "    health [debug args]                     : Print the cluster connection status of a peer cluster in a mirroring-enabled cluster. Optional ceph args such as: '--debug-ms 1'."
+  echo "    health [debug args]                     : Print the ceph status of a peer cluster in a mirroring-enabled cluster. Optional ceph args such as: '--debug-ms 1'."
   echo ""
 }
 
