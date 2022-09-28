@@ -551,7 +551,7 @@ function run_dr_health() {
   PEER_KEY=$(KUBECTL_NS_CLUSTER get secret/"$SECRET_NAME" -o jsonpath='{.data.token}' | base64 --decode | base64 --decode | jq '.key' | sed -e 's/^.//' -e 's/.$//')
   # run ceph status command form one cluster to another
   echo
-  info_msg "running ceph status from other cluster details"
+  info_msg "running ceph status from peer cluster"
   run_ceph_command -s --mon-host "$MON_HOST" --id rbd-mirror-peer --key "$PEER_KEY" "$@"
   # run rbd pool mirror status
   info_msg "running mirroring daemon health"
@@ -634,16 +634,6 @@ function run_main_command() {
   esac
 }
 
-# Default values
-: "${ROOK_CLUSTER_NAMESPACE:=rook-ceph}"
-: "${ALTERNATE_IMAGE=}"
-: "${ROOK_OPERATOR_NAMESPACE:=$ROOK_CLUSTER_NAMESPACE}"
-: "${TOP_LEVEL_COMMAND:=kubectl}"
-: "${RESET:=\033[0m}"                           # For no color
-: "${ERROR_PREFIX:=\033[1;31mError:$RESET}"     # \033[1;31m for Red color
-: "${INFO_PREFIX:=\033[1;34mInfo:$RESET}"       # \033[1;34m for Blue color
-: "${WARNING_PREFIX:=\033[1;33mWarning:$RESET}" # \033[1;33m for Yellow color
-
 ####################################################################################################
 # MAIN: PARSE MAIN ARGS AND CALL MAIN COMMAND HANDLER
 ####################################################################################################
@@ -679,10 +669,12 @@ function parse_main_flag() {
 REMAINING_ARGS=()
 parse_flags 'parse_main_flag' "$@"
 
+# Note: don't move default values
 # Default values
 : "${ROOK_CLUSTER_NAMESPACE:=rook-ceph}"
 : "${ROOK_OPERATOR_NAMESPACE:=$ROOK_CLUSTER_NAMESPACE}"
 : "${TOP_LEVEL_COMMAND:=kubectl}"
+: "${ALTERNATE_IMAGE=}"
 : "${RESET:=\033[0m}"                           # For no color
 : "${ERROR_PREFIX:=\033[1;31mError:$RESET}"     # \033[1;31m for Red color
 : "${INFO_PREFIX:=\033[1;34mInfo:$RESET}"       # \033[1;34m for Blue color
