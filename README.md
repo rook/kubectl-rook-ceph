@@ -48,7 +48,7 @@ To install the plugin, run:
   - `stop  <deployment-name>` : Stop debugging a deployment
 
 - `dr` :
-  - `health [ceph status args]`: Print the cluster connection status of a peer cluster in a mirroring-enabled cluster. Ceph status args can be optionally passed, such as to change the log level: `--debug-ms 1`..
+  - `health [ceph status args]`: Print the `ceph status` of a peer cluster in a mirroring-enabled environment thereby validating connectivity between ceph clusters. Ceph status args can be optionally passed, such as to change the log level: `--debug-ms 1`.
 
 - `help` : Output help text
 
