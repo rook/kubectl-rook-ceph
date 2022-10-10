@@ -58,6 +58,7 @@ These are args currently supported:
 - `rbd <args>` : Call a 'rbd' CLI command with arbitrary args
 
 - `mons` : Print mon endpoints
+  - `restore-quorum <mon-name>` : Restore the mon quorum based on a single healthy mon since quorum was lost with the other mons
 
 - `health` : check health of the cluster and common configuration issues
 
@@ -88,7 +89,7 @@ Visit docs below for complete details about each command and their flags uses.
 
 1. [Running ceph commands](docs/ceph.md)
 1. [Running rbd commands](docs/rbd.md)
-1. [Getting mon endpoints](docs/mons.md)
+1. [Get mon endpoints](docs/mons.md#print-mon-endpoints)
 1. [Get cluster health status](docs/health.md)
 1. [Update configmap rook-ceph-operator-config](docs/operator.md#set)
 1. [Restart operator pod](docs/operator.md#restart)
@@ -98,6 +99,7 @@ Visit docs below for complete details about each command and their flags uses.
 1. [Get specific CR status](docs/rook.md#status-cr-name)
 1. [To purge OSD](docs/rook.md#operator.md)
 1. [Debug OSDs and Mons](docs/debug.md)
+1. [Restore mon quorum](docs/mons.md#restore-quorum)
 1. [Disaster Recovery](docs/dr-health.md)
 
 ## Examples

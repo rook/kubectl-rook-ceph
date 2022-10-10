@@ -56,10 +56,14 @@ deploy_rook_in_custom_namespace() {
   sed -i '0,/count: 1/ s/count: 1/count: 3/' cluster-test.yaml
   deploy_with_custom_ns "$1" "$2" cluster-test.yaml
   wait_for_pod_to_be_ready_state_custom
+
   curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/storageclass-test.yaml -o storageclass-test.yaml
   sed -i "s|provisioner: rook-ceph.rbd.csi.ceph.com |provisioner: test-operator.rbd.csi.ceph.com |g" storageclass-test.yaml
   deploy_with_custom_ns "$1" "$2" storageclass-test.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/pvc.yaml
+
+  curl -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/toolbox.yaml -o toolbox.yaml
+  deploy_with_custom_ns "$1" "$2" toolbox.yaml
 }
 
 deploy_with_custom_ns() {
@@ -100,6 +104,16 @@ wait_for_operator_pod_to_be_ready_state_custom() {
     until [ $(kubectl get pod -l app=rook-ceph-operator -n test-operator -o jsonpath='{.items[*].metadata.name}' -o custom-columns=READY:status.containerStatuses[*].ready | grep -c true) -eq 1 ]; do
       echo "waiting for the operator to be in ready state"
       sleep 1
+    done
+EOF
+}
+
+wait_for_three_mons() {
+  export namespace=$1
+  timeout 100 bash <<-'EOF'
+    until [ $(kubectl -n $namespace get deploy -l app=rook-ceph-mon,mon_canary!=true | grep rook-ceph-mon | wc -l | awk '{print $1}' ) -eq 3 ]; do
+      echo "$(date) waiting for three mon deployments to exist"
+      sleep 2
     done
 EOF
 }

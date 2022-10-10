@@ -36,7 +36,7 @@ jobs:
           POD=$(kubectl -n test-operator get pod -l app=rook-ceph-operator -o jsonpath="{.items[0].metadata.name}")
           kubectl rook_ceph -o test-operator -n test-cluster operator restart
 
-          # let's wait for operator pod to be restart
+          # let's wait for operator pod to be restarted
           kubectl -n test-operator wait --for=delete pod/$POD --timeout=100s
           tests/github-action-helper.sh wait_for_operator_pod_to_be_ready_state_custom
           kubectl rook_ceph -o test-operator -n test-cluster operator set ROOK_LOG_LEVEL DEBUG
@@ -48,6 +48,15 @@ jobs:
           # to allow time for reconcile, sleep before listing the pools
           sleep 5
           kubectl rook_ceph -o test-operator -n test-cluster rbd ls replicapool
+
+          # test the mon restore to restore to mon a, delete mons b and c, then add d and e
+          export ROOK_PLUGIN_SKIP_PROMPTS=true
+          kubectl rook_ceph -o test-operator -n test-cluster mons restore-quorum a
+          kubectl -n test-cluster wait pod -l app=rook-ceph-mon-b --for=delete --timeout=90s
+          kubectl -n test-cluster wait pod -l app=rook-ceph-mon-c --for=delete --timeout=90s
+          tests/github-action-helper.sh wait_for_three_mons test-cluster
+          kubectl -n test-cluster wait deployment rook-ceph-mon-d --for condition=Available=True --timeout=90s
+          kubectl -n test-cluster wait deployment rook-ceph-mon-e --for condition=Available=True --timeout=90s
 
           # for testing osd purge scale the osd deplyment
           kubectl --namespace test-cluster scale deploy/rook-ceph-osd-0 --replicas=0

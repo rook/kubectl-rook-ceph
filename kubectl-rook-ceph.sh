@@ -40,6 +40,7 @@ function print_usage() {
   echo "    restart                                 : restart the Rook-Ceph operator"
   echo "    set <property> <value>                  : Set the property in the rook-ceph-operator-config configmap."
   echo "  mons                                      : output mon endpoints"
+  echo "    restore-quorum <mon-name>               : When quorum is lost, restore quorum to the remaining healthy mon"
   echo "  rook"
   echo "    version                                 : print the version of Rook"
   echo "    status                                  : print the phase and conditions of the CephCluster CR"
@@ -226,12 +227,232 @@ function path_cm_rook_ceph_operator_config() {
 }
 
 ####################################################################################################
-# 'kubectl rook-ceph mon-endpoints' commands
+# 'kubectl rook-ceph mons' commands
 ####################################################################################################
+
+function run_mons_command () {
+  if [ "$#" -ge 1 ] && [ "$1" = "restore-quorum" ]; then
+    shift # remove the subcommand from the front of the arg list
+    run_restore_quorum "$@"
+  else
+    fetch_mon_endpoints "$@"
+  fi
+}
 
 function fetch_mon_endpoints() {
   end_of_command_parsing "$@" # end of command tree
   KUBECTL_NS_CLUSTER get cm rook-ceph-mon-endpoints -o json | jq --monochrome-output '.data.data' | tr -d '"' | tr -d '=' | sed 's/[A-Za-z]*//g'
+}
+
+wait_for_deployment_to_be_running() {
+  deployment=$1
+  info_msg "Waiting for the pod from deployment \"$deployment\" to be running"
+  KUBECTL_NS_CLUSTER wait deployment $deployment --for condition=Available=True --timeout=90s
+}
+
+function run_restore_quorum() {
+  parse_flags parse_image_flag "$@" # parse flags before the good mon name
+  [[ -z "${REMAINING_ARGS[0]:-""}" ]] && fail_error "Missing healthy mon name"
+  good_mon="${REMAINING_ARGS[0]}"              # get the good mon being used to restore quorum
+  shift # remove the healthy mon from the front of the arg list
+  REMAINING_ARGS=("${REMAINING_ARGS[@]:1}")           # remove mon name from remaining args
+  end_of_command_parsing "$@" # end of command tree
+
+  # Parse the endpoints configmap for the mon endpoints
+  bad_mons=()
+  mon_endpoints=$(KUBECTL_NS_CLUSTER get cm rook-ceph-mon-endpoints -o jsonpath='{.data.data}')
+  # split the endpoints into an array, separated by the comma
+  for single_mon in ${mon_endpoints//,/ } ; do
+    mon_name=$(echo "${single_mon/=/ }" | awk '{print $1}')
+    mon_endpoint=$(echo "${single_mon/=/ }" | awk '{print $2}')
+    echo "mon=$mon_name, endpoint=$mon_endpoint"
+    if [ "$mon_name" = "$good_mon" ]; then
+      good_mon_public_ip=$(echo "${mon_endpoint/:/ }" | awk '{print $1}')
+      good_mon_port=$(echo "${mon_endpoint/:/ }" | awk '{print $2}')
+    else
+      bad_mons+=("$mon_name")
+    fi
+  done
+
+  # Parse the cluster FSID
+  ceph_fsid=$(KUBECTL_NS_CLUSTER get secret rook-ceph-mon -o jsonpath='{.data.fsid}' | base64 -d)
+  if [ -z ${good_mon_public_ip+x} ]; then
+    error_msg "error: good mon $good_mon not found"
+    exit 1
+  fi
+  if [ "$ceph_fsid" = "" ]; then
+    error_msg "ceph cluster fsid not found"
+    exit 1
+  fi
+
+  # Check for the existence of the toolbox
+  info_msg "Check for the running toolbox"
+  wait_for_deployment_to_be_running rook-ceph-tools
+
+  echo ""
+  warn_msg "Restoring mon quorum to mon $good_mon ($good_mon_public_ip)"
+  info_msg "The mons to discard are: ${bad_mons[*]}"
+  info_msg "The cluster fsid is $ceph_fsid"
+  prompt_to_continue_or_cancel "Are you sure you want to restore the quorum to mon \"$good_mon\"?" "yes-really-restore"
+
+  # scale the operator deployment down
+  KUBECTL_NS_OPERATOR scale deployment rook-ceph-operator --replicas=0
+
+  # scale down all the mon pods
+  KUBECTL_NS_CLUSTER scale deployment -l app=rook-ceph-mon --replicas=0
+
+  # wait for the operator and mons to all stop
+  info_msg "Waiting for operator and mon pods to stop"
+  KUBECTL_NS_OPERATOR wait pod -l app=rook-ceph-operator --for=delete --timeout=90s
+  KUBECTL_NS_CLUSTER wait pod -l app=rook-ceph-mon --for=delete --timeout=90s
+
+  # start the mon debug pod
+  run_start_debug rook-ceph-mon-$good_mon
+
+  wait_for_deployment_to_be_running "rook-ceph-mon-$good_mon-debug"
+
+  info_msg "Started debug pod, restoring the mon quorum in the debug pod"
+  export monmap_path=/tmp/monmap
+
+  # run some ceph commands in the mon debug pod to restore quorum
+  set +eu
+  info_msg "Extracting the monmap"
+  KUBECTL_NS_CLUSTER exec deploy/rook-ceph-mon-$good_mon-debug -c mon -- ceph-mon \
+    --fsid=$ceph_fsid \
+    --keyring=/etc/ceph/keyring-store/keyring \
+    --log-to-stderr=true \
+    --err-to-stderr=true \
+    --mon-cluster-log-to-stderr=true \
+    --log-stderr-prefix=debug \
+    --default-log-to-file=false \
+    --default-mon-cluster-log-to-file=false \
+    --mon-host=$ROOK_CEPH_MON_HOST \
+    --mon-initial-members=$ROOK_CEPH_MON_INITIAL_MEMBERS \
+    --id=$good_mon \
+    --foreground \
+    --public-addr=$good_mon_public_ip \
+    --setuser-match-path=/var/lib/ceph/mon/ceph-$good_mon/store.db \
+    --public-bind-addr=$ROOK_POD_IP \
+    --extract-monmap=$monmap_path
+
+  info_msg "Printing monmap"; \
+  KUBECTL_NS_CLUSTER exec deploy/rook-ceph-mon-$good_mon-debug -c mon -- monmaptool --print $monmap_path
+
+  # remove all the mons except the good one
+  for bad_mon in "${bad_mons[@]}"
+  do
+    info_msg "Removing mon $bad_mon"
+    KUBECTL_NS_CLUSTER exec deploy/rook-ceph-mon-$good_mon-debug -c mon -- monmaptool $monmap_path --rm $bad_mon
+  done
+
+  info_msg "Injecting the monmap"
+  KUBECTL_NS_CLUSTER exec deploy/rook-ceph-mon-$good_mon-debug -c mon -- ceph-mon \
+    --fsid=$ceph_fsid \
+    --keyring=/etc/ceph/keyring-store/keyring \
+    --log-to-stderr=true \
+    --err-to-stderr=true \
+    --mon-cluster-log-to-stderr=true \
+    --log-stderr-prefix=debug \
+    --default-log-to-file=false \
+    --default-mon-cluster-log-to-file=false \
+    --mon-host=$ROOK_CEPH_MON_HOST \
+    --mon-initial-members=$ROOK_CEPH_MON_INITIAL_MEMBERS \
+    --id=$good_mon \
+    --foreground \
+    --public-addr=$good_mon_public_ip \
+    --setuser-match-path=/var/lib/ceph/mon/ceph-$good_mon/store.db \
+    --public-bind-addr=$ROOK_POD_IP \
+    --inject-monmap=$monmap_path
+  info_msg "Finished updating the monmap!"
+  set -eu
+
+  info_msg "Printing final monmap"
+  KUBECTL_NS_CLUSTER exec deploy/rook-ceph-mon-$good_mon-debug -c mon -- monmaptool --print $monmap_path
+
+  info_msg "Restoring the mons in the rook-ceph-mon-endpoints configmap to the good mon"
+  KUBECTL_NS_CLUSTER patch configmaps rook-ceph-mon-endpoints --type json --patch "[{ op: replace, path: /data/data, value: $good_mon=$good_mon_public_ip:$good_mon_port }]"
+
+  info_msg "Stopping the debug pod for mon $good_mon"
+  run_stop_debug rook-ceph-mon-$good_mon
+
+  info_msg "Check that the restored mon is responding"
+  wait_for_mon_status_response
+
+  info_msg "Purging the bad mons: ${bad_mons[*]}"
+  # ignore errors purging old mons if their resources don't exist
+  set +e
+  for bad_mon in "${bad_mons[@]}"
+  do
+    info_msg "purging old mon: $bad_mon"
+    KUBECTL_NS_CLUSTER delete deploy rook-ceph-mon-$bad_mon
+    KUBECTL_NS_CLUSTER delete svc rook-ceph-mon-$bad_mon
+    info_msg "purging mon pvc if exists"
+    KUBECTL_NS_CLUSTER delete pvc rook-ceph-mon-$bad_mon
+  done
+  set -e
+
+  info_msg "Mon quorum was successfully restored to mon $good_mon"
+  info_msg "Only a single mon is currently running"
+
+  prompt_to_continue_or_cancel "Press Enter to start the operator and expand to full mon quorum again" ""
+
+  # scale up the operator
+  KUBECTL_NS_OPERATOR scale deployment rook-ceph-operator --replicas=1
+  info_msg "The operator will now expand to full mon quorum"
+}
+
+function prompt_to_continue_or_cancel() {
+  proceed_question=$1
+  proceed_answer=$2
+  if [[ "$proceed_answer" == "" ]]; then
+    info_msg "$proceed_question"
+  else
+    info_msg "$proceed_question If so, enter: $proceed_answer"
+  fi
+
+  set +u
+  if [[ "$ROOK_PLUGIN_SKIP_PROMPTS" != "true" ]]; then
+    read INPUT_VAR
+    if [[ "$proceed_answer" == "" ]]; then
+      info_msg "continuing"
+    elif [ "$INPUT_VAR" = "$proceed_answer" ]; then
+      info_msg "proceeding"
+    else
+      warn_msg "cancelled"
+      exit 1
+    fi
+  else
+    warn_msg "skipped prompt since ROOK_PLUGIN_SKIP_PROMPTS=true"
+  fi
+  set -u
+}
+
+function wait_for_mon_status_response() {
+  i=0
+  max_retries=20
+  sleep_time=5
+
+  exit_status=1
+  while [[ $exit_status != 0 ]]
+  do
+    # Don't fail the script if the ceph command fails
+    set +e
+    KUBECTL_NS_CLUSTER exec deploy/rook-ceph-tools -- ceph status --connect-timeout=3
+    exit_status=$?
+    if [[ $exit_status = 0 ]]; then
+      info_msg "finished waiting for ceph status"
+    else
+      info_msg "$i: waiting for ceph status to confirm single mon quorum"
+      ((i++))
+      if [[ $i -eq $max_retries ]]; then
+        error_msg "timed out waiting for mon quorum to respond"
+        exit 1
+      fi
+      info_msg "sleeping $sleep_time"
+      sleep $sleep_time
+    fi
+    set -e
+  done
 }
 
 ####################################################################################################
@@ -423,35 +644,43 @@ function run_start_debug() {
   [[ -z "${REMAINING_ARGS[0]:-""}" ]] && fail_error "Missing mon or osd deployment name"
   deployment_name="${REMAINING_ARGS[0]}"              # get deployment name
   REMAINING_ARGS=("${REMAINING_ARGS[@]:1}")           # remove deploy name from remaining args
+  set +u
   parse_flags parse_image_flag "${REMAINING_ARGS[@]}" # parse flags after the deployment name
-  end_of_command_parsing "${REMAINING_ARGS[@]}"
+  set -u
 
   verify_debug_deployment "$deployment_name"
 
   # copy the deployment spec before scaling it down
-  deployment_spec=$(KUBECTL_NS_CLUSTER get deployments "$deployment_name" -o json | jq -r ".spec")
+  deployment_spec=$(KUBECTL_NS_CLUSTER get deployment "$deployment_name" -o json | jq -r ".spec")
   # copy the deployment labels before scaling it down
-  labels=$(KUBECTL_NS_CLUSTER get deployments "$deployment_name" -o json | jq -r ".metadata.labels")
+  labels=$(KUBECTL_NS_CLUSTER get deployment "$deployment_name" -o json | jq -r ".metadata.labels")
   # add debug label to the list
   labels=$(echo "$labels" | jq '. + {"ceph.rook.io/do-not-reconcile": "true"}')
   # remove probes from the deployment
   deployment_spec=$(remove_probe_from_deployment "$deployment_spec")
   # update the deployment_spec with new image if alternate-image is passed
   if [ -n "$ALTERNATE_IMAGE" ]; then
-    echo "setting debug image to \"$ALTERNATE_IMAGE\""
+    info_msg "setting debug image to \"$ALTERNATE_IMAGE\""
     deployment_spec=$(update_deployment_spec_image "$deployment_spec" "$ALTERNATE_IMAGE")
   fi
   # update the deployment_spec main container to be only a placeholder,
-  echo "setting debug command to main container"
+  info_msg "setting debug command to main container"
   deployment_spec=$(update_deployment_spec_command "$deployment_spec")
 
+  # scale down the daemon pod if it's running
+  set +e
+  info_msg "get pod for deployment $deployment_name"
   deployment_pod=$(KUBECTL_NS_CLUSTER get pod | grep "$deployment_name" | awk '{ print $1  }')
-  # scale the deployment to 0
-  KUBECTL_NS_CLUSTER scale deployments "$deployment_name" --replicas=0
+  set -e
+  if [ "$deployment_pod" != "" ]; then
+    # scale the deployment to 0
+    info_msg "scale down the deployment $deployment_name"
+    KUBECTL_NS_CLUSTER scale deployments "$deployment_name" --replicas=0
 
-  # wait for the deployment pod to be deleted
-  echo "waiting for the deployment pod \"$deployment_pod\" to be deleted"
-  KUBECTL_NS_CLUSTER wait --for=delete pod/"$deployment_pod" --timeout=60s
+    # wait for the deployment pod to be deleted
+    info_msg "waiting for the deployment pod \"$deployment_pod\" to be deleted"
+    KUBECTL_NS_CLUSTER wait --for=delete pod/"$deployment_pod" --timeout=60s
+  fi
 
   # create debug deployment
   cat <<EOF | $TOP_LEVEL_COMMAND create -f -
@@ -465,6 +694,8 @@ function run_start_debug() {
     spec:
         $deployment_spec
 EOF
+    info_msg "ensure the debug deployment $deployment_name is scaled up"
+    KUBECTL_NS_CLUSTER scale deployments "$deployment_name-debug" --replicas=1
 }
 
 function run_stop_debug() {
@@ -474,7 +705,7 @@ function run_stop_debug() {
     deployment_name="$deployment_name-debug"
   fi
   verify_debug_deployment "$deployment_name"
-  echo "removing debug mode from \"$deployment_name\""
+  info_msg "removing debug mode from \"$deployment_name\""
 
   # delete the deployment debug pod
   KUBECTL_NS_CLUSTER delete deployment "$deployment_name"
@@ -617,7 +848,7 @@ function run_main_command() {
     run_operator_command "$@"
     ;;
   mons)
-    fetch_mon_endpoints "$@"
+    run_mons_command "$@"
     ;;
   rook)
     rook_version "$@"
