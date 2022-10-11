@@ -552,10 +552,12 @@ function run_dr_health() {
   # run ceph status command form one cluster to another
   echo
   info_msg "running ceph status from peer cluster"
+  set +e
   run_ceph_command -s --mon-host "$MON_HOST" --id rbd-mirror-peer --key "$PEER_KEY" "$@"
   # run rbd pool mirror status
   info_msg "running mirroring daemon health"
   run_rbd_command -p "$blockpool_name" mirror pool status
+  set -e
 }
 
 ####################################################################################################
