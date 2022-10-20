@@ -75,15 +75,15 @@ jobs:
           # for testing start-debug and stop-debug deployment
           # mons
           kubectl rook_ceph debug start rook-ceph-mon-a
-          tkubectl-rook-ceph.sh wait_for_deployment_to_be_running rook-ceph-mon-a-debug rook-ceph
+          tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-mon-a-debug rook-ceph
           kubectl rook_ceph debug stop rook-ceph-mon-a
           # osd
           kubectl rook_ceph debug start rook-ceph-osd-0
-          kubectl-rook-ceph.sh wait_for_deployment_to_be_running rook-ceph-osd-0-debug rook-ceph
+          tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-osd-0-debug rook-ceph
           kubectl rook_ceph debug stop rook-ceph-osd-0
 
            # check if osd 0 is started
-          kubectl-rook-ceph.sh wait_for_deployment_to_be_running rook-ceph-osd-0 rook-ceph
+          tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-osd-0 rook-ceph
 
           # for testing osd purge scale the osd deplyment
           kubectl --namespace rook-ceph scale deploy/rook-ceph-osd-0 --replicas=0
