@@ -33,16 +33,16 @@ To restore the quorum in this disaster scenario:
 5. Follow the prompts to confirm that you want to continue with each critical step of the restore
 6. The final prompt will be to restart the operator, which will add new mons to restore the full quorum size
 
-In this example, quorum is restore to mon **a**.
+In this example, quorum is restored to mon **c**.
 
 ```bash
-kubectl rook-ceph mons restore-quorum a
+kubectl rook-ceph mons restore-quorum c
 ```
 
 Before the restore proceeds, you will be prompted if you want to continue.
 For example, here is the output in a test cluster up to the point of starting the restore.
 
-```console
+```
 $ kubectl rook-ceph mons restore-quorum c
 mon=b, endpoint=192.168.64.168:6789
 mon=c, endpoint=192.168.64.167:6789
@@ -54,10 +54,6 @@ deployment.apps/rook-ceph-tools condition met
 Warning: Restoring mon quorum to mon c (192.168.64.167)
 Info: The mons to discard are: b a
 Info: Are you sure you want to restore the quorum to mon "c"? If so, enter: yes-really-restore
-
-Info: Mon quorum was successfully restored to mon c
-Info: Only a single mon is currently running
-Info: Press Enter to start the operator and expand to full mon quorum again
 ```
 
 After entering `yes-really-restore`, the restore continues with output as such:
@@ -135,7 +131,11 @@ Error from server (NotFound): persistentvolumeclaims "rook-ceph-mon-a" not found
 Info: Mon quorum was successfully restored to mon c
 Info: Only a single mon is currently running
 Info: Press Enter to start the operator and expand to full mon quorum again
+```
 
+After reviewing that the cluster is healthy with a single mon, press Enter to continue:
+
+```
 Info: continuing
 deployment.apps/rook-ceph-operator scaled
 Info: The operator will now expand to full mon quorum
