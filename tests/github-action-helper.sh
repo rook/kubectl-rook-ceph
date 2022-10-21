@@ -118,6 +118,13 @@ wait_for_three_mons() {
 EOF
 }
 
+wait_for_deployment_to_be_running() {
+  deployment=$1
+  namespace=$2
+  echo "Waiting for the pod from deployment \"$deployment\" to be running"
+  kubectl -n "$namespace" wait deployment "$deployment" --for condition=Available=True --timeout=90s
+}
+
 ########
 # MAIN #
 ########

@@ -244,7 +244,7 @@ function fetch_mon_endpoints() {
   KUBECTL_NS_CLUSTER get cm rook-ceph-mon-endpoints -o json | jq --monochrome-output '.data.data' | tr -d '"' | tr -d '=' | sed 's/[A-Za-z]*//g'
 }
 
-wait_for_deployment_to_be_running() {
+function wait_for_deployment_to_be_running() {
   deployment=$1
   info_msg "Waiting for the pod from deployment \"$deployment\" to be running"
   KUBECTL_NS_CLUSTER wait deployment $deployment --for condition=Available=True --timeout=90s
