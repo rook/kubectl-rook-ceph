@@ -564,6 +564,42 @@ function run_dr_health() {
   set -e
 }
 
+function run_csi_command() {
+  [[ -z "${1:-""}" ]] && fail_error "Missing csi-debug subcommand"
+  subcommand="$1"
+  shift # remove the subcommand from the front of the arg list
+
+  case $subcommand in
+  health)
+    run_csi_health "$@"
+    ;;
+  *)
+    fail_error "'csi-debug' subcommand '$subcommand' does not exit"
+    ;;
+  esac
+}
+
+function run_csi_health() {
+  end_of_command_parsing "$@" # end of command tree
+
+  info_msg "checking 'csi-cephfsplugin-provisioner' network connection"
+  cephfs_out="$(KUBECTL_NS_CLUSTER exec deploy/csi-cephfsplugin-provisioner -c csi-cephfsplugin -- curl "$(kubectl -n rook-ceph get svc -l app=rook-ceph-mon -o jsonpath='{.items[0].spec.clusterIP}')":3300 2>/dev/null | tr '\0' '\n')"
+  if [[ "$cephfs_out" =~ "ceph v2" ]]; then
+    info_msg "Network connection between cluster and csi-cephfs is: Connected"
+  else
+    error_msg "Network connection between cluster and csi-cephfs is: Not Connected"
+  fi
+  echo
+
+  info_msg "checking 'csi-rbdplugin-provisioner' network connection"
+  cephrbd_out="$(KUBECTL_NS_CLUSTER exec deploy/csi-rbdplugin-provisioner -c csi-rbdplugin -- curl "$(KUBECTL_NS_CLUSTER get svc -l app=rook-ceph-mon -o jsonpath='{.items[0].spec.clusterIP}')":3300 2>/dev/null | tr '\0' '\n')"
+  if [[ "$cephrbd_out" =~ "ceph v2" ]]; then
+    info_msg "Network connection between cluster and csi-rbd is: Connected"
+  else
+    error_msg "Network connection between cluster and csi-rbd is: Not Connected"
+  fi
+}
+
 ####################################################################################################
 # 'kubectl rook-ceph status' command
 ####################################################################################################
@@ -630,6 +666,9 @@ function run_main_command() {
     ;;
   dr)
     run_dr_subcommands "$@"
+    ;;
+  csi)
+    run_csi_command "$@"
     ;;
   # status)
   #   run_status_command "$@"
