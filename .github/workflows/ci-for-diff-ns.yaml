@@ -11,7 +11,7 @@ jobs:
   # This test is required to test latest changes or the changes that not present
   # with current version of rook-ceph krew plugin
   with-pr-changes-in-custom-namespace:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-20.04
     steps:
       - name: checkout
         uses: actions/checkout@v2
