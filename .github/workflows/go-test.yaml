@@ -37,3 +37,11 @@ jobs:
           kubectl rook-ceph ceph status
           kubectl rook-ceph mons
           kubectl rook-ceph rbd ls replicapool
+
+          POD=$(kubectl -n rook-ceph get pod -l app=rook-ceph-operator -o jsonpath="{.items[0].metadata.name}")
+          kubectl rook-ceph operator restart
+          # let's wait for operator pod to be restart
+          kubectl -n rook-ceph wait --for=delete pod/$POD --timeout=100s
+          tests/github-action-helper.sh wait_for_operator_pod_to_be_ready_state_default
+
+          kubectl rook-ceph operator set ROOK_LOG_LEVEL DEBUG
