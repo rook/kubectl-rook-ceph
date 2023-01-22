@@ -1,5 +1,6 @@
 /*
 Copyright 2023 The Rook Authors. All rights reserved.
+
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.
 You may obtain a copy of the License at
@@ -13,21 +14,26 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package main
+package exec
 
-import command "github.com/rook/kubectl-rook-ceph/cmd/commands"
+import (
+	"fmt"
+	"os"
+	"os/exec"
+)
 
-func main() {
-	addcommands()
-	command.RootCmd.Execute()
-}
-
-func addcommands() {
-	command.RootCmd.AddCommand(
-		command.CephCmd,
-		command.MonCmd,
-		command.RbdCmd,
-		command.OperatorCmd,
-		command.RookCmd,
+func ExecuteBashCommand(command string) string {
+	cmd := exec.Command("/bin/bash",
+		"-x", // Print commands and their arguments as they are executed
+		"-e", // Exit immediately if a command exits with a non-zero status.
+		"-m", // Terminal job control, allows job to be terminated by SIGTERM
+		"-c", // Command to run
+		command,
 	)
+	stdout, err := cmd.Output()
+	if err != nil {
+		fmt.Println(err.Error())
+		os.Exit(1)
+	}
+	return string(stdout)
 }

@@ -17,7 +17,6 @@ package mons
 
 import (
 	ctx "context"
-	"fmt"
 	"regexp"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
@@ -25,22 +24,18 @@ import (
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-const monConfigMap = "rook-ceph-mon-endpoints"
+const MonConfigMap = "rook-ceph-mon-endpoints"
 
-func GetMonEndpoint(context *k8sutil.Context, clusterNamespace string) {
-	monCm, err := context.Clientset.CoreV1().ConfigMaps(clusterNamespace).Get(ctx.TODO(), monConfigMap, v1.GetOptions{})
+func GetMonEndpoint(context *k8sutil.Context, clusterNamespace string) string {
+	monCm, err := context.Clientset.CoreV1().ConfigMaps(clusterNamespace).Get(ctx.TODO(), MonConfigMap, v1.GetOptions{})
 	if err != nil {
-		log.Fatalf("failed to get mon configmap %s %v", monConfigMap, err)
+		log.Fatalf("failed to get mon configmap %s %v", MonConfigMap, err)
 	}
 
 	monData := monCm.Data["data"]
-	fmt.Println(parseMonEndpoint(monData))
-}
-
-func parseMonEndpoint(monData string) string {
 	reg, err := regexp.Compile("[^0-9,.:]+")
 	if err != nil {
 		log.Fatal(err)
 	}
-	return reg.ReplaceAllString(monData, "")
+	return reg.ReplaceAllLiteralString(monData, "")
 }

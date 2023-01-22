@@ -17,7 +17,9 @@ limitations under the License.
 package command
 
 import (
-	k8sutil "github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
+	"fmt"
+
+	"github.com/rook/kubectl-rook-ceph/pkg/exec"
 
 	"github.com/spf13/cobra"
 )
@@ -30,6 +32,6 @@ var RbdCmd = &cobra.Command{
 	Args:               cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		context := GetContext()
-		k8sutil.RunCommandInOperatorPod(context, cmd.Use, args, OperatorNamespace, CephClusterNamespace)
+		fmt.Println(exec.RunCommandInOperatorPod(context, cmd.Use, args, OperatorNamespace, CephClusterNamespace))
 	},
 }

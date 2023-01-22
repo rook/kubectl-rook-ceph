@@ -17,6 +17,8 @@ limitations under the License.
 package command
 
 import (
+	"fmt"
+
 	"github.com/rook/kubectl-rook-ceph/pkg/mons"
 
 	"github.com/spf13/cobra"
@@ -30,7 +32,7 @@ var MonCmd = &cobra.Command{
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) == 0 {
 			context := GetContext()
-			mons.GetMonEndpoint(context, CephClusterNamespace)
+			fmt.Println(mons.GetMonEndpoint(context, CephClusterNamespace))
 		}
 	},
 }

@@ -19,9 +19,11 @@ package k8sutil
 import (
 	"context"
 	"fmt"
-	"log"
 	"time"
 
+	log "github.com/sirupsen/logrus"
+
+	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 )
@@ -35,6 +37,22 @@ func RestartDeployment(ctx *Context, namespace, deploymentName string) {
 	}
 
 	fmt.Printf("deployment.apps/%s restarted\n", deploymentName)
+}
+
+func WaitForOperatorPod(ctx *Context, operatorNamespace string) (corev1.Pod, error) {
+	opts := v1.ListOptions{LabelSelector: fmt.Sprintf("app=%s", "rook-ceph-operator")}
+	for i := 0; i < 60; i++ {
+		pod, _ := ctx.Clientset.CoreV1().Pods(operatorNamespace).List(context.TODO(), opts)
+		if pod.Items[0].Status.Phase == corev1.PodRunning && pod.Items[0].DeletionTimestamp.IsZero() {
+			return pod.Items[0], nil
+		}
+
+		fmt.Println("waiting for pod to be running")
+		time.Sleep(time.Second * 5)
+	}
+
+	return corev1.Pod{}, fmt.Errorf("failed to get rook operator pod where the command could be executed")
+
 }
 
 func UpdateConfigMap(ctx *Context, namespace, configMapName, key, value string) {
