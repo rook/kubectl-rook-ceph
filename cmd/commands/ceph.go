@@ -29,6 +29,7 @@ var CephCmd = &cobra.Command{
 	DisableFlagParsing: true,
 	Args:               cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		k8sutil.RunCommandInOperatorPod(cmd.Use, args, OperatorNamespace, CephClusterNamespace)
+		context := GetContext()
+		k8sutil.RunCommandInOperatorPod(context, cmd.Use, args, OperatorNamespace, CephClusterNamespace)
 	},
 }
