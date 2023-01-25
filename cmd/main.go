@@ -27,5 +27,6 @@ func addcommands() {
 		command.CephCmd,
 		command.MonCmd,
 		command.RbdCmd,
+		command.OperatorCmd,
 	)
 }
