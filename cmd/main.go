@@ -29,5 +29,6 @@ func addcommands() {
 		command.RbdCmd,
 		command.OperatorCmd,
 		command.RookCmd,
+		command.DebugCmd,
 	)
 }
