@@ -26,8 +26,6 @@ import (
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
-	corev1client "k8s.io/client-go/kubernetes/typed/core/v1"
-	restclient "k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 )
 
@@ -36,28 +34,21 @@ var (
 	CephClusterNamespace string // Cephcluster namespace
 )
 
-func RunCommandInOperatorPod(cmd string, args []string, operatorNamespace, clusterNamespace string) {
-
-	// Get Kubernetes Client
-	rest, _, client := GetKubeClient()
+func RunCommandInOperatorPod(ctx *Context, cmd string, args []string, operatorNamespace, clusterNamespace string) {
 
 	opts := metav1.ListOptions{LabelSelector: fmt.Sprintf("app=%s", "rook-ceph-operator")}
-	list, err := client.Pods(operatorNamespace).List(context.TODO(), opts)
+	list, err := ctx.Clientset.CoreV1().Pods(operatorNamespace).List(context.TODO(), opts)
 	if err != nil || len(list.Items) == 0 {
 		log.Error("failed to get rook operator pod where the command could be executed")
 		log.Fatal(err)
 	}
 
-	ExecCmd(rest, cmd, list.Items[0].Name, "rook-ceph-operator", list.Items[0].Namespace, clusterNamespace, args)
+	ExecCmdInPod(ctx, cmd, list.Items[0].Name, "rook-ceph-operator", list.Items[0].Namespace, clusterNamespace, args)
 }
 
-// ExecCmd exec command on specific pod and wait the command's output.
-func ExecCmd(restconfig *restclient.Config, command, podName, containerName, podNamespace, clusterNamespace string, args []string) {
-	// Create a Kubernetes core/v1 client.
-	coreclient, err := corev1client.NewForConfig(restconfig)
-	if err != nil {
-		log.Fatal(err)
-	}
+// ExecCmdInPod exec command on specific pod and wait the command's output.
+func ExecCmdInPod(ctx *Context, command, podName, containerName, podNamespace, clusterNamespace string, args []string) {
+
 	cmd := []string{}
 	cmd = append(cmd, command)
 	cmd = append(cmd, args...)
@@ -72,7 +63,7 @@ func ExecCmd(restconfig *restclient.Config, command, podName, containerName, pod
 
 	// Prepare the API URL used to execute another process within the Pod.  In
 	// this case, we'll run a remote shell.
-	req := coreclient.RESTClient().
+	req := ctx.Clientset.CoreV1().RESTClient().
 		Post().
 		Namespace(podNamespace).
 		Resource("pods").
@@ -87,7 +78,7 @@ func ExecCmd(restconfig *restclient.Config, command, podName, containerName, pod
 			TTY:       true,
 		}, scheme.ParameterCodec)
 
-	exec, err := remotecommand.NewSPDYExecutor(restconfig, "POST", req.URL())
+	exec, err := remotecommand.NewSPDYExecutor(ctx.KubeConfig, "POST", req.URL())
 	if err != nil {
 		log.Fatal(err)
 	}

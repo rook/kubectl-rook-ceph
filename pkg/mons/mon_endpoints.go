@@ -16,7 +16,7 @@ limitations under the License.
 package mons
 
 import (
-	"context"
+	ctx "context"
 	"fmt"
 	"regexp"
 
@@ -27,11 +27,8 @@ import (
 
 const monConfigMap = "rook-ceph-mon-endpoints"
 
-func GetMonEndpoint(clusterNamespace string) {
-	// Get Kubernetes Client
-	_, _, client := k8sutil.GetKubeClient()
-
-	monCm, err := client.ConfigMaps(clusterNamespace).Get(context.TODO(), monConfigMap, v1.GetOptions{})
+func GetMonEndpoint(context *k8sutil.Context, clusterNamespace string) {
+	monCm, err := context.Clientset.CoreV1().ConfigMaps(clusterNamespace).Get(ctx.TODO(), monConfigMap, v1.GetOptions{})
 	if err != nil {
 		log.Fatalf("failed to get mon configmap %s %v", monConfigMap, err)
 	}

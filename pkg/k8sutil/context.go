@@ -14,22 +14,21 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package command
+package k8sutil
 
 import (
-	k8sutil "github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
-
-	"github.com/spf13/cobra"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 )
 
-// RbdCmd represents the rbd command
-var RbdCmd = &cobra.Command{
-	Use:                "rbd",
-	Short:              "call a 'rbd' CLI command with arbitrary args",
-	DisableFlagParsing: true,
-	Args:               cobra.MinimumNArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
-		context := GetContext()
-		k8sutil.RunCommandInOperatorPod(context, cmd.Use, args, OperatorNamespace, CephClusterNamespace)
-	},
+type Context struct {
+	// The kubernetes config used for this context
+	KubeConfig *rest.Config
+
+	// Clientset is a connection to the core kubernetes API
+	Clientset kubernetes.Interface
+
+	// Represents the Client provided by the controller-runtime package to interact with Kubernetes objects
+	Client client.Client
 }

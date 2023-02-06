@@ -29,7 +29,8 @@ var MonCmd = &cobra.Command{
 	DisableFlagParsing: true,
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) == 0 {
-			mons.GetMonEndpoint(CephClusterNamespace)
+			context := GetContext()
+			mons.GetMonEndpoint(context, CephClusterNamespace)
 		}
 	},
 }

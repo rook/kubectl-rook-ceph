@@ -16,7 +16,13 @@ limitations under the License.
 package command
 
 import (
+	"log"
+
+	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
 	"github.com/spf13/cobra"
+
+	k8s "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 var (
@@ -45,4 +51,28 @@ func init() {
 	RootCmd.PersistentFlags().StringVar(&KubeConfig, "kubeconfig", "", "kubernetes config path")
 	RootCmd.PersistentFlags().StringVar(&OperatorNamespace, "operator-namespace", "rook-ceph", "Kubernetes namespace where rook operator is running")
 	RootCmd.PersistentFlags().StringVar(&CephClusterNamespace, "namespace", "rook-ceph", "Kubernetes namespace where ceph cluster is created")
+}
+
+func GetContext() *k8sutil.Context {
+	var err error
+
+	context := &k8sutil.Context{}
+
+	// 1. Create Kubernetes Client
+	kubeconfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		clientcmd.NewDefaultClientConfigLoadingRules(),
+		&clientcmd.ConfigOverrides{},
+	)
+
+	context.KubeConfig, err = kubeconfig.ClientConfig()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	context.Clientset, err = k8s.NewForConfig(context.KubeConfig)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	return context
 }
