@@ -45,3 +45,8 @@ jobs:
           tests/github-action-helper.sh wait_for_operator_pod_to_be_ready_state_default
 
           kubectl rook-ceph operator set ROOK_LOG_LEVEL DEBUG
+          kubectl rook-ceph rook version
+          kubectl rook-ceph rook status
+          kubectl rook-ceph rook status all
+          kubectl rook-ceph rook status cephobjectstores
+          kubectl rook-ceph rook purge-osd 0 --force

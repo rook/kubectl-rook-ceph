@@ -19,6 +19,7 @@ import (
 	"context"
 	"testing"
 
+	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
 	"github.com/stretchr/testify/assert"
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -30,23 +31,24 @@ func TestParseMonEndpoint(t *testing.T) {
 
 	newClient := fake.NewSimpleClientset
 	k8s := newClient()
+	context := k8sutil.Context{
+		Clientset: k8s,
+	}
 	ns := "rook-ceph"
 
 	cm := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      monConfigMap,
+			Name:      MonConfigMap,
 			Namespace: ns,
 		},
 		Data: map[string]string{
 			"data": "10.96.52.53:6789",
 		},
 	}
-	_, err := k8s.CoreV1().ConfigMaps(ns).Create(ctx, cm, metav1.CreateOptions{})
-	assert.NoError(t, err)
-	c, err := k8s.CoreV1().ConfigMaps(ns).Get(ctx, monConfigMap, metav1.GetOptions{})
+	_, err := context.Clientset.CoreV1().ConfigMaps(ns).Create(ctx, cm, metav1.CreateOptions{})
 	assert.NoError(t, err)
 
-	monData := parseMonEndpoint(c.Data["data"])
+	monData := GetMonEndpoint(&context, ns)
 	assert.Equal(t, "10.96.52.53:6789", monData)
 	assert.NotEqual(t, "10.96.52.54:6789", monData)
 

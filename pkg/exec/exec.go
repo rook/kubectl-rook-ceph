@@ -14,17 +14,18 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package k8sutil
+package exec
 
 import (
+	"bytes"
 	"context"
 	"fmt"
+	"io"
 	"os"
-	"strings"
 
+	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
 	log "github.com/sirupsen/logrus"
 	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/tools/remotecommand"
 )
@@ -34,32 +35,47 @@ var (
 	CephClusterNamespace string // Cephcluster namespace
 )
 
-func RunCommandInOperatorPod(ctx *Context, cmd string, args []string, operatorNamespace, clusterNamespace string) {
+func RunCommandInOperatorPod(ctx *k8sutil.Context, cmd string, args []string, operatorNamespace, clusterNamespace string) string {
 
-	opts := metav1.ListOptions{LabelSelector: fmt.Sprintf("app=%s", "rook-ceph-operator")}
-	list, err := ctx.Clientset.CoreV1().Pods(operatorNamespace).List(context.TODO(), opts)
-	if err != nil || len(list.Items) == 0 {
-		log.Error("failed to get rook operator pod where the command could be executed")
-		log.Fatal(err)
+	pod, err := k8sutil.WaitForOperatorPod(ctx, operatorNamespace)
+	if err != nil {
+		os.Exit(1)
 	}
 
-	ExecCmdInPod(ctx, cmd, list.Items[0].Name, "rook-ceph-operator", list.Items[0].Namespace, clusterNamespace, args)
+	output := new(bytes.Buffer)
+
+	ExecCmdInPod(ctx, cmd, pod.Name, "rook-ceph-operator", pod.Namespace, clusterNamespace, args, output)
+	return output.String()
+}
+
+func RunShellCommandInOperatorPod(ctx *k8sutil.Context, arg []string, operatorNamespace, clusterNamespace string) string {
+	pod, err := k8sutil.WaitForOperatorPod(ctx, operatorNamespace)
+	if err != nil {
+		os.Exit(1)
+	}
+
+	cmd := "/bin/sh"
+	args := []string{"-c"}
+	args = append(args, arg...)
+
+	output := new(bytes.Buffer)
+
+	ExecCmdInPod(ctx, cmd, pod.Name, "rook-ceph-operator", pod.Namespace, clusterNamespace, args, output)
+	return output.String()
 }
 
 // ExecCmdInPod exec command on specific pod and wait the command's output.
-func ExecCmdInPod(ctx *Context, command, podName, containerName, podNamespace, clusterNamespace string, args []string) {
+func ExecCmdInPod(ctx *k8sutil.Context, command, podName, containerName, podNamespace, clusterNamespace string, args []string, stdout io.Writer) {
 
 	cmd := []string{}
 	cmd = append(cmd, command)
 	cmd = append(cmd, args...)
 
 	if cmd[0] == "ceph" {
-		cmd = append(cmd, "--connect-timeout=10")
+		cmd = append(cmd, "--connect-timeout=10", fmt.Sprintf("--conf=/var/lib/rook/%s/%s.config", clusterNamespace, clusterNamespace))
+	} else if cmd[0] == "rbd" {
+		cmd = append(cmd, fmt.Sprintf("--conf=/var/lib/rook/%s/%s.config", clusterNamespace, clusterNamespace))
 	}
-
-	cmd = append(cmd, fmt.Sprintf("--conf=/var/lib/rook/%s/%s.config", clusterNamespace, clusterNamespace))
-
-	fmt.Printf("\n%s\n", strings.Join(cmd, " "))
 
 	// Prepare the API URL used to execute another process within the Pod.  In
 	// this case, we'll run a remote shell.
@@ -75,7 +91,7 @@ func ExecCmdInPod(ctx *Context, command, podName, containerName, podNamespace, c
 			Stdin:     true,
 			Stdout:    true,
 			Stderr:    true,
-			TTY:       true,
+			TTY:       false,
 		}, scheme.ParameterCodec)
 
 	exec, err := remotecommand.NewSPDYExecutor(ctx.KubeConfig, "POST", req.URL())
@@ -86,9 +102,9 @@ func ExecCmdInPod(ctx *Context, command, podName, containerName, podNamespace, c
 	// Connect this process' std{in,out,err} to the remote shell process.
 	err = exec.StreamWithContext(context.TODO(), remotecommand.StreamOptions{
 		Stdin:  os.Stdin,
-		Stdout: os.Stdout,
+		Stdout: stdout,
 		Stderr: os.Stderr,
-		Tty:    true,
+		Tty:    false,
 	})
 	if err != nil {
 		log.Fatal(err)
