@@ -34,6 +34,7 @@ jobs:
 
       - name: Test plugin with ceph commands
         run: |
+          set -e
           kubectl rook-ceph ceph status
           kubectl rook-ceph mons
           kubectl rook-ceph rbd ls replicapool
@@ -43,7 +44,11 @@ jobs:
           # let's wait for operator pod to be restart
           kubectl -n rook-ceph wait --for=delete pod/$POD --timeout=100s
           tests/github-action-helper.sh wait_for_operator_pod_to_be_ready_state_default
+          kubectl rook_ceph debug start rook-ceph-osd-0
+          tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-osd-0-debug rook-ceph
 
+          kubectl rook_ceph debug stop rook-ceph-osd-0
+          tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-osd-0 rook-ceph
           kubectl rook-ceph operator set ROOK_LOG_LEVEL DEBUG
           kubectl rook-ceph rook version
           kubectl rook-ceph rook status
