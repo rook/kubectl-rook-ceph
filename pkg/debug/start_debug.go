@@ -26,13 +26,11 @@ import (
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
-	corev1 "k8s.io/api/core/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
 func StartDebug(context *k8sutil.Context, clusterNamespace, deploymentName, alternateImageValue string) {
-
 	err := startDebug(context, clusterNamespace, deploymentName, alternateImageValue)
 	if err != nil {
 		fmt.Println(err)
@@ -41,10 +39,13 @@ func StartDebug(context *k8sutil.Context, clusterNamespace, deploymentName, alte
 }
 
 func startDebug(context *k8sutil.Context, clusterNamespace, deploymentName, alternateImageValue string) error {
-	deployment, err := verifyDeploymentExists(context, clusterNamespace, deploymentName)
+	originalDeployment, err := GetDeployment(context, clusterNamespace, deploymentName)
 	if err != nil {
 		return fmt.Errorf("Missing mon or osd deployment name %s. %v\n", deploymentName, err)
 	}
+
+	// We need to dereference the deployment as it is required for the debug deployment
+	deployment := *originalDeployment
 
 	if alternateImageValue != "" {
 		log.Printf("setting debug image to %s\n", alternateImageValue)
@@ -62,23 +63,21 @@ func startDebug(context *k8sutil.Context, clusterNamespace, deploymentName, alte
 	deployment.Spec.Template.Spec.Containers[0].Command = []string{"sleep", "infinity"}
 	deployment.Spec.Template.Spec.Containers[0].Args = []string{}
 
-	if err := updateDeployment(context, clusterNamespace, deployment); err != nil {
-		return fmt.Errorf("Failed to update deployment %s. %v\n", deployment.Name, err)
-	}
-
-	deploymentPodName, err := waitForPodToRun(context, clusterNamespace, deployment.Spec)
+	labelSelector := fmt.Sprintf("ceph_daemon_type=%s,ceph_daemon_id=%s", deployment.Spec.Template.Labels["ceph_daemon_type"], deployment.Spec.Template.Labels["ceph_daemon_id"])
+	deploymentPodName, err := k8sutil.WaitForPodToRun(context, clusterNamespace, labelSelector)
 	if err != nil {
 		fmt.Println(err)
 		return err
 	}
 
-	if err := setDeploymentScale(context, clusterNamespace, deployment.Name, 0); err != nil {
+	if err := SetDeploymentScale(context, clusterNamespace, deployment.Name, 0); err != nil {
 		return err
 	}
+	fmt.Printf("deployment %s scaled down\n", deployment.Name)
 
-	fmt.Printf("waiting for the deployment pod %s to be deleted\n", deploymentPodName)
+	fmt.Printf("waiting for the deployment pod %s to be deleted\n", deploymentPodName.Name)
 
-	err = waitForPodDeletion(context, clusterNamespace, deploymentPodName)
+	err = waitForPodDeletion(context, clusterNamespace, deploymentName)
 	if err != nil {
 		fmt.Println(err)
 		return err
@@ -99,13 +98,14 @@ func startDebug(context *k8sutil.Context, clusterNamespace, deploymentName, alte
 	}
 	fmt.Printf("ensure the debug deployment %s is scaled up\n", deploymentName)
 
-	if err := setDeploymentScale(context, clusterNamespace, debugDeployment.Name, 1); err != nil {
+	if err := SetDeploymentScale(context, clusterNamespace, debugDeployment.Name, 1); err != nil {
 		return err
 	}
+
 	return nil
 }
 
-func setDeploymentScale(context *k8sutil.Context, clusterNamespace, deploymentName string, scaleCount int) error {
+func SetDeploymentScale(context *k8sutil.Context, clusterNamespace, deploymentName string, scaleCount int) error {
 	scale := &autoscalingv1.Scale{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      deploymentName,
@@ -122,11 +122,14 @@ func setDeploymentScale(context *k8sutil.Context, clusterNamespace, deploymentNa
 	return nil
 }
 
-func verifyDeploymentExists(context *k8sutil.Context, clusterNamespace, deploymentName string) (*appsv1.Deployment, error) {
+func GetDeployment(context *k8sutil.Context, clusterNamespace, deploymentName string) (*appsv1.Deployment, error) {
+	fmt.Printf("fetching the deployment %s to be running\n", deploymentName)
 	deployment, err := context.Clientset.AppsV1().Deployments(clusterNamespace).Get(ctx.TODO(), deploymentName, v1.GetOptions{})
 	if err != nil {
+		fmt.Printf("deployment %s doesn't exist. %v", deploymentName, err)
 		return nil, err
 	}
+	fmt.Printf("deployment %s exists\n", deploymentName)
 	return deployment, nil
 }
 
@@ -136,22 +139,6 @@ func updateDeployment(context *k8sutil.Context, clusterNamespace string, deploym
 		return err
 	}
 	return nil
-}
-
-func waitForPodToRun(context *k8sutil.Context, clusterNamespace string, deploymentSpec appsv1.DeploymentSpec) (string, error) {
-	labelSelector := fmt.Sprintf("ceph_daemon_type=%s,ceph_daemon_id=%s", deploymentSpec.Template.Labels["ceph_daemon_type"], deploymentSpec.Template.Labels["ceph_daemon_id"])
-	for i := 0; i < 60; i++ {
-		pod, _ := context.Clientset.CoreV1().Pods(clusterNamespace).List(ctx.TODO(), v1.ListOptions{LabelSelector: labelSelector})
-		if pod.Items[0].Status.Phase == corev1.PodRunning && pod.Items[0].DeletionTimestamp.IsZero() {
-			return pod.Items[0].Name, nil
-		}
-
-		fmt.Println("waiting for pod to be running")
-		time.Sleep(time.Second * 5)
-	}
-
-	return "", fmt.Errorf("No pod with labels matching %s:%s", deploymentSpec.Template.Labels, deploymentSpec.Template.Labels)
-
 }
 
 func waitForPodDeletion(context *k8sutil.Context, clusterNamespace, podName string) error {

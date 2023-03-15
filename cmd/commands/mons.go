@@ -29,10 +29,27 @@ var MonCmd = &cobra.Command{
 	Use:                "mons",
 	Short:              "Output mon endpoints",
 	DisableFlagParsing: true,
-	Run: func(cmd *cobra.Command, args []string) {
+	Args:               cobra.MaximumNArgs(1),
+	Run: func(_ *cobra.Command, args []string) {
 		if len(args) == 0 {
 			context := GetContext()
 			fmt.Println(mons.GetMonEndpoint(context, CephClusterNamespace))
 		}
 	},
+}
+
+// RestoreQuorum represents the mons command
+var RestoreQuorum = &cobra.Command{
+	Use:                "restore-quorum",
+	Short:              "When quorum is lost, restore quorum to the remaining healthy mon",
+	DisableFlagParsing: true,
+	Args:               cobra.ExactArgs(1),
+	Run: func(_ *cobra.Command, args []string) {
+		context := GetContext()
+		mons.RestoreQuorum(context, OperatorNamespace, CephClusterNamespace, args[0])
+	},
+}
+
+func init() {
+	MonCmd.AddCommand(RestoreQuorum)
 }

@@ -28,7 +28,6 @@ import (
 )
 
 func PurgeOsd(context *k8sutil.Context, operatorNamespace, clusterNamespace, osdId, flag string) string {
-
 	monCm, err := context.Clientset.CoreV1().ConfigMaps(clusterNamespace).Get(ctx.TODO(), mons.MonConfigMap, v1.GetOptions{})
 	if err != nil {
 		log.Fatalf("failed to get mon configmap %s %v", mons.MonConfigMap, err)
@@ -38,12 +37,13 @@ func PurgeOsd(context *k8sutil.Context, operatorNamespace, clusterNamespace, osd
 	cephArgs := []string{
 		"auth", "print-key", "client.admin",
 	}
-	adminKey := exec.RunCommandInOperatorPod(context, "ceph", cephArgs, operatorNamespace, clusterNamespace)
+	adminKey := exec.RunCommandInOperatorPod(context, "ceph", cephArgs, operatorNamespace, clusterNamespace, true)
 
+	cmd := "/bin/sh"
 	args := []string{
 		"-c",
 		fmt.Sprintf("export ROOK_MON_ENDPOINTS=%s ROOK_CEPH_USERNAME=client.admin ROOK_CEPH_SECRET=%s ROOK_CONFIG_DIR=/var/lib/rook && rook ceph osd remove --osd-ids=%s --force-osd-removal=%s", monEndPoint, adminKey, osdId, flag),
 	}
 
-	return exec.RunShellCommandInOperatorPod(context, args, operatorNamespace, clusterNamespace)
+	return exec.RunCommandInOperatorPod(context, cmd, args, operatorNamespace, clusterNamespace, true)
 }

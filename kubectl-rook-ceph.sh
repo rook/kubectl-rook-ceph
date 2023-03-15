@@ -230,7 +230,7 @@ function path_cm_rook_ceph_operator_config() {
 # 'kubectl rook-ceph mons' commands
 ####################################################################################################
 
-function run_mons_command () {
+function run_mons_command() {
   if [ "$#" -ge 1 ] && [ "$1" = "restore-quorum" ]; then
     shift # remove the subcommand from the front of the arg list
     run_restore_quorum "$@"
@@ -253,16 +253,16 @@ function wait_for_deployment_to_be_running() {
 function run_restore_quorum() {
   parse_flags parse_image_flag "$@" # parse flags before the good mon name
   [[ -z "${REMAINING_ARGS[0]:-""}" ]] && fail_error "Missing healthy mon name"
-  good_mon="${REMAINING_ARGS[0]}"              # get the good mon being used to restore quorum
-  shift # remove the healthy mon from the front of the arg list
-  REMAINING_ARGS=("${REMAINING_ARGS[@]:1}")           # remove mon name from remaining args
-  end_of_command_parsing "$@" # end of command tree
+  good_mon="${REMAINING_ARGS[0]}"           # get the good mon being used to restore quorum
+  shift                                     # remove the healthy mon from the front of the arg list
+  REMAINING_ARGS=("${REMAINING_ARGS[@]:1}") # remove mon name from remaining args
+  end_of_command_parsing "$@"               # end of command tree
 
   # Parse the endpoints configmap for the mon endpoints
   bad_mons=()
   mon_endpoints=$(KUBECTL_NS_CLUSTER get cm rook-ceph-mon-endpoints -o jsonpath='{.data.data}')
   # split the endpoints into an array, separated by the comma
-  for single_mon in ${mon_endpoints//,/ } ; do
+  for single_mon in ${mon_endpoints//,/ }; do
     mon_name=$(echo "${single_mon/=/ }" | awk '{print $1}')
     mon_endpoint=$(echo "${single_mon/=/ }" | awk '{print $2}')
     echo "mon=$mon_name, endpoint=$mon_endpoint"
@@ -335,12 +335,11 @@ function run_restore_quorum() {
     --public-bind-addr=$ROOK_POD_IP \
     --extract-monmap=$monmap_path
 
-  info_msg "Printing monmap"; \
+  info_msg "Printing monmap"
   KUBECTL_NS_CLUSTER exec deploy/rook-ceph-mon-$good_mon-debug -c mon -- monmaptool --print $monmap_path
 
   # remove all the mons except the good one
-  for bad_mon in "${bad_mons[@]}"
-  do
+  for bad_mon in "${bad_mons[@]}"; do
     info_msg "Removing mon $bad_mon"
     KUBECTL_NS_CLUSTER exec deploy/rook-ceph-mon-$good_mon-debug -c mon -- monmaptool $monmap_path --rm $bad_mon
   done
@@ -381,8 +380,7 @@ function run_restore_quorum() {
   info_msg "Purging the bad mons: ${bad_mons[*]}"
   # ignore errors purging old mons if their resources don't exist
   set +e
-  for bad_mon in "${bad_mons[@]}"
-  do
+  for bad_mon in "${bad_mons[@]}"; do
     info_msg "purging old mon: $bad_mon"
     KUBECTL_NS_CLUSTER delete deploy rook-ceph-mon-$bad_mon
     KUBECTL_NS_CLUSTER delete svc rook-ceph-mon-$bad_mon
@@ -433,8 +431,7 @@ function wait_for_mon_status_response() {
   sleep_time=5
 
   exit_status=1
-  while [[ $exit_status != 0 ]]
-  do
+  while [[ $exit_status != 0 ]]; do
     # Don't fail the script if the ceph command fails
     set +e
     KUBECTL_NS_CLUSTER exec deploy/rook-ceph-tools -- ceph status --connect-timeout=3
@@ -642,8 +639,8 @@ function run_start_debug() {
   # 3) debug start deploymentName
   parse_flags parse_image_flag "$@" # parse flags before the deployment name
   [[ -z "${REMAINING_ARGS[0]:-""}" ]] && fail_error "Missing mon or osd deployment name"
-  deployment_name="${REMAINING_ARGS[0]}"              # get deployment name
-  REMAINING_ARGS=("${REMAINING_ARGS[@]:1}")           # remove deploy name from remaining args
+  deployment_name="${REMAINING_ARGS[0]}"    # get deployment name
+  REMAINING_ARGS=("${REMAINING_ARGS[@]:1}") # remove deploy name from remaining args
   set +u
   parse_flags parse_image_flag "${REMAINING_ARGS[@]}" # parse flags after the deployment name
   set -u
@@ -694,8 +691,8 @@ function run_start_debug() {
     spec:
         $deployment_spec
 EOF
-    info_msg "ensure the debug deployment $deployment_name is scaled up"
-    KUBECTL_NS_CLUSTER scale deployments "$deployment_name-debug" --replicas=1
+  info_msg "ensure the debug deployment $deployment_name is scaled up"
+  KUBECTL_NS_CLUSTER scale deployments "$deployment_name-debug" --replicas=1
 }
 
 function run_stop_debug() {
