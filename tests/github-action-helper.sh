@@ -35,6 +35,7 @@ deploy_rook() {
   sed -i '0,/count: 1/ s/count: 1/count: 3/' cluster-test.yaml
   kubectl create -f cluster-test.yaml
   wait_for_pod_to_be_ready_state_default
+  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/toolbox.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/storageclass-test.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/pvc.yaml
 }
@@ -110,7 +111,7 @@ EOF
 
 wait_for_three_mons() {
   export namespace=$1
-  timeout 100 bash <<-'EOF'
+  timeout 150 bash <<-'EOF'
     until [ $(kubectl -n $namespace get deploy -l app=rook-ceph-mon,mon_canary!=true | grep rook-ceph-mon | wc -l | awk '{print $1}' ) -eq 3 ]; do
       echo "$(date) waiting for three mon deployments to exist"
       sleep 2

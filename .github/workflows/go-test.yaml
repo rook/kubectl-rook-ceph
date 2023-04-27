@@ -8,7 +8,7 @@ defaults:
     shell: bash --noprofile --norc -eo pipefail -x {0}
 
 jobs:
-  with-krew:
+  go-test:
     runs-on: ubuntu-20.04
     steps:
       - name: checkout
@@ -36,6 +36,17 @@ jobs:
         run: |
           set -e
           kubectl rook-ceph ceph status
+
+          # test the mon restore to restore to mon a, delete mons b and c, then add d and e
+          export ROOK_PLUGIN_SKIP_PROMPTS=true
+          kubectl rook-ceph  mons restore-quorum a
+          kubectl  -n rook-ceph wait pod -l app=rook-ceph-mon-b --for=delete --timeout=90s
+          kubectl -n rook-ceph wait pod -l app=rook-ceph-mon-c --for=delete --timeout=90s
+          tests/github-action-helper.sh wait_for_three_mons rook-ceph
+          kubectl -n rook-ceph wait deployment rook-ceph-mon-d --for condition=Available=True --timeout=90s
+          kubectl -n rook-ceph wait deployment rook-ceph-mon-e --for condition=Available=True --timeout=90s
+
+
           kubectl rook-ceph mons
           kubectl rook-ceph rbd ls replicapool
 
@@ -55,3 +66,15 @@ jobs:
           kubectl rook-ceph rook status all
           kubectl rook-ceph rook status cephobjectstores
           kubectl rook-ceph rook purge-osd 0 --force
+
+      - name: collect common logs
+        if: always()
+        uses: ./.github/workflows/collect-logs
+        with:
+          name: go-test
+
+      - name: consider debugging
+        if: failure()
+        uses: mxschmitt/action-tmate@v3
+        with:
+          use-tmate: ${{ secrets.USE_TMATE }}

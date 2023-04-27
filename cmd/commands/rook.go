@@ -37,7 +37,7 @@ var versionCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, args []string) {
 		context := GetContext()
-		fmt.Println(exec.RunCommandInOperatorPod(context, "rook", []string{cmd.Use}, OperatorNamespace, CephClusterNamespace))
+		fmt.Println(exec.RunCommandInOperatorPod(context, "rook", []string{cmd.Use}, OperatorNamespace, CephClusterNamespace, true))
 	},
 }
 

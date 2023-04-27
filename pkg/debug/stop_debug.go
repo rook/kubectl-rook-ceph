@@ -38,12 +38,11 @@ func StopDebug(context *k8sutil.Context, clusterNamespace, deploymentName string
 }
 
 func stopDebug(context *k8sutil.Context, clusterNamespace, deploymentName string) error {
-
 	if !strings.HasSuffix(deploymentName, "-debug") {
 		deploymentName = deploymentName + "-debug"
 	}
 
-	debugDeployment, err := verifyDeploymentExists(context, clusterNamespace, deploymentName)
+	debugDeployment, err := GetDeployment(context, clusterNamespace, deploymentName)
 	if err != nil {
 		return fmt.Errorf("Missing mon or osd debug deployment name %s. %v\n", deploymentName, err)
 	}
@@ -55,7 +54,7 @@ func stopDebug(context *k8sutil.Context, clusterNamespace, deploymentName string
 	}
 
 	original_deployment_name := strings.ReplaceAll(deploymentName, "-debug", "")
-	if err := setDeploymentScale(context, clusterNamespace, original_deployment_name, 1); err != nil {
+	if err := SetDeploymentScale(context, clusterNamespace, original_deployment_name, 1); err != nil {
 		return err
 	}
 	return nil
