@@ -17,10 +17,11 @@ package mons
 
 import (
 	ctx "context"
+	"fmt"
 	"regexp"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
-	log "github.com/sirupsen/logrus"
+	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -29,13 +30,13 @@ const MonConfigMap = "rook-ceph-mon-endpoints"
 func GetMonEndpoint(context *k8sutil.Context, clusterNamespace string) string {
 	monCm, err := context.Clientset.CoreV1().ConfigMaps(clusterNamespace).Get(ctx.TODO(), MonConfigMap, v1.GetOptions{})
 	if err != nil {
-		log.Fatalf("failed to get mon configmap %s %v", MonConfigMap, err)
+		logging.Error(fmt.Errorf("failed to get mon configmap %s %v", MonConfigMap, err))
 	}
 
 	monData := monCm.Data["data"]
 	reg, err := regexp.Compile("[^0-9,.:]+")
 	if err != nil {
-		log.Fatal(err)
+		logging.Fatal(err)
 	}
 	return reg.ReplaceAllLiteralString(monData, "")
 }

@@ -15,11 +15,17 @@ limitations under the License.
 
 package main
 
-import command "github.com/rook/kubectl-rook-ceph/cmd/commands"
+import (
+	command "github.com/rook/kubectl-rook-ceph/cmd/commands"
+	"github.com/rook/kubectl-rook-ceph/pkg/logging"
+)
 
 func main() {
 	addcommands()
-	command.RootCmd.Execute()
+	err := command.RootCmd.Execute()
+	if err != nil {
+		logging.Fatal(err)
+	}
 }
 
 func addcommands() {

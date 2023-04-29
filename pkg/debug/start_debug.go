@@ -19,11 +19,10 @@ package debug
 import (
 	ctx "context"
 	"fmt"
-	"log"
-	"os"
 	"time"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
+	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -33,8 +32,7 @@ import (
 func StartDebug(context *k8sutil.Context, clusterNamespace, deploymentName, alternateImageValue string) {
 	err := startDebug(context, clusterNamespace, deploymentName, alternateImageValue)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		logging.Fatal(err)
 	}
 }
 
@@ -48,7 +46,7 @@ func startDebug(context *k8sutil.Context, clusterNamespace, deploymentName, alte
 	deployment := *originalDeployment
 
 	if alternateImageValue != "" {
-		log.Printf("setting debug image to %s\n", alternateImageValue)
+		logging.Info("setting debug image to %s\n", alternateImageValue)
 		deployment.Spec.Template.Spec.Containers[0].Image = alternateImageValue
 	}
 
@@ -58,7 +56,7 @@ func startDebug(context *k8sutil.Context, clusterNamespace, deploymentName, alte
 	deployment.Spec.Template.Spec.Containers[0].LivenessProbe = nil
 	deployment.Spec.Template.Spec.Containers[0].StartupProbe = nil
 
-	fmt.Println("setting debug command to main container")
+	logging.Info("setting debug command to main container")
 
 	deployment.Spec.Template.Spec.Containers[0].Command = []string{"sleep", "infinity"}
 	deployment.Spec.Template.Spec.Containers[0].Args = []string{}
@@ -66,20 +64,18 @@ func startDebug(context *k8sutil.Context, clusterNamespace, deploymentName, alte
 	labelSelector := fmt.Sprintf("ceph_daemon_type=%s,ceph_daemon_id=%s", deployment.Spec.Template.Labels["ceph_daemon_type"], deployment.Spec.Template.Labels["ceph_daemon_id"])
 	deploymentPodName, err := k8sutil.WaitForPodToRun(context, clusterNamespace, labelSelector)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 
 	if err := SetDeploymentScale(context, clusterNamespace, deployment.Name, 0); err != nil {
 		return err
 	}
-	fmt.Printf("deployment %s scaled down\n", deployment.Name)
 
-	fmt.Printf("waiting for the deployment pod %s to be deleted\n", deploymentPodName.Name)
+	logging.Info("deployment %s scaled down\n", deployment.Name)
+	logging.Info("waiting for the deployment pod %s to be deleted\n", deploymentPodName.Name)
 
 	err = waitForPodDeletion(context, clusterNamespace, deploymentName)
 	if err != nil {
-		fmt.Println(err)
 		return err
 	}
 
@@ -96,7 +92,7 @@ func startDebug(context *k8sutil.Context, clusterNamespace, deploymentName, alte
 	if err != nil {
 		return fmt.Errorf("Error creating deployment %s. %v\n", debugDeploymentSpec, err)
 	}
-	fmt.Printf("ensure the debug deployment %s is scaled up\n", deploymentName)
+	logging.Info("ensure the debug deployment %s is scaled up\n", deploymentName)
 
 	if err := SetDeploymentScale(context, clusterNamespace, debugDeployment.Name, 1); err != nil {
 		return err
@@ -123,22 +119,14 @@ func SetDeploymentScale(context *k8sutil.Context, clusterNamespace, deploymentNa
 }
 
 func GetDeployment(context *k8sutil.Context, clusterNamespace, deploymentName string) (*appsv1.Deployment, error) {
-	fmt.Printf("fetching the deployment %s to be running\n", deploymentName)
+	logging.Info("fetching the deployment %s to be running\n", deploymentName)
 	deployment, err := context.Clientset.AppsV1().Deployments(clusterNamespace).Get(ctx.TODO(), deploymentName, v1.GetOptions{})
 	if err != nil {
-		fmt.Printf("deployment %s doesn't exist. %v", deploymentName, err)
 		return nil, err
 	}
-	fmt.Printf("deployment %s exists\n", deploymentName)
-	return deployment, nil
-}
 
-func updateDeployment(context *k8sutil.Context, clusterNamespace string, deploymentName *appsv1.Deployment) error {
-	_, err := context.Clientset.AppsV1().Deployments(clusterNamespace).Update(ctx.TODO(), deploymentName, v1.UpdateOptions{})
-	if err != nil {
-		return err
-	}
-	return nil
+	logging.Info("deployment %s exists\n", deploymentName)
+	return deployment, nil
 }
 
 func waitForPodDeletion(context *k8sutil.Context, clusterNamespace, podName string) error {
@@ -148,7 +136,7 @@ func waitForPodDeletion(context *k8sutil.Context, clusterNamespace, podName stri
 			return nil
 		}
 
-		fmt.Printf("waiting for pod %q to be deleted\n", podName)
+		logging.Info("waiting for pod %q to be deleted\n", podName)
 		time.Sleep(time.Second * 5)
 	}
 

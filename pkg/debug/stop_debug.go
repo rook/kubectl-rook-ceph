@@ -19,21 +19,20 @@ package debug
 import (
 	ctx "context"
 	"fmt"
-	"os"
 	"strings"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
+	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 )
 
 func StopDebug(context *k8sutil.Context, clusterNamespace, deploymentName string) {
 
 	err := stopDebug(context, clusterNamespace, deploymentName)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		logging.Fatal(err)
 	}
 }
 
@@ -47,7 +46,7 @@ func stopDebug(context *k8sutil.Context, clusterNamespace, deploymentName string
 		return fmt.Errorf("Missing mon or osd debug deployment name %s. %v\n", deploymentName, err)
 	}
 
-	fmt.Printf("removing debug mode from deployment %s\n", debugDeployment.Name)
+	logging.Info("removing debug mode from deployment %s\n", debugDeployment.Name)
 	err = context.Clientset.AppsV1().Deployments(clusterNamespace).Delete(ctx.TODO(), debugDeployment.Name, v1.DeleteOptions{})
 	if err != nil && !kerrors.IsNotFound(err) {
 		return fmt.Errorf("Error deleting deployment %s: %v", debugDeployment.Name, err)

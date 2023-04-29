@@ -21,7 +21,7 @@ import (
 	"fmt"
 	"time"
 
-	log "github.com/sirupsen/logrus"
+	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -33,10 +33,10 @@ func RestartDeployment(ctx *Context, namespace, deploymentName string) {
 	data := fmt.Sprintf(`{"spec": {"template": {"metadata": {"annotations": {"kubectl.kubernetes.io/restartedAt": "%s"}}}}}`, time.Now().String())
 	_, err := deploymentsClient.Patch(context.TODO(), deploymentName, types.StrategicMergePatchType, []byte(data), v1.PatchOptions{})
 	if err != nil {
-		log.Fatalf("Failed to delete deployment %s: %v", deploymentName, err)
+		logging.Error(fmt.Errorf("Failed to delete deployment %s: %v", deploymentName, err))
 	}
 
-	fmt.Printf("deployment.apps/%s restarted\n", deploymentName)
+	logging.Info("deployment.apps/%s restarted\n", deploymentName)
 }
 
 func WaitForPodToRun(ctx *Context, operatorNamespace, labelSelector string) (corev1.Pod, error) {
@@ -50,7 +50,7 @@ func WaitForPodToRun(ctx *Context, operatorNamespace, labelSelector string) (cor
 			return pod.Items[0], nil
 		}
 
-		fmt.Println("waiting for pod to be running")
+		logging.Info("waiting for pod to be running")
 		time.Sleep(time.Second * 5)
 	}
 
@@ -60,14 +60,14 @@ func WaitForPodToRun(ctx *Context, operatorNamespace, labelSelector string) (cor
 func UpdateConfigMap(ctx *Context, namespace, configMapName, key, value string) {
 	cm, err := ctx.Clientset.CoreV1().ConfigMaps(namespace).Get(context.TODO(), configMapName, v1.GetOptions{})
 	if err != nil {
-		log.Fatal(err)
+		logging.Fatal(err)
 	}
 
 	cm.Data[key] = value
 	_, err = ctx.Clientset.CoreV1().ConfigMaps(namespace).Update(context.TODO(), cm, v1.UpdateOptions{})
 	if err != nil {
-		log.Fatal(err)
+		logging.Fatal(err)
 	}
 
-	fmt.Printf("configmap/%s patched\n", configMapName)
+	logging.Info("configmap/%s patched\n", configMapName)
 }

@@ -21,6 +21,7 @@ import (
 	"strings"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
+	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 )
 
 var scriptPrintSpecificCRStatus = `
@@ -35,18 +36,18 @@ func PrintCustomResourceStatus(clusterNamespace string, arg []string) {
 	if len(arg) == 1 && arg[0] == "all" {
 		command := fmt.Sprintf(getCrdList, clusterNamespace)
 		allCRs := strings.Split(exec.ExecuteBashCommand(command), "\n")
-		fmt.Println(allCRs[0])
+		logging.Info(allCRs[0])
 		for _, cr := range allCRs {
-			fmt.Println(cr)
+			logging.Info(cr)
 			command := fmt.Sprintf(scriptPrintSpecificCRStatus, clusterNamespace, cr)
-			fmt.Println(exec.ExecuteBashCommand(command))
+			logging.Info(exec.ExecuteBashCommand(command))
 		}
 
 	} else if len(arg) == 1 {
 		command := fmt.Sprintf(scriptPrintSpecificCRStatus, clusterNamespace, arg[0])
-		fmt.Println(exec.ExecuteBashCommand(command))
+		logging.Info(exec.ExecuteBashCommand(command))
 	} else {
 		command := fmt.Sprintf(scriptPrintSpecificCRStatus, clusterNamespace, "cephclusters.ceph.rook.io")
-		fmt.Println(exec.ExecuteBashCommand(command))
+		logging.Info(exec.ExecuteBashCommand(command))
 	}
 }
