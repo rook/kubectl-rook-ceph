@@ -35,6 +35,8 @@ jobs:
       - name: Test plugin with ceph commands
         run: |
           set -e
+          kubectl rook-ceph health
+
           kubectl rook-ceph ceph status
 
           # test the mon restore to restore to mon a, delete mons b and c, then add d and e
