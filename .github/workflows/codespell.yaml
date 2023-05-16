@@ -24,6 +24,6 @@ jobs:
       - name: codespell
         uses: codespell-project/actions-codespell@master
         with:
-          skip: logo.svg
+          skip: logo.svg,*.sum
           check_filenames: true
           check_hidden: true

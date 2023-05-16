@@ -31,5 +31,6 @@ func addcommands() {
 		command.RookCmd,
 		command.DebugCmd,
 		command.Health,
+		command.DrCmd,
 	)
 }
