@@ -39,11 +39,12 @@ var startDebugCmd = &cobra.Command{
 		debug.StartDebug(context, CephClusterNamespace, args[0], alternateImage)
 	},
 }
+
 var stopDebugCmd = &cobra.Command{
 	Use:   "stop",
 	Short: "Stop debugging a deployment",
 	Args:  cobra.ExactArgs(1),
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		context := GetContext()
 		debug.StopDebug(context, CephClusterNamespace, args[0])
 	},

@@ -35,7 +35,7 @@ var versionCmd = &cobra.Command{
 	Use:   "version",
 	Short: "Prints rook version",
 	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(cmd *cobra.Command, _ []string) {
 		context := GetContext()
 		fmt.Println(exec.RunCommandInOperatorPod(context, "rook", []string{cmd.Use}, OperatorNamespace, CephClusterNamespace, true))
 	},
@@ -56,7 +56,7 @@ var purgeCmd = &cobra.Command{
 var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Print the phase and conditions of the CephCluster CR",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, args []string) {
 		rook.PrintCustomResourceStatus(CephClusterNamespace, args)
 	},
 }

@@ -16,9 +16,8 @@ limitations under the License.
 package command
 
 import (
-	"log"
-
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
+	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 	rookclient "github.com/rook/rook/pkg/client/clientset/versioned"
 	"github.com/spf13/cobra"
 
@@ -67,17 +66,22 @@ func GetContext() *k8sutil.Context {
 
 	context.KubeConfig, err = kubeconfig.ClientConfig()
 	if err != nil {
-		log.Fatal(err)
+		logging.Fatal(err)
 	}
 
 	context.RookClientset, err = rookclient.NewForConfig(context.KubeConfig)
 	if err != nil {
-		log.Fatal(err)
+		logging.Fatal(err)
+	}
+
+	context.RookClientset, err = rookclient.NewForConfig(context.KubeConfig)
+	if err != nil {
+		logging.Fatal(err)
 	}
 
 	context.Clientset, err = k8s.NewForConfig(context.KubeConfig)
 	if err != nil {
-		log.Fatal(err)
+		logging.Fatal(err)
 	}
 
 	return context

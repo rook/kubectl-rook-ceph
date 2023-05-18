@@ -26,8 +26,8 @@ import (
 	"github.com/rook/kubectl-rook-ceph/pkg/debug"
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
+	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 
-	log "github.com/sirupsen/logrus"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -35,15 +35,14 @@ import (
 func RestoreQuorum(context *k8sutil.Context, operatorNamespace, clusterNamespace, goodMon string) {
 	err := restoreQuorum(context, operatorNamespace, clusterNamespace, goodMon)
 	if err != nil {
-		fmt.Println(err)
-		os.Exit(1)
+		logging.Fatal(err)
 	}
 }
 
 func restoreQuorum(context *k8sutil.Context, operatorNamespace, clusterNamespace, goodMon string) error {
 	monCm, err := context.Clientset.CoreV1().ConfigMaps(clusterNamespace).Get(ctx.TODO(), MonConfigMap, v1.GetOptions{})
 	if err != nil {
-		log.Fatalf("failed to get mon configmap %s %v", MonConfigMap, err)
+		return fmt.Errorf("failed to get mon configmap %s %v", MonConfigMap, err)
 	}
 
 	monData := monCm.Data["data"]
@@ -51,16 +50,16 @@ func restoreQuorum(context *k8sutil.Context, operatorNamespace, clusterNamespace
 
 	badMons, goodMonPublicIp, goodMonPort, err := getMonDetails(goodMon, monEndpoints)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 
 	if goodMonPublicIp == "" {
-		return fmt.Errorf("error: good mon %s not found", goodMon)
+		return fmt.Errorf("good mon %s not found", goodMon)
 	}
 
 	fsidSecret, err := context.Clientset.CoreV1().Secrets(clusterNamespace).Get(ctx.TODO(), "rook-ceph-mon", v1.GetOptions{})
 	if err != nil {
-		log.Fatalf("failed to get mon configmap %s %v", MonConfigMap, err)
+		return fmt.Errorf("failed to get mon configmap %s %v", MonConfigMap, err)
 	}
 
 	cephFsid := string(fsidSecret.Data["fsid"])
@@ -68,8 +67,8 @@ func restoreQuorum(context *k8sutil.Context, operatorNamespace, clusterNamespace
 		return fmt.Errorf("ceph cluster fsid not found")
 	}
 
-	fmt.Printf("printing fsid secret %s\n", cephFsid)
-	fmt.Println("Check for the running toolbox")
+	logging.Info("printing fsid secret %s\n", cephFsid)
+	logging.Info("Check for the running toolbox")
 
 	_, err = debug.GetDeployment(context, clusterNamespace, "rook-ceph-tools")
 	if err != nil {
@@ -81,33 +80,33 @@ func restoreQuorum(context *k8sutil.Context, operatorNamespace, clusterNamespace
 		return fmt.Errorf("failed to get the running toolbox")
 	}
 
-	fmt.Printf("Restoring mon quorum to mon %s %s\n", goodMon, goodMonPublicIp)
-	fmt.Printf("The mons to discard are: %s\n", badMons)
-	fmt.Printf("The cluster fsid is %s\n", cephFsid)
+	logging.Info("Restoring mon quorum to mon %s %s\n", goodMon, goodMonPublicIp)
+	logging.Info("The mons to discard are: %s\n", badMons)
+	logging.Info("The cluster fsid is %s\n", cephFsid)
 
 	var answer, output string
-	fmt.Printf("Are you sure you want to restore the quorum to mon %s? If so, enter 'yes-really-restore\n", goodMon)
+	logging.Warning("Are you sure you want to restore the quorum to mon %s? If so, enter 'yes-really-restore\n", goodMon)
 	fmt.Scanf("%s", &answer)
 	output, err = promptToContinueOrCancel(answer)
 	if err != nil {
-		return fmt.Errorf(" restoring the mon quorum to mon %s cancelled", goodMon)
+		return fmt.Errorf("restoring the mon quorum to mon %s cancelled", goodMon)
 	}
-	fmt.Println(output)
+	logging.Info(output)
 
-	fmt.Println("Waiting for operator pod to stop")
+	logging.Info("Waiting for operator pod to stop")
 	err = debug.SetDeploymentScale(context, operatorNamespace, "rook-ceph-operator", 0)
 	if err != nil {
 		return fmt.Errorf("failed to stop deployment rook-ceph-operator. %v", err)
 	}
-	fmt.Println("rook-ceph-operator deployment scaled down")
+	logging.Info("rook-ceph-operator deployment scaled down")
 
-	fmt.Println("Waiting for bad mon pod to stop")
+	logging.Info("Waiting for bad mon pod to stop")
 	for _, badMon := range badMons {
 		err = debug.SetDeploymentScale(context, clusterNamespace, fmt.Sprintf("rook-ceph-mon-%s", badMon), 0)
 		if err != nil {
 			return fmt.Errorf("deployment %s still exist. %v", fmt.Sprintf("rook-ceph-mon-%s", badMon), err)
 		}
-		fmt.Printf("deployment.apps/%s scaled\n", fmt.Sprintf("rook-ceph-mon-%s", badMon))
+		logging.Info("deployment.apps/%s scaled\n", fmt.Sprintf("rook-ceph-mon-%s", badMon))
 	}
 
 	debug.StartDebug(context, clusterNamespace, fmt.Sprintf("rook-ceph-mon-%s", goodMon), "")
@@ -125,18 +124,18 @@ func restoreQuorum(context *k8sutil.Context, operatorNamespace, clusterNamespace
 
 	updateMonMap(context, clusterNamespace, labelSelector, cephFsid, goodMon, goodMonPublicIp, badMons)
 
-	fmt.Println("Restoring the mons in the rook-ceph-mon-endpoints configmap to the good mon")
+	logging.Info("Restoring the mons in the rook-ceph-mon-endpoints configmap to the good mon")
 	monCm.Data["data"] = fmt.Sprintf("%s=%s:%s", goodMon, goodMonPublicIp, goodMonPort)
 
-	monCm, err = context.Clientset.CoreV1().ConfigMaps(clusterNamespace).Update(ctx.TODO(), monCm, v1.UpdateOptions{})
+	_, err = context.Clientset.CoreV1().ConfigMaps(clusterNamespace).Update(ctx.TODO(), monCm, v1.UpdateOptions{})
 	if err != nil {
-		log.Fatalf("failed to update mon configmap %s %v", MonConfigMap, err)
+		logging.Error(fmt.Errorf("failed to update mon configmap %s %v", MonConfigMap, err))
 	}
 
-	fmt.Printf("Stopping the debug pod for mon %s.\n", goodMon)
+	logging.Info("Stopping the debug pod for mon %s.\n", goodMon)
 	debug.StopDebug(context, clusterNamespace, fmt.Sprintf("rook-ceph-mon-%s", goodMon))
 
-	fmt.Println("Check that the restored mon is responding")
+	logging.Info("Check that the restored mon is responding")
 	err = waitForMonStatusResponse(context, clusterNamespace)
 	if err != nil {
 		return err
@@ -147,14 +146,14 @@ func restoreQuorum(context *k8sutil.Context, operatorNamespace, clusterNamespace
 		return err
 	}
 
-	fmt.Printf("Mon quorum was successfully restored to mon %s\n", goodMon)
-	fmt.Println("Only a single mon is currently running")
+	logging.Info("Mon quorum was successfully restored to mon %s\n", goodMon)
+	logging.Info("Only a single mon is currently running")
 
 	output, err = promptToContinueOrCancel(answer)
 	if err != nil {
-		return fmt.Errorf(" restoring the mon quorum to mon %s cancelled", goodMon)
+		return fmt.Errorf("restoring the mon quorum to mon %s cancelled", goodMon)
 	}
-	fmt.Println(output)
+	logging.Info(output)
 
 	err = debug.SetDeploymentScale(context, clusterNamespace, "rook-ceph-operator", 1)
 	if err != nil {
@@ -165,7 +164,7 @@ func restoreQuorum(context *k8sutil.Context, operatorNamespace, clusterNamespace
 }
 
 func updateMonMap(context *k8sutil.Context, clusterNamespace, labelSelector, cephFsid, goodMon, goodMonPublicIp string, badMons []string) {
-	fmt.Println("Started debug pod, restoring the mon quorum in the debug pod")
+	logging.Info("Started debug pod, restoring the mon quorum in the debug pod")
 
 	monmapPath := "/tmp/monmap"
 
@@ -190,35 +189,35 @@ func updateMonMap(context *k8sutil.Context, clusterNamespace, labelSelector, cep
 	extractMonMap := []string{fmt.Sprintf("--extract-monmap=%s", monmapPath)}
 	extractMonMapArgs := append(monMapArgs, extractMonMap...)
 
-	fmt.Println("Extracting the monmap")
-	fmt.Println(exec.RunCommandInLabeledPod(context, labelSelector, "mon", "ceph-mon", extractMonMapArgs, clusterNamespace, true))
+	logging.Info("Extracting the monmap")
+	logging.Info(exec.RunCommandInLabeledPod(context, labelSelector, "mon", "ceph-mon", extractMonMapArgs, clusterNamespace, true))
 
-	fmt.Println("Printing monmap")
-	fmt.Println(exec.RunCommandInLabeledPod(context, labelSelector, "mon", "monmaptool", []string{"--print", monmapPath}, clusterNamespace, true))
+	logging.Info("Printing monmap")
+	logging.Info(exec.RunCommandInLabeledPod(context, labelSelector, "mon", "monmaptool", []string{"--print", monmapPath}, clusterNamespace, true))
 
 	// remove all the mons except the good one
 	for _, badMonId := range badMons {
-		fmt.Printf("Removing mon %s.\n", badMonId)
-		fmt.Println(exec.RunCommandInLabeledPod(context, labelSelector, "mon", "monmaptool", []string{monmapPath, "--rm", badMonId}, clusterNamespace, true))
+		logging.Info("Removing mon %s.\n", badMonId)
+		logging.Info(exec.RunCommandInLabeledPod(context, labelSelector, "mon", "monmaptool", []string{monmapPath, "--rm", badMonId}, clusterNamespace, true))
 	}
 
 	injectMonMap := []string{fmt.Sprintf("--inject-monmap=%s", monmapPath)}
 	injectMonMapArgs := append(monMapArgs, injectMonMap...)
 
-	fmt.Println("Injecting the monmap")
-	fmt.Println(exec.RunCommandInLabeledPod(context, labelSelector, "mon", "ceph-mon", injectMonMapArgs, clusterNamespace, true))
+	logging.Info("Injecting the monmap")
+	logging.Info(exec.RunCommandInLabeledPod(context, labelSelector, "mon", "ceph-mon", injectMonMapArgs, clusterNamespace, true))
 
-	fmt.Println("Finished updating the monmap!")
+	logging.Info("Finished updating the monmap!")
 
-	fmt.Println("Printing final monmap")
-	fmt.Println(exec.RunCommandInLabeledPod(context, labelSelector, "mon", "monmaptool", []string{"--print", monmapPath}, clusterNamespace, true))
+	logging.Info("Printing final monmap")
+	logging.Info(exec.RunCommandInLabeledPod(context, labelSelector, "mon", "monmaptool", []string{"--print", monmapPath}, clusterNamespace, true))
 }
 
 func removeBadMonsResources(context *k8sutil.Context, clusterNamespace string, badMons []string) error {
-	fmt.Printf("Purging the bad mons %v\n", badMons)
+	logging.Info("Purging the bad mons %v\n", badMons)
 
 	for _, badMon := range badMons {
-		fmt.Printf("purging bad mon: %s\n", badMon)
+		logging.Info("purging bad mon: %s\n", badMon)
 		err := context.Clientset.AppsV1().Deployments(clusterNamespace).Delete(ctx.TODO(), fmt.Sprintf("rook-ceph-mon-%s", badMon), v1.DeleteOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to delete deployment %s", fmt.Sprintf("rook-ceph-mon-%s", badMon))
@@ -242,15 +241,15 @@ func waitForMonStatusResponse(context *k8sutil.Context, clusterNamespace string)
 	for i := 0; i < maxRetries; i++ {
 		output := exec.RunCommandInToolboxPod(context, "ceph", []string{"status"}, clusterNamespace, false)
 		if strings.Contains(output, "HEALTH_WARN") || strings.Contains(output, "HEALTH_OK") || strings.Contains(output, "HEALTH_ERROR") {
-			fmt.Printf("finished waiting for ceph status %s\n", output)
+			logging.Info("finished waiting for ceph status %s\n", output)
 			break
 		}
 		if i == maxRetries-1 {
 			return fmt.Errorf("timed out waiting for mon quorum to respond")
 		}
-		fmt.Printf("%d: waiting for ceph status to confirm single mon quorum. \n", i+1)
-		fmt.Printf("current ceph status output %s\n", output)
-		fmt.Println("sleeping for 5 seconds")
+		logging.Info("%d: waiting for ceph status to confirm single mon quorum. \n", i+1)
+		logging.Info("current ceph status output %s\n", output)
+		logging.Info("sleeping for 5 seconds")
 		time.Sleep(5 * time.Second)
 	}
 
@@ -273,7 +272,7 @@ func getMonDetails(goodMon string, monEndpoints []string) ([]string, string, str
 		} else {
 			badMons = append(badMons, monName)
 		}
-		fmt.Printf("mon=%s, endpoints=%s\n", monName, monEndpoint)
+		logging.Info("mon=%s, endpoints=%s\n", monName, monEndpoint)
 	}
 	return badMons, goodMonPublicIp, goodMonPort, nil
 }

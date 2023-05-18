@@ -19,10 +19,10 @@ package rook
 import (
 	ctx "context"
 	"fmt"
-	"log"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
+	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 	"github.com/rook/kubectl-rook-ceph/pkg/mons"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
@@ -30,7 +30,7 @@ import (
 func PurgeOsd(context *k8sutil.Context, operatorNamespace, clusterNamespace, osdId, flag string) string {
 	monCm, err := context.Clientset.CoreV1().ConfigMaps(clusterNamespace).Get(ctx.TODO(), mons.MonConfigMap, v1.GetOptions{})
 	if err != nil {
-		log.Fatalf("failed to get mon configmap %s %v", mons.MonConfigMap, err)
+		logging.Fatal(fmt.Errorf("failed to get mon configmap %s %v", mons.MonConfigMap, err))
 	}
 
 	monEndPoint := monCm.Data["data"]
@@ -45,5 +45,6 @@ func PurgeOsd(context *k8sutil.Context, operatorNamespace, clusterNamespace, osd
 		fmt.Sprintf("export ROOK_MON_ENDPOINTS=%s ROOK_CEPH_USERNAME=client.admin ROOK_CEPH_SECRET=%s ROOK_CONFIG_DIR=/var/lib/rook && rook ceph osd remove --osd-ids=%s --force-osd-removal=%s", monEndPoint, adminKey, osdId, flag),
 	}
 
+	logging.Info("Running purge osd command")
 	return exec.RunCommandInOperatorPod(context, cmd, args, operatorNamespace, clusterNamespace, true)
 }

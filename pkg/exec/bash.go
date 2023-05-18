@@ -17,9 +17,9 @@ limitations under the License.
 package exec
 
 import (
-	"fmt"
-	"os"
 	"os/exec"
+
+	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 )
 
 func ExecuteBashCommand(command string) string {
@@ -32,8 +32,7 @@ func ExecuteBashCommand(command string) string {
 	)
 	stdout, err := cmd.Output()
 	if err != nil {
-		fmt.Println(err.Error())
-		os.Exit(1)
+		logging.Fatal(err)
 	}
 	return string(stdout)
 }
