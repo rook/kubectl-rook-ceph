@@ -17,7 +17,6 @@ limitations under the License.
 package debug
 
 import (
-	ctx "context"
 	"fmt"
 	"time"
 
@@ -88,7 +87,7 @@ func startDebug(context *k8sutil.Context, clusterNamespace, deploymentName, alte
 		Spec: deployment.Spec,
 	}
 
-	debugDeployment, err := context.Clientset.AppsV1().Deployments(clusterNamespace).Create(ctx.TODO(), debugDeploymentSpec, v1.CreateOptions{})
+	debugDeployment, err := context.Clientset.AppsV1().Deployments(clusterNamespace).Create(context.Context, debugDeploymentSpec, v1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("Error creating deployment %s. %v\n", debugDeploymentSpec, err)
 	}
@@ -111,7 +110,7 @@ func SetDeploymentScale(context *k8sutil.Context, clusterNamespace, deploymentNa
 			Replicas: int32(scaleCount),
 		},
 	}
-	_, err := context.Clientset.AppsV1().Deployments(clusterNamespace).UpdateScale(ctx.TODO(), deploymentName, scale, v1.UpdateOptions{})
+	_, err := context.Clientset.AppsV1().Deployments(clusterNamespace).UpdateScale(context.Context, deploymentName, scale, v1.UpdateOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to update scale of deployment %s. %v\n", deploymentName, err)
 	}
@@ -120,7 +119,7 @@ func SetDeploymentScale(context *k8sutil.Context, clusterNamespace, deploymentNa
 
 func GetDeployment(context *k8sutil.Context, clusterNamespace, deploymentName string) (*appsv1.Deployment, error) {
 	logging.Info("fetching the deployment %s to be running\n", deploymentName)
-	deployment, err := context.Clientset.AppsV1().Deployments(clusterNamespace).Get(ctx.TODO(), deploymentName, v1.GetOptions{})
+	deployment, err := context.Clientset.AppsV1().Deployments(clusterNamespace).Get(context.Context, deploymentName, v1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -131,7 +130,7 @@ func GetDeployment(context *k8sutil.Context, clusterNamespace, deploymentName st
 
 func waitForPodDeletion(context *k8sutil.Context, clusterNamespace, podName string) error {
 	for i := 0; i < 60; i++ {
-		_, err := context.Clientset.CoreV1().Pods(clusterNamespace).Get(ctx.TODO(), podName, v1.GetOptions{})
+		_, err := context.Clientset.CoreV1().Pods(clusterNamespace).Get(context.Context, podName, v1.GetOptions{})
 		if kerrors.IsNotFound(err) {
 			return nil
 		}

@@ -17,7 +17,6 @@ limitations under the License.
 package rook
 
 import (
-	ctx "context"
 	"fmt"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
@@ -28,7 +27,7 @@ import (
 )
 
 func PurgeOsd(context *k8sutil.Context, operatorNamespace, clusterNamespace, osdId, flag string) string {
-	monCm, err := context.Clientset.CoreV1().ConfigMaps(clusterNamespace).Get(ctx.TODO(), mons.MonConfigMap, v1.GetOptions{})
+	monCm, err := context.Clientset.CoreV1().ConfigMaps(clusterNamespace).Get(context.Context, mons.MonConfigMap, v1.GetOptions{})
 	if err != nil {
 		logging.Fatal(fmt.Errorf("failed to get mon configmap %s %v", mons.MonConfigMap, err))
 	}

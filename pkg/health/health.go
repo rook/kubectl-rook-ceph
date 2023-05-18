@@ -17,7 +17,6 @@ limitations under the License.
 package health
 
 import (
-	ctx "context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -82,7 +81,7 @@ func checkPodsOnNodes(context *k8sutil.Context, clusterNamespace, label string) 
 	}
 
 	opts := metav1.ListOptions{LabelSelector: label}
-	podList, err := context.Clientset.CoreV1().Pods(clusterNamespace).List(ctx.TODO(), opts)
+	podList, err := context.Clientset.CoreV1().Pods(clusterNamespace).List(context.Context, opts)
 	if err != nil {
 		logging.Error(fmt.Errorf("failed to list %s pods with label %s: %v", daemonType, opts.LabelSelector, err))
 	}
@@ -138,7 +137,7 @@ func CheckAllPodsStatus(context *k8sutil.Context, operatorNamespace, clusterName
 
 func getPodRunningStatus(context *k8sutil.Context, namespace string) ([]v1.Pod, []v1.Pod) {
 	var podNotRunning, podRunning []v1.Pod
-	podList, err := context.Clientset.CoreV1().Pods(namespace).List(ctx.TODO(), metav1.ListOptions{})
+	podList, err := context.Clientset.CoreV1().Pods(namespace).List(context.Context, metav1.ListOptions{})
 	if err != nil {
 		logging.Error(fmt.Errorf("\nfailed to list pods in namespace %s: %v\n", namespace, err))
 	}
@@ -168,7 +167,7 @@ func checkPgStatus(context *k8sutil.Context, operatorNamespace, clusterNamespace
 
 func checkMgrPodsStatusAndCounts(context *k8sutil.Context, clusterNamespace string) {
 	opts := metav1.ListOptions{LabelSelector: "app=rook-ceph-mgr"}
-	podList, err := context.Clientset.CoreV1().Pods(clusterNamespace).List(ctx.TODO(), opts)
+	podList, err := context.Clientset.CoreV1().Pods(clusterNamespace).List(context.Context, opts)
 	if err != nil {
 		logging.Error(fmt.Errorf("\nfailed to list mgr pods with label %s: %v\n", opts.LabelSelector, err))
 		return

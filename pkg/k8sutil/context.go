@@ -17,6 +17,8 @@ limitations under the License.
 package k8sutil
 
 import (
+	"context"
+
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"sigs.k8s.io/controller-runtime/pkg/client"
@@ -36,4 +38,6 @@ type Context struct {
 
 	// RookClientset is a typed connection to the rook API
 	RookClientset rookclient.Interface
+
+	Context context.Context
 }

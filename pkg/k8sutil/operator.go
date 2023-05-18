@@ -17,7 +17,6 @@ limitations under the License.
 package k8sutil
 
 import (
-	"context"
 	"fmt"
 	"time"
 
@@ -31,7 +30,7 @@ import (
 func RestartDeployment(ctx *Context, namespace, deploymentName string) {
 	deploymentsClient := ctx.Clientset.AppsV1().Deployments(namespace)
 	data := fmt.Sprintf(`{"spec": {"template": {"metadata": {"annotations": {"kubectl.kubernetes.io/restartedAt": "%s"}}}}}`, time.Now().String())
-	_, err := deploymentsClient.Patch(context.TODO(), deploymentName, types.StrategicMergePatchType, []byte(data), v1.PatchOptions{})
+	_, err := deploymentsClient.Patch(ctx.Context, deploymentName, types.StrategicMergePatchType, []byte(data), v1.PatchOptions{})
 	if err != nil {
 		logging.Error(fmt.Errorf("Failed to delete deployment %s: %v", deploymentName, err))
 	}
@@ -42,7 +41,7 @@ func RestartDeployment(ctx *Context, namespace, deploymentName string) {
 func WaitForPodToRun(ctx *Context, operatorNamespace, labelSelector string) (corev1.Pod, error) {
 	opts := v1.ListOptions{LabelSelector: labelSelector}
 	for i := 0; i < 60; i++ {
-		pod, err := ctx.Clientset.CoreV1().Pods(operatorNamespace).List(context.TODO(), opts)
+		pod, err := ctx.Clientset.CoreV1().Pods(operatorNamespace).List(ctx.Context, opts)
 		if err != nil {
 			return corev1.Pod{}, fmt.Errorf("failed to list pods with labels matching %s", labelSelector)
 		}
@@ -58,13 +57,13 @@ func WaitForPodToRun(ctx *Context, operatorNamespace, labelSelector string) (cor
 }
 
 func UpdateConfigMap(ctx *Context, namespace, configMapName, key, value string) {
-	cm, err := ctx.Clientset.CoreV1().ConfigMaps(namespace).Get(context.TODO(), configMapName, v1.GetOptions{})
+	cm, err := ctx.Clientset.CoreV1().ConfigMaps(namespace).Get(ctx.Context, configMapName, v1.GetOptions{})
 	if err != nil {
 		logging.Fatal(err)
 	}
 
 	cm.Data[key] = value
-	_, err = ctx.Clientset.CoreV1().ConfigMaps(namespace).Update(context.TODO(), cm, v1.UpdateOptions{})
+	_, err = ctx.Clientset.CoreV1().ConfigMaps(namespace).Update(ctx.Context, cm, v1.UpdateOptions{})
 	if err != nil {
 		logging.Fatal(err)
 	}

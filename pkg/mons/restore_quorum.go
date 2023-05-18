@@ -17,7 +17,6 @@ limitations under the License.
 package mons
 
 import (
-	ctx "context"
 	"fmt"
 	"os"
 	"strings"
@@ -40,7 +39,7 @@ func RestoreQuorum(context *k8sutil.Context, operatorNamespace, clusterNamespace
 }
 
 func restoreQuorum(context *k8sutil.Context, operatorNamespace, clusterNamespace, goodMon string) error {
-	monCm, err := context.Clientset.CoreV1().ConfigMaps(clusterNamespace).Get(ctx.TODO(), MonConfigMap, v1.GetOptions{})
+	monCm, err := context.Clientset.CoreV1().ConfigMaps(clusterNamespace).Get(context.Context, MonConfigMap, v1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to get mon configmap %s %v", MonConfigMap, err)
 	}
@@ -57,7 +56,7 @@ func restoreQuorum(context *k8sutil.Context, operatorNamespace, clusterNamespace
 		return fmt.Errorf("good mon %s not found", goodMon)
 	}
 
-	fsidSecret, err := context.Clientset.CoreV1().Secrets(clusterNamespace).Get(ctx.TODO(), "rook-ceph-mon", v1.GetOptions{})
+	fsidSecret, err := context.Clientset.CoreV1().Secrets(clusterNamespace).Get(context.Context, "rook-ceph-mon", v1.GetOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to get mon configmap %s %v", MonConfigMap, err)
 	}
@@ -127,7 +126,7 @@ func restoreQuorum(context *k8sutil.Context, operatorNamespace, clusterNamespace
 	logging.Info("Restoring the mons in the rook-ceph-mon-endpoints configmap to the good mon")
 	monCm.Data["data"] = fmt.Sprintf("%s=%s:%s", goodMon, goodMonPublicIp, goodMonPort)
 
-	_, err = context.Clientset.CoreV1().ConfigMaps(clusterNamespace).Update(ctx.TODO(), monCm, v1.UpdateOptions{})
+	_, err = context.Clientset.CoreV1().ConfigMaps(clusterNamespace).Update(context.Context, monCm, v1.UpdateOptions{})
 	if err != nil {
 		logging.Error(fmt.Errorf("failed to update mon configmap %s %v", MonConfigMap, err))
 	}
@@ -218,16 +217,16 @@ func removeBadMonsResources(context *k8sutil.Context, clusterNamespace string, b
 
 	for _, badMon := range badMons {
 		logging.Info("purging bad mon: %s\n", badMon)
-		err := context.Clientset.AppsV1().Deployments(clusterNamespace).Delete(ctx.TODO(), fmt.Sprintf("rook-ceph-mon-%s", badMon), v1.DeleteOptions{})
+		err := context.Clientset.AppsV1().Deployments(clusterNamespace).Delete(context.Context, fmt.Sprintf("rook-ceph-mon-%s", badMon), v1.DeleteOptions{})
 		if err != nil {
 			return fmt.Errorf("failed to delete deployment %s", fmt.Sprintf("rook-ceph-mon-%s", badMon))
 		}
-		err = context.Clientset.CoreV1().Services(clusterNamespace).Delete(ctx.TODO(), fmt.Sprintf("rook-ceph-mon-%s", badMon), v1.DeleteOptions{})
+		err = context.Clientset.CoreV1().Services(clusterNamespace).Delete(context.Context, fmt.Sprintf("rook-ceph-mon-%s", badMon), v1.DeleteOptions{})
 		if err != nil && !kerrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete service %s", fmt.Sprintf("rook-ceph-mon-%s", badMon))
 		}
 
-		err = context.Clientset.CoreV1().PersistentVolumeClaims(clusterNamespace).Delete(ctx.TODO(), fmt.Sprintf("rook-ceph-mon-%s", badMon), v1.DeleteOptions{})
+		err = context.Clientset.CoreV1().PersistentVolumeClaims(clusterNamespace).Delete(context.Context, fmt.Sprintf("rook-ceph-mon-%s", badMon), v1.DeleteOptions{})
 		if err != nil && !kerrors.IsNotFound(err) {
 			return fmt.Errorf("failed to delete pvc %s", fmt.Sprintf("rook-ceph-mon-%s", badMon))
 		}

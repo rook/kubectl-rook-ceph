@@ -17,7 +17,6 @@ limitations under the License.
 package debug
 
 import (
-	ctx "context"
 	"fmt"
 	"strings"
 
@@ -47,7 +46,7 @@ func stopDebug(context *k8sutil.Context, clusterNamespace, deploymentName string
 	}
 
 	logging.Info("removing debug mode from deployment %s\n", debugDeployment.Name)
-	err = context.Clientset.AppsV1().Deployments(clusterNamespace).Delete(ctx.TODO(), debugDeployment.Name, v1.DeleteOptions{})
+	err = context.Clientset.AppsV1().Deployments(clusterNamespace).Delete(context.Context, debugDeployment.Name, v1.DeleteOptions{})
 	if err != nil && !kerrors.IsNotFound(err) {
 		return fmt.Errorf("Error deleting deployment %s: %v", debugDeployment.Name, err)
 	}
