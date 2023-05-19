@@ -18,7 +18,6 @@ package exec
 
 import (
 	"bytes"
-	"context"
 	"fmt"
 	"io"
 	"os"
@@ -78,7 +77,7 @@ func RunCommandInToolboxPod(ctx *k8sutil.Context, cmd string, args []string, clu
 
 func RunCommandInLabeledPod(ctx *k8sutil.Context, label, container, cmd string, args []string, clusterNamespace string, exitOnError bool) string {
 	opts := metav1.ListOptions{LabelSelector: label}
-	list, err := ctx.Clientset.CoreV1().Pods(clusterNamespace).List(context.TODO(), opts)
+	list, err := ctx.Clientset.CoreV1().Pods(clusterNamespace).List(ctx.Context, opts)
 	if err != nil || len(list.Items) == 0 {
 		logging.Fatal(fmt.Errorf("failed to get rook mon pod where the command could be executed. %v", err))
 	}
@@ -133,7 +132,7 @@ func execCmdInPod(ctx *k8sutil.Context, command, podName, containerName, podName
 	}
 
 	// Connect this process' std{in,out,err} to the remote shell process.
-	return exec.StreamWithContext(context.TODO(), remotecommand.StreamOptions{
+	return exec.StreamWithContext(ctx.Context, remotecommand.StreamOptions{
 		Stdin:  os.Stdin,
 		Stdout: stdout,
 		Stderr: stderr,

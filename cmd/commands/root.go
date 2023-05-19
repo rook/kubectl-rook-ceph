@@ -84,5 +84,7 @@ func GetContext() *k8sutil.Context {
 		logging.Fatal(err)
 	}
 
+	context.Context = RootCmd.Context()
+
 	return context
 }

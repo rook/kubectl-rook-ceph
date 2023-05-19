@@ -1,7 +1,6 @@
 package dr
 
 import (
-	ctx "context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -22,7 +21,7 @@ type secretData struct {
 
 func Health(context *k8sutil.Context, operatorNamespace, cephClusterNamespace string, args []string) {
 	fmt.Println("INFO: fetching the cephblockpools with mirroring enabled")
-	blockPoolList, err := context.RookClientset.CephV1().CephBlockPools(cephClusterNamespace).List(ctx.TODO(), v1.ListOptions{})
+	blockPoolList, err := context.RookClientset.CephV1().CephBlockPools(cephClusterNamespace).List(context.Context, v1.ListOptions{})
 	if err != nil {
 		log.Error(err)
 	}
@@ -76,7 +75,7 @@ func Health(context *k8sutil.Context, operatorNamespace, cephClusterNamespace st
 }
 
 func extractSecretData(context *k8sutil.Context, operatorNamespace, cephClusterNamespace, secretName string) (*secretData, error) {
-	secret, err := context.Clientset.CoreV1().Secrets(cephClusterNamespace).Get(ctx.TODO(), secretName, v1.GetOptions{})
+	secret, err := context.Clientset.CoreV1().Secrets(cephClusterNamespace).Get(context.Context, secretName, v1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
