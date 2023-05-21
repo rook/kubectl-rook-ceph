@@ -123,15 +123,15 @@ func CheckAllPodsStatus(context *k8sutil.Context, operatorNamespace, clusterName
 		podNotRunning = append(podNotRunning, clusterNotRunningPod...)
 	}
 
-	logging.Info("Pods that are in 'Running' status")
+	logging.Info("Pods that are in 'Running' or `Succeeded` status")
 	for i := range podRunning {
-		fmt.Printf("%s\t%s\t%s\t%s\n", podRunning[i].Name, podRunning[i].Status.Phase, podRunning[i].Namespace, podRunning[i].Spec.NodeName)
+		fmt.Printf("%s \t %s \t %s\t %s\n", podRunning[i].Name, podRunning[i].Status.Phase, podRunning[i].Namespace, podRunning[i].Spec.NodeName)
 	}
 
 	fmt.Println()
 	logging.Warning("Pods that are 'Not' in 'Running' status")
 	for i := range podNotRunning {
-		fmt.Printf("%s\t%s\t%s\t%s\n", podNotRunning[i].Name, podNotRunning[i].Status.Phase, podNotRunning[i].Namespace, podNotRunning[i].Spec.NodeName)
+		fmt.Printf("%s \t %s \t %s \t %s\n", podNotRunning[i].Name, podNotRunning[i].Status.Phase, podNotRunning[i].Namespace, podNotRunning[i].Spec.NodeName)
 	}
 }
 
@@ -143,7 +143,7 @@ func getPodRunningStatus(context *k8sutil.Context, namespace string) ([]v1.Pod, 
 	}
 
 	for i := range podList.Items {
-		if podList.Items[i].Status.Phase != v1.PodRunning {
+		if podList.Items[i].Status.Phase != v1.PodRunning && podList.Items[i].Status.Phase != v1.PodSucceeded {
 			podNotRunning = append(podNotRunning, podList.Items[i])
 		} else {
 			podRunning = append(podRunning, podList.Items[i])
