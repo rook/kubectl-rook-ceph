@@ -84,7 +84,7 @@ func restoreQuorum(context *k8sutil.Context, operatorNamespace, clusterNamespace
 	logging.Info("The cluster fsid is %s\n", cephFsid)
 
 	var answer, output string
-	logging.Warning("Are you sure you want to restore the quorum to mon %s? If so, enter 'yes-really-restore\n", goodMon)
+	logging.Warning("Are you sure you want to restore the quorum to mon %s? If so, enter 'yes-really-restore'\n", goodMon)
 	fmt.Scanf("%s", &answer)
 	output, err = promptToContinueOrCancel(answer)
 	if err != nil {
@@ -277,17 +277,13 @@ func getMonDetails(goodMon string, monEndpoints []string) ([]string, string, str
 }
 
 func promptToContinueOrCancel(answer string) (string, error) {
-	var ROOK_PLUGIN_SKIP_PROMPTS string
-	_, ok := os.LookupEnv(ROOK_PLUGIN_SKIP_PROMPTS)
-	if ok {
-		if answer == "yes-really-restore" {
-			return "proceeding", nil
-		} else if answer == "" {
-			return "continuing", nil
-		} else {
-			return "", fmt.Errorf("canncelled")
-		}
-	} else {
+	if skip, ok := os.LookupEnv("ROOK_PLUGIN_SKIP_PROMPTS"); ok && skip == "true" {
 		return "skipped prompt since ROOK_PLUGIN_SKIP_PROMPTS=true", nil
 	}
+
+	if answer == "yes-really-restore" {
+		return "proceeding", nil
+	}
+
+	return "", fmt.Errorf("cancelled")
 }

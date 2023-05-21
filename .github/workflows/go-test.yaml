@@ -43,10 +43,11 @@ jobs:
           kubectl rook-ceph ceph status
 
       - name: Mon restore
+        env:
+          ROOK_PLUGIN_SKIP_PROMPTS: true
         run: |
           set -ex
           # test the mon restore to restore to mon a, delete mons b and c, then add d and e
-          export ROOK_PLUGIN_SKIP_PROMPTS=true
           kubectl rook-ceph  mons restore-quorum a
           kubectl  -n rook-ceph wait pod -l app=rook-ceph-mon-b --for=delete --timeout=90s
           kubectl -n rook-ceph wait pod -l app=rook-ceph-mon-c --for=delete --timeout=90s
