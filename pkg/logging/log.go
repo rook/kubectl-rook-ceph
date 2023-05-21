@@ -18,6 +18,7 @@ package logging
 
 import (
 	"fmt"
+	"os"
 
 	"github.com/fatih/color"
 )
@@ -48,4 +49,5 @@ func Fatal(err error, args ...interface{}) {
 	fmt.Print(red("Error: "))
 	fmt.Printf(err.Error(), args...)
 	fmt.Println()
+	os.Exit(1)
 }

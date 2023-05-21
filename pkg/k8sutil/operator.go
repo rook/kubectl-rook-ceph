@@ -45,8 +45,10 @@ func WaitForPodToRun(ctx *Context, operatorNamespace, labelSelector string) (cor
 		if err != nil {
 			return corev1.Pod{}, fmt.Errorf("failed to list pods with labels matching %s", labelSelector)
 		}
-		if pod.Items[0].Status.Phase == corev1.PodRunning && pod.Items[0].DeletionTimestamp.IsZero() {
-			return pod.Items[0], nil
+		if len(pod.Items) != 0 {
+			if pod.Items[0].Status.Phase == corev1.PodRunning && pod.Items[0].DeletionTimestamp.IsZero() {
+				return pod.Items[0], nil
+			}
 		}
 
 		logging.Info("waiting for pod to be running")

@@ -97,6 +97,12 @@ func startDebug(context *k8sutil.Context, clusterNamespace, deploymentName, alte
 		return err
 	}
 
+	pod, err := k8sutil.WaitForPodToRun(context, clusterNamespace, labelSelector)
+	if err != nil {
+		logging.Fatal(err)
+	}
+
+	logging.Info("Debug pod %s is ready use", pod.Name)
 	return nil
 }
 
