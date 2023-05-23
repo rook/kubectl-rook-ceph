@@ -55,5 +55,6 @@ func stopDebug(context *k8sutil.Context, clusterNamespace, deploymentName string
 	if err := SetDeploymentScale(context, clusterNamespace, original_deployment_name, 1); err != nil {
 		return err
 	}
+	logging.Info("Successfully deleted debug deployment and restored deployment %q", original_deployment_name)
 	return nil
 }
