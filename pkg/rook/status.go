@@ -36,11 +36,11 @@ func PrintCustomResourceStatus(clusterNamespace string, arg []string) {
 	if len(arg) == 1 && arg[0] == "all" {
 		command := fmt.Sprintf(getCrdList, clusterNamespace)
 		allCRs := strings.Split(exec.ExecuteBashCommand(command), "\n")
-		logging.Info(allCRs[0])
+		allCRs = allCRs[:len(allCRs)-1] // remove last empty line which is not a CR
 		for _, cr := range allCRs {
 			logging.Info(cr)
 			command := fmt.Sprintf(scriptPrintSpecificCRStatus, clusterNamespace, cr)
-			logging.Info(exec.ExecuteBashCommand(command))
+			fmt.Println(exec.ExecuteBashCommand(command))
 		}
 
 	} else if len(arg) == 1 {

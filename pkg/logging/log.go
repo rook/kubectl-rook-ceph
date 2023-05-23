@@ -24,8 +24,11 @@ import (
 
 func Info(output string, args ...interface{}) {
 	blue := color.New(color.FgBlue).SprintFunc()
-	fmt.Print(blue("Info: "))
-	fmt.Printf(output, args...)
+	if output != "" {
+		fmt.Print(blue("Info: "))
+		fmt.Printf(output, args...)
+	}
+
 	fmt.Println()
 }
 
