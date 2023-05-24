@@ -40,10 +40,10 @@ func RestartDeployment(ctx context.Context, k8sclientset kubernetes.Interface, n
 	logging.Info("deployment.apps/%s restarted\n", deploymentName)
 }
 
-func WaitForPodToRun(ctx context.Context, k8sclientset kubernetes.Interface, operatorNamespace, labelSelector string) (corev1.Pod, error) {
+func WaitForPodToRun(ctx context.Context, k8sclientset kubernetes.Interface, namespace, labelSelector string) (corev1.Pod, error) {
 	opts := v1.ListOptions{LabelSelector: labelSelector}
 	for i := 0; i < 60; i++ {
-		pod, err := k8sclientset.CoreV1().Pods(operatorNamespace).List(ctx, opts)
+		pod, err := k8sclientset.CoreV1().Pods(namespace).List(ctx, opts)
 		if err != nil {
 			return corev1.Pod{}, fmt.Errorf("failed to list pods with labels matching %s", labelSelector)
 		}
@@ -53,7 +53,7 @@ func WaitForPodToRun(ctx context.Context, k8sclientset kubernetes.Interface, ope
 			}
 		}
 
-		logging.Info("waiting for pod to be running")
+		logging.Info("waiting for pod with label %q in namespace %q to be running", labelSelector, namespace)
 		time.Sleep(time.Second * 5)
 	}
 

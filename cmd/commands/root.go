@@ -33,9 +33,14 @@ var (
 
 // rookCmd represents the rook command
 var RootCmd = &cobra.Command{
-	Use:   "rook-ceph",
-	Short: "kubectl rook-ceph provides common management and troubleshooting tools for Ceph.",
-	Args:  cobra.MinimumNArgs(1),
+	Use:              "rook-ceph",
+	Short:            "kubectl rook-ceph provides common management and troubleshooting tools for Ceph.",
+	Args:             cobra.MinimumNArgs(1),
+	TraverseChildren: true,
+	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		logging.Info("CephCluster namespace: %q", CephClusterNamespace)
+		logging.Info("Rook operator namespace: %q", OperatorNamespace)
+	},
 }
 
 // Execute adds all child commands to the root command and sets flags appropriately.
@@ -50,7 +55,7 @@ func init() {
 
 	RootCmd.PersistentFlags().StringVar(&KubeConfig, "kubeconfig", "", "kubernetes config path")
 	RootCmd.PersistentFlags().StringVar(&OperatorNamespace, "operator-namespace", "rook-ceph", "Kubernetes namespace where rook operator is running")
-	RootCmd.PersistentFlags().StringVar(&CephClusterNamespace, "namespace", "rook-ceph", "Kubernetes namespace where ceph cluster is created")
+	RootCmd.PersistentFlags().StringVarP(&CephClusterNamespace, "namespace", "n", "rook-ceph", "Kubernetes namespace where CephCluster is created")
 }
 
 func GetClientsets() *k8sutil.Clientsets {

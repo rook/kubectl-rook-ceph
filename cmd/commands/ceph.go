@@ -20,7 +20,7 @@ import (
 	"fmt"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
-
+	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 	"github.com/spf13/cobra"
 )
 
@@ -32,6 +32,7 @@ var CephCmd = &cobra.Command{
 	Args:               cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		clientsets := GetClientsets()
+		logging.Info("running 'ceph' command with args: %v", args)
 		fmt.Println(exec.RunCommandInOperatorPod(cmd.Context(), clientsets, cmd.Use, args, OperatorNamespace, CephClusterNamespace, true))
 	},
 }
