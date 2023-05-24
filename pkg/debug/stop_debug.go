@@ -17,42 +17,42 @@ limitations under the License.
 package debug
 
 import (
+	"context"
 	"fmt"
 	"strings"
 
+	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
-	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
-	"github.com/rook/kubectl-rook-ceph/pkg/logging"
+	"k8s.io/client-go/kubernetes"
 )
 
-func StopDebug(context *k8sutil.Context, clusterNamespace, deploymentName string) {
+func StopDebug(ctx context.Context, k8sclientset kubernetes.Interface, clusterNamespace, deploymentName string) {
 
-	err := stopDebug(context, clusterNamespace, deploymentName)
+	err := stopDebug(ctx, k8sclientset, clusterNamespace, deploymentName)
 	if err != nil {
 		logging.Fatal(err)
 	}
 }
 
-func stopDebug(context *k8sutil.Context, clusterNamespace, deploymentName string) error {
+func stopDebug(ctx context.Context, k8sclientset kubernetes.Interface, clusterNamespace, deploymentName string) error {
 	if !strings.HasSuffix(deploymentName, "-debug") {
 		deploymentName = deploymentName + "-debug"
 	}
 
-	debugDeployment, err := GetDeployment(context, clusterNamespace, deploymentName)
+	debugDeployment, err := GetDeployment(ctx, k8sclientset, clusterNamespace, deploymentName)
 	if err != nil {
 		return fmt.Errorf("Missing mon or osd debug deployment name %s. %v\n", deploymentName, err)
 	}
 
 	logging.Info("removing debug mode from deployment %s\n", debugDeployment.Name)
-	err = context.Clientset.AppsV1().Deployments(clusterNamespace).Delete(context.Context, debugDeployment.Name, v1.DeleteOptions{})
+	err = k8sclientset.AppsV1().Deployments(clusterNamespace).Delete(ctx, debugDeployment.Name, v1.DeleteOptions{})
 	if err != nil && !kerrors.IsNotFound(err) {
 		return fmt.Errorf("Error deleting deployment %s: %v", debugDeployment.Name, err)
 	}
 
 	original_deployment_name := strings.ReplaceAll(deploymentName, "-debug", "")
-	if err := SetDeploymentScale(context, clusterNamespace, original_deployment_name, 1); err != nil {
+	if err := SetDeploymentScale(ctx, k8sclientset, clusterNamespace, original_deployment_name, 1); err != nil {
 		return err
 	}
 	logging.Info("Successfully deleted debug deployment and restored deployment %q", original_deployment_name)

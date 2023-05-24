@@ -53,10 +53,10 @@ func init() {
 	RootCmd.PersistentFlags().StringVar(&CephClusterNamespace, "namespace", "rook-ceph", "Kubernetes namespace where ceph cluster is created")
 }
 
-func GetContext() *k8sutil.Context {
+func GetClientsets() *k8sutil.Clientsets {
 	var err error
 
-	context := &k8sutil.Context{}
+	clientsets := &k8sutil.Clientsets{}
 
 	// 1. Create Kubernetes Client
 	kubeconfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
@@ -64,27 +64,20 @@ func GetContext() *k8sutil.Context {
 		&clientcmd.ConfigOverrides{},
 	)
 
-	context.KubeConfig, err = kubeconfig.ClientConfig()
+	clientsets.KubeConfig, err = kubeconfig.ClientConfig()
 	if err != nil {
 		logging.Fatal(err)
 	}
 
-	context.RookClientset, err = rookclient.NewForConfig(context.KubeConfig)
+	clientsets.Rook, err = rookclient.NewForConfig(clientsets.KubeConfig)
 	if err != nil {
 		logging.Fatal(err)
 	}
 
-	context.RookClientset, err = rookclient.NewForConfig(context.KubeConfig)
+	clientsets.Kube, err = k8s.NewForConfig(clientsets.KubeConfig)
 	if err != nil {
 		logging.Fatal(err)
 	}
 
-	context.Clientset, err = k8s.NewForConfig(context.KubeConfig)
-	if err != nil {
-		logging.Fatal(err)
-	}
-
-	context.Context = RootCmd.Context()
-
-	return context
+	return clientsets
 }

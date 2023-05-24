@@ -36,8 +36,8 @@ var versionCmd = &cobra.Command{
 	Short: "Prints rook version",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, _ []string) {
-		context := GetContext()
-		fmt.Println(exec.RunCommandInOperatorPod(context, "rook", []string{cmd.Use}, OperatorNamespace, CephClusterNamespace, true))
+		clientsets := GetClientsets()
+		fmt.Println(exec.RunCommandInOperatorPod(cmd.Context(), clientsets, "rook", []string{cmd.Use}, OperatorNamespace, CephClusterNamespace, true))
 	},
 }
 
@@ -46,10 +46,10 @@ var purgeCmd = &cobra.Command{
 	Short: "Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs.",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		context := GetContext()
+		clientsets := GetClientsets()
 		forceflagValue := cmd.Flag("force").Value.String()
 		osdID := args[0]
-		rook.PurgeOsd(context, OperatorNamespace, CephClusterNamespace, osdID, forceflagValue)
+		rook.PurgeOsd(cmd.Context(), clientsets, OperatorNamespace, CephClusterNamespace, osdID, forceflagValue)
 	},
 }
 

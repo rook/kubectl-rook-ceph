@@ -1,6 +1,7 @@
 package dr
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -10,6 +11,7 @@ import (
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 	rookv1 "github.com/rook/rook/pkg/apis/ceph.rook.io/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 type secretData struct {
@@ -18,9 +20,9 @@ type secretData struct {
 	ClientId string `json:"client_id"`
 }
 
-func Health(context *k8sutil.Context, operatorNamespace, cephClusterNamespace string, args []string) {
+func Health(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, cephClusterNamespace string, args []string) {
 	logging.Info("fetching the cephblockpools with mirroring enabled")
-	blockPoolList, err := context.RookClientset.CephV1().CephBlockPools(cephClusterNamespace).List(context.Context, v1.ListOptions{})
+	blockPoolList, err := clientsets.Rook.CephV1().CephBlockPools(cephClusterNamespace).List(ctx, v1.ListOptions{})
 	if err != nil {
 		logging.Fatal(err)
 	}
@@ -46,7 +48,7 @@ func Health(context *k8sutil.Context, operatorNamespace, cephClusterNamespace st
 		}
 	}
 
-	secretData, err := extractSecretData(context, operatorNamespace, cephClusterNamespace, secretDetail)
+	secretData, err := extractSecretData(ctx, clientsets.Kube, operatorNamespace, cephClusterNamespace, secretDetail)
 	if err != nil {
 		logging.Fatal(fmt.Errorf("failed to extract secret %s", secretDetail))
 	}
@@ -61,7 +63,7 @@ func Health(context *k8sutil.Context, operatorNamespace, cephClusterNamespace st
 		cephArgs = append(cephArgs, args...)
 	}
 
-	cephStatus := exec.RunCommandInOperatorPod(context, "ceph", cephArgs, operatorNamespace, cephClusterNamespace, false)
+	cephStatus := exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", cephArgs, operatorNamespace, cephClusterNamespace, false)
 	if cephStatus == "" {
 		logging.Warning("failed to get ceph status from peer cluster, please check for network issues between the clusters")
 		return
@@ -70,11 +72,11 @@ func Health(context *k8sutil.Context, operatorNamespace, cephClusterNamespace st
 
 	logging.Info("running mirroring daemon health")
 
-	fmt.Println(exec.RunCommandInOperatorPod(context, "rbd", []string{"-p", mirrorBlockPool.Name, "mirror", "pool", "status"}, cephClusterNamespace, operatorNamespace, true))
+	fmt.Println(exec.RunCommandInOperatorPod(ctx, clientsets, "rbd", []string{"-p", mirrorBlockPool.Name, "mirror", "pool", "status"}, cephClusterNamespace, operatorNamespace, true))
 }
 
-func extractSecretData(context *k8sutil.Context, operatorNamespace, cephClusterNamespace, secretName string) (*secretData, error) {
-	secret, err := context.Clientset.CoreV1().Secrets(cephClusterNamespace).Get(context.Context, secretName, v1.GetOptions{})
+func extractSecretData(ctx context.Context, k8sclientset kubernetes.Interface, operatorNamespace, cephClusterNamespace, secretName string) (*secretData, error) {
+	secret, err := k8sclientset.CoreV1().Secrets(cephClusterNamespace).Get(ctx, secretName, v1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}

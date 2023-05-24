@@ -18,6 +18,7 @@ package exec
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -35,16 +36,16 @@ var (
 	CephClusterNamespace string // Cephcluster namespace
 )
 
-func RunCommandInOperatorPod(ctx *k8sutil.Context, cmd string, args []string, operatorNamespace, clusterNamespace string, exitOnError bool) string {
+func RunCommandInOperatorPod(ctx context.Context, clientsets *k8sutil.Clientsets, cmd string, args []string, operatorNamespace, clusterNamespace string, exitOnError bool) string {
 
-	pod, err := k8sutil.WaitForPodToRun(ctx, operatorNamespace, "app=rook-ceph-operator")
+	pod, err := k8sutil.WaitForPodToRun(ctx, clientsets.Kube, operatorNamespace, "app=rook-ceph-operator")
 	if err != nil {
 		logging.Fatal(fmt.Errorf("failed to wait for operator pod to run: %v", err))
 	}
 
 	var stdout, stderr bytes.Buffer
 
-	err = execCmdInPod(ctx, cmd, pod.Name, "rook-ceph-operator", pod.Namespace, clusterNamespace, args, &stdout, &stderr)
+	err = execCmdInPod(ctx, clientsets, cmd, pod.Name, "rook-ceph-operator", pod.Namespace, clusterNamespace, args, &stdout, &stderr)
 	if err != nil {
 		logging.Error(err)
 		if exitOnError {
@@ -56,15 +57,15 @@ func RunCommandInOperatorPod(ctx *k8sutil.Context, cmd string, args []string, op
 	return stdout.String()
 }
 
-func RunCommandInToolboxPod(ctx *k8sutil.Context, cmd string, args []string, clusterNamespace string, exitOnError bool) string {
-	pod, err := k8sutil.WaitForPodToRun(ctx, clusterNamespace, "app=rook-ceph-tools")
+func RunCommandInToolboxPod(ctx context.Context, clientsets *k8sutil.Clientsets, cmd string, args []string, clusterNamespace string, exitOnError bool) string {
+	pod, err := k8sutil.WaitForPodToRun(ctx, clientsets.Kube, clusterNamespace, "app=rook-ceph-tools")
 	if err != nil {
 		logging.Fatal(err)
 	}
 
 	var stdout, stderr bytes.Buffer
 
-	err = execCmdInPod(ctx, cmd, pod.Name, "rook-ceph-tools", pod.Namespace, clusterNamespace, args, &stdout, &stderr)
+	err = execCmdInPod(ctx, clientsets, cmd, pod.Name, "rook-ceph-tools", pod.Namespace, clusterNamespace, args, &stdout, &stderr)
 	if err != nil {
 		logging.Error(err)
 		if exitOnError {
@@ -75,15 +76,15 @@ func RunCommandInToolboxPod(ctx *k8sutil.Context, cmd string, args []string, clu
 	return stdout.String()
 }
 
-func RunCommandInLabeledPod(ctx *k8sutil.Context, label, container, cmd string, args []string, clusterNamespace string, exitOnError bool) string {
+func RunCommandInLabeledPod(ctx context.Context, clientsets *k8sutil.Clientsets, label, container, cmd string, args []string, clusterNamespace string, exitOnError bool) string {
 	opts := metav1.ListOptions{LabelSelector: label}
-	list, err := ctx.Clientset.CoreV1().Pods(clusterNamespace).List(ctx.Context, opts)
+	list, err := clientsets.Kube.CoreV1().Pods(clusterNamespace).List(ctx, opts)
 	if err != nil || len(list.Items) == 0 {
 		logging.Fatal(fmt.Errorf("failed to get rook mon pod where the command could be executed. %v", err))
 	}
 	var stdout, stderr bytes.Buffer
 
-	err = execCmdInPod(ctx, cmd, list.Items[0].Name, container, list.Items[0].Namespace, clusterNamespace, args, &stdout, &stderr)
+	err = execCmdInPod(ctx, clientsets, cmd, list.Items[0].Name, container, list.Items[0].Namespace, clusterNamespace, args, &stdout, &stderr)
 	if err != nil {
 		logging.Error(err)
 		if exitOnError {
@@ -96,7 +97,7 @@ func RunCommandInLabeledPod(ctx *k8sutil.Context, label, container, cmd string, 
 }
 
 // execCmdInPod exec command on specific pod and wait the command's output.
-func execCmdInPod(ctx *k8sutil.Context, command, podName, containerName, podNamespace, clusterNamespace string, args []string, stdout, stderr io.Writer) error {
+func execCmdInPod(ctx context.Context, clientsets *k8sutil.Clientsets, command, podName, containerName, podNamespace, clusterNamespace string, args []string, stdout, stderr io.Writer) error {
 	cmd := []string{}
 	cmd = append(cmd, command)
 	cmd = append(cmd, args...)
@@ -111,7 +112,7 @@ func execCmdInPod(ctx *k8sutil.Context, command, podName, containerName, podName
 
 	// Prepare the API URL used to execute another process within the Pod.  In
 	// this case, we'll run a remote shell.
-	req := ctx.Clientset.CoreV1().RESTClient().
+	req := clientsets.Kube.CoreV1().RESTClient().
 		Post().
 		Namespace(podNamespace).
 		Resource("pods").
@@ -126,13 +127,13 @@ func execCmdInPod(ctx *k8sutil.Context, command, podName, containerName, podName
 			TTY:       false,
 		}, scheme.ParameterCodec)
 
-	exec, err := remotecommand.NewSPDYExecutor(ctx.KubeConfig, "POST", req.URL())
+	exec, err := remotecommand.NewSPDYExecutor(clientsets.KubeConfig, "POST", req.URL())
 	if err != nil {
 		logging.Fatal(err)
 	}
 
 	// Connect this process' std{in,out,err} to the remote shell process.
-	return exec.StreamWithContext(ctx.Context, remotecommand.StreamOptions{
+	return exec.StreamWithContext(ctx, remotecommand.StreamOptions{
 		Stdin:  os.Stdin,
 		Stdout: stdout,
 		Stderr: stderr,
