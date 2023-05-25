@@ -17,9 +17,9 @@ var healthCmd = &cobra.Command{
 	Short:              "Print the ceph status of a peer cluster in a mirroring-enabled cluster.",
 	DisableFlagParsing: true,
 	Args:               cobra.MaximumNArgs(2),
-	Run: func(_ *cobra.Command, args []string) {
-		context := GetContext()
-		dr.Health(context, OperatorNamespace, CephClusterNamespace, args)
+	Run: func(cmd *cobra.Command, args []string) {
+		clientsets := GetClientsets()
+		dr.Health(cmd.Context(), clientsets, OperatorNamespace, CephClusterNamespace, args)
 	},
 }
 

@@ -17,6 +17,7 @@ limitations under the License.
 package debug
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -26,17 +27,18 @@ import (
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
-func StartDebug(context *k8sutil.Context, clusterNamespace, deploymentName, alternateImageValue string) {
-	err := startDebug(context, clusterNamespace, deploymentName, alternateImageValue)
+func StartDebug(ctx context.Context, k8sclientset kubernetes.Interface, clusterNamespace, deploymentName, alternateImageValue string) {
+	err := startDebug(ctx, k8sclientset, clusterNamespace, deploymentName, alternateImageValue)
 	if err != nil {
 		logging.Fatal(err)
 	}
 }
 
-func startDebug(context *k8sutil.Context, clusterNamespace, deploymentName, alternateImageValue string) error {
-	originalDeployment, err := GetDeployment(context, clusterNamespace, deploymentName)
+func startDebug(ctx context.Context, k8sclientset kubernetes.Interface, clusterNamespace, deploymentName, alternateImageValue string) error {
+	originalDeployment, err := GetDeployment(ctx, k8sclientset, clusterNamespace, deploymentName)
 	if err != nil {
 		return fmt.Errorf("Missing mon or osd deployment name %s. %v\n", deploymentName, err)
 	}
@@ -61,19 +63,19 @@ func startDebug(context *k8sutil.Context, clusterNamespace, deploymentName, alte
 	deployment.Spec.Template.Spec.Containers[0].Args = []string{}
 
 	labelSelector := fmt.Sprintf("ceph_daemon_type=%s,ceph_daemon_id=%s", deployment.Spec.Template.Labels["ceph_daemon_type"], deployment.Spec.Template.Labels["ceph_daemon_id"])
-	deploymentPodName, err := k8sutil.WaitForPodToRun(context, clusterNamespace, labelSelector)
+	deploymentPodName, err := k8sutil.WaitForPodToRun(ctx, k8sclientset, clusterNamespace, labelSelector)
 	if err != nil {
 		return err
 	}
 
-	if err := SetDeploymentScale(context, clusterNamespace, deployment.Name, 0); err != nil {
+	if err := SetDeploymentScale(ctx, k8sclientset, clusterNamespace, deployment.Name, 0); err != nil {
 		return err
 	}
 
 	logging.Info("deployment %s scaled down\n", deployment.Name)
 	logging.Info("waiting for the deployment pod %s to be deleted\n", deploymentPodName.Name)
 
-	err = waitForPodDeletion(context, clusterNamespace, deploymentName)
+	err = waitForPodDeletion(ctx, k8sclientset, clusterNamespace, deploymentName)
 	if err != nil {
 		return err
 	}
@@ -87,17 +89,17 @@ func startDebug(context *k8sutil.Context, clusterNamespace, deploymentName, alte
 		Spec: deployment.Spec,
 	}
 
-	debugDeployment, err := context.Clientset.AppsV1().Deployments(clusterNamespace).Create(context.Context, debugDeploymentSpec, v1.CreateOptions{})
+	debugDeployment, err := k8sclientset.AppsV1().Deployments(clusterNamespace).Create(ctx, debugDeploymentSpec, v1.CreateOptions{})
 	if err != nil {
 		return fmt.Errorf("Error creating deployment %s. %v\n", debugDeploymentSpec, err)
 	}
 	logging.Info("ensure the debug deployment %s is scaled up\n", deploymentName)
 
-	if err := SetDeploymentScale(context, clusterNamespace, debugDeployment.Name, 1); err != nil {
+	if err := SetDeploymentScale(ctx, k8sclientset, clusterNamespace, debugDeployment.Name, 1); err != nil {
 		return err
 	}
 
-	pod, err := k8sutil.WaitForPodToRun(context, clusterNamespace, labelSelector)
+	pod, err := k8sutil.WaitForPodToRun(ctx, k8sclientset, clusterNamespace, labelSelector)
 	if err != nil {
 		logging.Fatal(err)
 	}
@@ -106,7 +108,7 @@ func startDebug(context *k8sutil.Context, clusterNamespace, deploymentName, alte
 	return nil
 }
 
-func SetDeploymentScale(context *k8sutil.Context, clusterNamespace, deploymentName string, scaleCount int) error {
+func SetDeploymentScale(ctx context.Context, k8sclientset kubernetes.Interface, clusterNamespace, deploymentName string, scaleCount int) error {
 	scale := &autoscalingv1.Scale{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      deploymentName,
@@ -116,16 +118,16 @@ func SetDeploymentScale(context *k8sutil.Context, clusterNamespace, deploymentNa
 			Replicas: int32(scaleCount),
 		},
 	}
-	_, err := context.Clientset.AppsV1().Deployments(clusterNamespace).UpdateScale(context.Context, deploymentName, scale, v1.UpdateOptions{})
+	_, err := k8sclientset.AppsV1().Deployments(clusterNamespace).UpdateScale(ctx, deploymentName, scale, v1.UpdateOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to update scale of deployment %s. %v\n", deploymentName, err)
 	}
 	return nil
 }
 
-func GetDeployment(context *k8sutil.Context, clusterNamespace, deploymentName string) (*appsv1.Deployment, error) {
+func GetDeployment(ctx context.Context, k8sclientset kubernetes.Interface, clusterNamespace, deploymentName string) (*appsv1.Deployment, error) {
 	logging.Info("fetching the deployment %s to be running\n", deploymentName)
-	deployment, err := context.Clientset.AppsV1().Deployments(clusterNamespace).Get(context.Context, deploymentName, v1.GetOptions{})
+	deployment, err := k8sclientset.AppsV1().Deployments(clusterNamespace).Get(ctx, deploymentName, v1.GetOptions{})
 	if err != nil {
 		return nil, err
 	}
@@ -134,9 +136,9 @@ func GetDeployment(context *k8sutil.Context, clusterNamespace, deploymentName st
 	return deployment, nil
 }
 
-func waitForPodDeletion(context *k8sutil.Context, clusterNamespace, podName string) error {
+func waitForPodDeletion(ctx context.Context, k8sclientset kubernetes.Interface, clusterNamespace, podName string) error {
 	for i := 0; i < 60; i++ {
-		_, err := context.Clientset.CoreV1().Pods(clusterNamespace).Get(context.Context, podName, v1.GetOptions{})
+		_, err := k8sclientset.CoreV1().Pods(clusterNamespace).Get(ctx, podName, v1.GetOptions{})
 		if kerrors.IsNotFound(err) {
 			return nil
 		}

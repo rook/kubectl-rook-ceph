@@ -31,8 +31,8 @@ func TestParseMonEndpoint(t *testing.T) {
 
 	newClient := fake.NewSimpleClientset
 	k8s := newClient()
-	context := k8sutil.Context{
-		Clientset: k8s,
+	clientsets := k8sutil.Clientsets{
+		Kube: k8s,
 	}
 	ns := "rook-ceph"
 
@@ -45,10 +45,10 @@ func TestParseMonEndpoint(t *testing.T) {
 			"data": "10.96.52.53:6789",
 		},
 	}
-	_, err := context.Clientset.CoreV1().ConfigMaps(ns).Create(ctx, cm, metav1.CreateOptions{})
+	_, err := clientsets.Kube.CoreV1().ConfigMaps(ns).Create(ctx, cm, metav1.CreateOptions{})
 	assert.NoError(t, err)
 
-	monData := GetMonEndpoint(&context, ns)
+	monData := GetMonEndpoint(context.TODO(), clientsets.Kube, ns)
 	assert.Equal(t, "10.96.52.53:6789", monData)
 	assert.NotEqual(t, "10.96.52.54:6789", monData)
 

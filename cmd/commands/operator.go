@@ -34,9 +34,9 @@ var restartCmd = &cobra.Command{
 	Use:   "restart",
 	Short: "Restart rook-ceph-operator pod",
 	Args:  cobra.NoArgs,
-	Run: func(_ *cobra.Command, _ []string) {
-		context := GetContext()
-		k8sutil.RestartDeployment(context, OperatorNamespace, "rook-ceph-operator")
+	Run: func(cmd *cobra.Command, args []string) {
+		clientsets := GetClientsets()
+		k8sutil.RestartDeployment(cmd.Context(), clientsets.Kube, OperatorNamespace, "rook-ceph-operator")
 	},
 }
 
@@ -44,9 +44,9 @@ var setCmd = &cobra.Command{
 	Use:   "set",
 	Short: "Set the property in the rook-ceph-operator-config configmap.",
 	Args:  cobra.ExactArgs(2),
-	Run: func(_ *cobra.Command, args []string) {
-		context := GetContext()
-		k8sutil.UpdateConfigMap(context, OperatorNamespace, "rook-ceph-operator-config", args[0], args[1])
+	Run: func(cmd *cobra.Command, args []string) {
+		clientsets := GetClientsets()
+		k8sutil.UpdateConfigMap(cmd.Context(), clientsets.Kube, OperatorNamespace, "rook-ceph-operator-config", args[0], args[1])
 	},
 }
 

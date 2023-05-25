@@ -34,9 +34,9 @@ var startDebugCmd = &cobra.Command{
 	Short: "Start debugging a deployment with an optional alternative ceph container image",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		context := GetContext()
+		clientsets := GetClientsets()
 		alternateImage := cmd.Flag("alternate-image").Value.String()
-		debug.StartDebug(context, CephClusterNamespace, args[0], alternateImage)
+		debug.StartDebug(cmd.Context(), clientsets.Kube, CephClusterNamespace, args[0], alternateImage)
 	},
 }
 
@@ -44,9 +44,9 @@ var stopDebugCmd = &cobra.Command{
 	Use:   "stop",
 	Short: "Stop debugging a deployment",
 	Args:  cobra.ExactArgs(1),
-	Run: func(_ *cobra.Command, args []string) {
-		context := GetContext()
-		debug.StopDebug(context, CephClusterNamespace, args[0])
+	Run: func(cmd *cobra.Command, args []string) {
+		clientsets := GetClientsets()
+		debug.StopDebug(cmd.Context(), clientsets.Kube, CephClusterNamespace, args[0])
 	},
 }
 

@@ -17,17 +17,18 @@ limitations under the License.
 package health
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
 
-	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
+	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 type cephStatus struct {
@@ -48,31 +49,31 @@ type PgStateEntry struct {
 	Count     int    `json:"count"`
 }
 
-func Health(context *k8sutil.Context, operatorNamespace, clusterNamespace string) {
+func Health(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string) {
 	logging.Info("Checking if at least three mon pods are running on different nodes")
-	checkPodsOnNodes(context, clusterNamespace, "app=rook-ceph-mon")
+	checkPodsOnNodes(ctx, clientsets.Kube, clusterNamespace, "app=rook-ceph-mon")
 
 	fmt.Println()
 	logging.Info("Checking mon quorum and ceph health details")
-	checkMonQuorum(context, operatorNamespace, clusterNamespace)
+	checkMonQuorum(ctx, clientsets, operatorNamespace, clusterNamespace)
 
 	fmt.Println()
 	logging.Info("Checking if at least three osd pods are running on different nodes")
-	checkPodsOnNodes(context, clusterNamespace, "app=rook-ceph-osd")
+	checkPodsOnNodes(ctx, clientsets.Kube, clusterNamespace, "app=rook-ceph-osd")
 
 	fmt.Println()
-	CheckAllPodsStatus(context, operatorNamespace, clusterNamespace)
+	CheckAllPodsStatus(ctx, clientsets.Kube, operatorNamespace, clusterNamespace)
 
 	fmt.Println()
 	logging.Info("Checking placement group status")
-	checkPgStatus(context, operatorNamespace, clusterNamespace)
+	checkPgStatus(ctx, clientsets, operatorNamespace, clusterNamespace)
 
 	fmt.Println()
 	logging.Info("Checking if at least one mgr pod is running")
-	checkMgrPodsStatusAndCounts(context, clusterNamespace)
+	checkMgrPodsStatusAndCounts(ctx, clientsets.Kube, clusterNamespace)
 }
 
-func checkPodsOnNodes(context *k8sutil.Context, clusterNamespace, label string) {
+func checkPodsOnNodes(ctx context.Context, k8sclientset kubernetes.Interface, clusterNamespace, label string) {
 	var daemonType string
 	if strings.Contains(label, "osd") {
 		daemonType = "osd"
@@ -81,7 +82,7 @@ func checkPodsOnNodes(context *k8sutil.Context, clusterNamespace, label string) 
 	}
 
 	opts := metav1.ListOptions{LabelSelector: label}
-	podList, err := context.Clientset.CoreV1().Pods(clusterNamespace).List(context.Context, opts)
+	podList, err := k8sclientset.CoreV1().Pods(clusterNamespace).List(ctx, opts)
 	if err != nil {
 		logging.Error(fmt.Errorf("failed to list %s pods with label %s: %v", daemonType, opts.LabelSelector, err))
 	}
@@ -103,8 +104,8 @@ func checkPodsOnNodes(context *k8sutil.Context, clusterNamespace, label string) 
 	}
 }
 
-func checkMonQuorum(context *k8sutil.Context, operatorNamespace, clusterNamespace string) {
-	cephHealthDetails, _ := unMarshalCephStatus(context, operatorNamespace, clusterNamespace)
+func checkMonQuorum(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string) {
+	cephHealthDetails, _ := unMarshalCephStatus(ctx, clientsets, operatorNamespace, clusterNamespace)
 	if cephHealthDetails == "HEALTH_OK" {
 		logging.Info(cephHealthDetails)
 	} else if cephHealthDetails == "HEALTH_WARN" {
@@ -114,11 +115,11 @@ func checkMonQuorum(context *k8sutil.Context, operatorNamespace, clusterNamespac
 	}
 }
 
-func CheckAllPodsStatus(context *k8sutil.Context, operatorNamespace, clusterNamespace string) {
+func CheckAllPodsStatus(ctx context.Context, k8sclientset kubernetes.Interface, operatorNamespace, clusterNamespace string) {
 	var podNotRunning, podRunning []v1.Pod
-	podRunning, podNotRunning = getPodRunningStatus(context, operatorNamespace)
+	podRunning, podNotRunning = getPodRunningStatus(ctx, k8sclientset, operatorNamespace)
 	if operatorNamespace != clusterNamespace {
-		clusterRunningPod, clusterNotRunningPod := getPodRunningStatus(context, clusterNamespace)
+		clusterRunningPod, clusterNotRunningPod := getPodRunningStatus(ctx, k8sclientset, clusterNamespace)
 		podRunning = append(podRunning, clusterRunningPod...)
 		podNotRunning = append(podNotRunning, clusterNotRunningPod...)
 	}
@@ -135,9 +136,9 @@ func CheckAllPodsStatus(context *k8sutil.Context, operatorNamespace, clusterName
 	}
 }
 
-func getPodRunningStatus(context *k8sutil.Context, namespace string) ([]v1.Pod, []v1.Pod) {
+func getPodRunningStatus(ctx context.Context, k8sclientset kubernetes.Interface, namespace string) ([]v1.Pod, []v1.Pod) {
 	var podNotRunning, podRunning []v1.Pod
-	podList, err := context.Clientset.CoreV1().Pods(namespace).List(context.Context, metav1.ListOptions{})
+	podList, err := k8sclientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{})
 	if err != nil {
 		logging.Error(fmt.Errorf("\nfailed to list pods in namespace %s: %v\n", namespace, err))
 	}
@@ -152,8 +153,8 @@ func getPodRunningStatus(context *k8sutil.Context, namespace string) ([]v1.Pod, 
 	return podRunning, podNotRunning
 }
 
-func checkPgStatus(context *k8sutil.Context, operatorNamespace, clusterNamespace string) {
-	_, pgStateEntryList := unMarshalCephStatus(context, operatorNamespace, clusterNamespace)
+func checkPgStatus(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string) {
+	_, pgStateEntryList := unMarshalCephStatus(ctx, clientsets, operatorNamespace, clusterNamespace)
 	for _, pgStatus := range pgStateEntryList {
 		if pgStatus.StateName == "active+clean" {
 			logging.Info("\tPgState: %s, PgCount: %d", pgStatus.StateName, pgStatus.Count)
@@ -165,9 +166,9 @@ func checkPgStatus(context *k8sutil.Context, operatorNamespace, clusterNamespace
 	}
 }
 
-func checkMgrPodsStatusAndCounts(context *k8sutil.Context, clusterNamespace string) {
+func checkMgrPodsStatusAndCounts(ctx context.Context, k8sclientset kubernetes.Interface, clusterNamespace string) {
 	opts := metav1.ListOptions{LabelSelector: "app=rook-ceph-mgr"}
-	podList, err := context.Clientset.CoreV1().Pods(clusterNamespace).List(context.Context, opts)
+	podList, err := k8sclientset.CoreV1().Pods(clusterNamespace).List(ctx, opts)
 	if err != nil {
 		logging.Error(fmt.Errorf("\nfailed to list mgr pods with label %s: %v\n", opts.LabelSelector, err))
 		return
@@ -182,8 +183,8 @@ func checkMgrPodsStatusAndCounts(context *k8sutil.Context, clusterNamespace stri
 	}
 }
 
-func unMarshalCephStatus(context *k8sutil.Context, operatorNamespace, clusterNamespace string) (string, []PgStateEntry) {
-	cephStatusOut := exec.RunCommandInOperatorPod(context, "ceph", []string{"-s", "--format", "json"}, operatorNamespace, clusterNamespace, false)
+func unMarshalCephStatus(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string) (string, []PgStateEntry) {
+	cephStatusOut := exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", []string{"-s", "--format", "json"}, operatorNamespace, clusterNamespace, false)
 
 	ecodedText := base64.StdEncoding.EncodeToString([]byte(cephStatusOut))
 	decodeCephStatus, err := base64.StdEncoding.DecodeString(ecodedText)

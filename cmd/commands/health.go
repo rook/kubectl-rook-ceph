@@ -26,8 +26,8 @@ var Health = &cobra.Command{
 	Short:              "check health of the cluster and common configuration issues",
 	DisableFlagParsing: true,
 	Args:               cobra.NoArgs,
-	Run: func(_ *cobra.Command, _ []string) {
-		context := GetContext()
-		health.Health(context, OperatorNamespace, CephClusterNamespace)
+	Run: func(cmd *cobra.Command, _ []string) {
+		clientsets := GetClientsets()
+		health.Health(cmd.Context(), clientsets, OperatorNamespace, CephClusterNamespace)
 	},
 }
