@@ -99,6 +99,7 @@ jobs:
       - name: Purge Osd
         run: |
           set -ex
+          kubectl -n rook-ceph scale deployment rook-ceph-osd-0 --replicas 0
           kubectl rook-ceph rook purge-osd 0 --force
 
       - name: collect common logs
