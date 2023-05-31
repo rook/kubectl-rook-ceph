@@ -191,27 +191,27 @@ func updateMonMap(ctx context.Context, clientsets *k8sutil.Clientsets, clusterNa
 	extractMonMapArgs := append(monMapArgs, extractMonMap...)
 
 	logging.Info("Extracting the monmap")
-	logging.Info(exec.RunCommandInLabeledPod(ctx, clientsets, labelSelector, "mon", "ceph-mon", extractMonMapArgs, clusterNamespace, true))
+	exec.RunCommandInLabeledPod(ctx, clientsets, labelSelector, "mon", "ceph-mon", extractMonMapArgs, clusterNamespace, false, true)
 
 	logging.Info("Printing monmap")
-	logging.Info(exec.RunCommandInLabeledPod(ctx, clientsets, labelSelector, "mon", "monmaptool", []string{"--print", monmapPath}, clusterNamespace, true))
+	exec.RunCommandInLabeledPod(ctx, clientsets, labelSelector, "mon", "monmaptool", []string{"--print", monmapPath}, clusterNamespace, false, true)
 
 	// remove all the mons except the good one
 	for _, badMonId := range badMons {
 		logging.Info("Removing mon %s.\n", badMonId)
-		logging.Info(exec.RunCommandInLabeledPod(ctx, clientsets, labelSelector, "mon", "monmaptool", []string{monmapPath, "--rm", badMonId}, clusterNamespace, true))
+		exec.RunCommandInLabeledPod(ctx, clientsets, labelSelector, "mon", "monmaptool", []string{monmapPath, "--rm", badMonId}, clusterNamespace, false, true)
 	}
 
 	injectMonMap := []string{fmt.Sprintf("--inject-monmap=%s", monmapPath)}
 	injectMonMapArgs := append(monMapArgs, injectMonMap...)
 
 	logging.Info("Injecting the monmap")
-	logging.Info(exec.RunCommandInLabeledPod(ctx, clientsets, labelSelector, "mon", "ceph-mon", injectMonMapArgs, clusterNamespace, true))
+	exec.RunCommandInLabeledPod(ctx, clientsets, labelSelector, "mon", "ceph-mon", injectMonMapArgs, clusterNamespace, false, true)
 
 	logging.Info("Finished updating the monmap!")
 
 	logging.Info("Printing final monmap")
-	logging.Info(exec.RunCommandInLabeledPod(ctx, clientsets, labelSelector, "mon", "monmaptool", []string{"--print", monmapPath}, clusterNamespace, true))
+	exec.RunCommandInLabeledPod(ctx, clientsets, labelSelector, "mon", "monmaptool", []string{"--print", monmapPath}, clusterNamespace, false, true)
 }
 
 func removeBadMonsResources(ctx context.Context, k8sclientset kubernetes.Interface, clusterNamespace string, badMons []string) error {
@@ -240,7 +240,7 @@ func waitForMonStatusResponse(ctx context.Context, clientsets *k8sutil.Clientset
 	maxRetries := 20
 
 	for i := 0; i < maxRetries; i++ {
-		output := exec.RunCommandInToolboxPod(ctx, clientsets, "ceph", []string{"status"}, clusterNamespace, false)
+		output := exec.RunCommandInToolboxPod(ctx, clientsets, "ceph", []string{"status"}, clusterNamespace, true, false)
 		if strings.Contains(output, "HEALTH_WARN") || strings.Contains(output, "HEALTH_OK") || strings.Contains(output, "HEALTH_ERROR") {
 			logging.Info("finished waiting for ceph status %s\n", output)
 			break

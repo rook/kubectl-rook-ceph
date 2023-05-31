@@ -17,8 +17,6 @@ limitations under the License.
 package command
 
 import (
-	"fmt"
-
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
 	"github.com/rook/kubectl-rook-ceph/pkg/rook"
 	"github.com/spf13/cobra"
@@ -37,7 +35,7 @@ var versionCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, _ []string) {
 		clientsets := GetClientsets()
-		fmt.Println(exec.RunCommandInOperatorPod(cmd.Context(), clientsets, "rook", []string{cmd.Use}, OperatorNamespace, CephClusterNamespace, true))
+		exec.RunCommandInOperatorPod(cmd.Context(), clientsets, "rook", []string{cmd.Use}, OperatorNamespace, CephClusterNamespace, false, true)
 	},
 }
 
