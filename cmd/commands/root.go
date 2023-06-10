@@ -18,7 +18,9 @@ package command
 import (
 	"context"
 	"fmt"
+	"strings"
 
+	"github.com/rook/kubectl-rook-ceph/pkg/exec"
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 	rookclient "github.com/rook/rook/pkg/client/clientset/versioned"
@@ -100,6 +102,11 @@ func PreValidationCheck(ctx context.Context, k8sclientset *k8sutil.Clientsets, o
 	}
 	_, err = k8sclientset.Kube.CoreV1().Namespaces().Get(ctx, cephClusterNamespace, v1.GetOptions{})
 	if err != nil {
-		logging.Fatal(fmt.Errorf("CephCluster namespace '%s' does not exist. %v", cephClusterNamespace, err))
+		logging.Error(fmt.Errorf("CephCluster namespace '%s' does not exist. %v", cephClusterNamespace, err))
+	}
+
+	rookVersion := exec.RunCommandInOperatorPod(ctx, k8sclientset, "rook", []string{"version"}, operatorNamespace, cephClusterNamespace, true, false)
+	if strings.Contains(rookVersion, "alpha") || strings.Contains(rookVersion, "beta") {
+		logging.Warning("rook version '%s' is running a pre-release version of Rook.", rookVersion)
 	}
 }
