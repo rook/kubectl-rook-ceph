@@ -16,11 +16,17 @@ limitations under the License.
 package command
 
 import (
+	"context"
+	"fmt"
+	"strings"
+
+	"github.com/rook/kubectl-rook-ceph/pkg/exec"
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 	rookclient "github.com/rook/rook/pkg/client/clientset/versioned"
 	"github.com/spf13/cobra"
 
+	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	k8s "k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/tools/clientcmd"
 )
@@ -58,7 +64,7 @@ func init() {
 	RootCmd.PersistentFlags().StringVarP(&CephClusterNamespace, "namespace", "n", "rook-ceph", "Kubernetes namespace where CephCluster is created")
 }
 
-func GetClientsets() *k8sutil.Clientsets {
+func GetClientsets(ctx context.Context) *k8sutil.Clientsets {
 	var err error
 
 	clientsets := &k8sutil.Clientsets{}
@@ -84,5 +90,23 @@ func GetClientsets() *k8sutil.Clientsets {
 		logging.Fatal(err)
 	}
 
+	PreValidationCheck(ctx, clientsets, OperatorNamespace, CephClusterNamespace)
+
 	return clientsets
+}
+
+func PreValidationCheck(ctx context.Context, k8sclientset *k8sutil.Clientsets, operatorNamespace, cephClusterNamespace string) {
+	_, err := k8sclientset.Kube.CoreV1().Namespaces().Get(ctx, operatorNamespace, v1.GetOptions{})
+	if err != nil {
+		logging.Fatal(fmt.Errorf("Operator namespace '%s' does not exist. %v", operatorNamespace, err))
+	}
+	_, err = k8sclientset.Kube.CoreV1().Namespaces().Get(ctx, cephClusterNamespace, v1.GetOptions{})
+	if err != nil {
+		logging.Error(fmt.Errorf("CephCluster namespace '%s' does not exist. %v", cephClusterNamespace, err))
+	}
+
+	rookVersion := exec.RunCommandInOperatorPod(ctx, k8sclientset, "rook", []string{"version"}, operatorNamespace, cephClusterNamespace, true, false)
+	if strings.Contains(rookVersion, "alpha") || strings.Contains(rookVersion, "beta") {
+		logging.Warning("rook version '%s' is running a pre-release version of Rook.", rookVersion)
+	}
 }
