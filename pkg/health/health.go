@@ -184,7 +184,7 @@ func checkMgrPodsStatusAndCounts(ctx context.Context, k8sclientset kubernetes.In
 }
 
 func unMarshalCephStatus(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string) (string, []PgStateEntry) {
-	cephStatusOut := exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", []string{"-s", "--format", "json"}, operatorNamespace, clusterNamespace, false)
+	cephStatusOut := exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", []string{"-s", "--format", "json"}, operatorNamespace, clusterNamespace, true, false)
 
 	ecodedText := base64.StdEncoding.EncodeToString([]byte(cephStatusOut))
 	decodeCephStatus, err := base64.StdEncoding.DecodeString(ecodedText)
