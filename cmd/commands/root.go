@@ -18,6 +18,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"regexp"
 	"strings"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
@@ -105,8 +106,18 @@ func PreValidationCheck(ctx context.Context, k8sclientset *k8sutil.Clientsets, o
 		logging.Error(fmt.Errorf("CephCluster namespace '%s' does not exist. %v", cephClusterNamespace, err))
 	}
 
-	rookVersion := exec.RunCommandInOperatorPod(ctx, k8sclientset, "rook", []string{"version"}, operatorNamespace, cephClusterNamespace, true, false)
+	rookVersionOutput := exec.RunCommandInOperatorPod(ctx, k8sclientset, "rook", []string{"version"}, operatorNamespace, cephClusterNamespace, true, false)
+	rookVersion := trimGoVersionFromRookVersion(rookVersionOutput)
 	if strings.Contains(rookVersion, "alpha") || strings.Contains(rookVersion, "beta") {
 		logging.Warning("rook version '%s' is running a pre-release version of Rook.", rookVersion)
+		fmt.Println()
 	}
+}
+
+func trimGoVersionFromRookVersion(rookVersion string) string {
+	re := regexp.MustCompile("(?m)[\r\n]+^.*go: go.*$") // remove the go version from the output
+	rookVersion = re.ReplaceAllString(rookVersion, "")
+	rookVersion = strings.TrimSpace(rookVersion) // remove any trailing newlines
+
+	return rookVersion
 }
