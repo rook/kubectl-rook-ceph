@@ -51,7 +51,6 @@ func RunCommandInOperatorPod(ctx context.Context, clientsets *k8sutil.Clientsets
 	if !returnOutput {
 		return ""
 	}
-	fmt.Println(stdout.String())
 
 	fmt.Print(stderr.String())
 	return stdout.String()
