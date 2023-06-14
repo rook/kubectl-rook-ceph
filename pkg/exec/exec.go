@@ -125,7 +125,6 @@ func execCmdInPod(ctx context.Context, clientsets *k8sutil.Clientsets,
 		VersionedParams(&v1.PodExecOptions{
 			Container: containerName,
 			Command:   cmd,
-			Stdin:     true,
 			Stdout:    true,
 			Stderr:    true,
 			TTY:       false,
@@ -140,7 +139,6 @@ func execCmdInPod(ctx context.Context, clientsets *k8sutil.Clientsets,
 	if !returnOutput {
 		// Connect this process' std{in,out,err} to the remote shell process.
 		err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
-			Stdin:  os.Stdin,
 			Stdout: os.Stdout,
 			Stderr: os.Stderr,
 			Tty:    false,
@@ -155,7 +153,6 @@ func execCmdInPod(ctx context.Context, clientsets *k8sutil.Clientsets,
 	} else {
 		// Connect this process' std{in,out,err} to the remote shell process.
 		err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
-			Stdin:  os.Stdin,
 			Stdout: stdout,
 			Stderr: stderr,
 			Tty:    false,
