@@ -104,7 +104,7 @@ func startDebug(ctx context.Context, k8sclientset kubernetes.Interface, clusterN
 		logging.Fatal(err)
 	}
 
-	logging.Info("Debug pod %s is ready use", pod.Name)
+	logging.Info("pod %s is ready for debugging", pod.Name)
 	return nil
 }
 
