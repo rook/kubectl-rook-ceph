@@ -54,3 +54,4 @@ func Fatal(err error, args ...interface{}) {
 	fmt.Println()
 	os.Exit(1)
 }
+
