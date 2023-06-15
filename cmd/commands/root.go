@@ -38,8 +38,8 @@ var RootCmd = &cobra.Command{
 	Args:             cobra.MinimumNArgs(1),
 	TraverseChildren: true,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		logging.Info("CephCluster namespace: %q", CephClusterNamespace)
-		logging.Info("Rook operator namespace: %q", OperatorNamespace)
+		// logging.Info("CephCluster namespace: %q", CephClusterNamespace)
+		// logging.Info("Rook operator namespace: %q", OperatorNamespace)
 	},
 }
 
