@@ -13,6 +13,14 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: GoReleaser
+        uses: goreleaser/goreleaser-action@v1
+        with:
+          version: latest
+          args: release --clean
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       # krew-release-bot is a bot that automates the update of plugin manifests in krew-index when a new version of your kubectl plugin is released.
       # https://github.com/rajatjindal/krew-release-bot
       - name: Update new version in krew-index
