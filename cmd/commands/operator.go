@@ -18,7 +18,6 @@ package command
 
 import (
 	k8sutil "github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
-
 	"github.com/spf13/cobra"
 )
 
@@ -34,7 +33,7 @@ var restartCmd = &cobra.Command{
 	Use:   "restart",
 	Short: "Restart rook-ceph-operator pod",
 	Args:  cobra.NoArgs,
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(cmd *cobra.Command, _ []string) {
 		clientsets := GetClientsets(cmd.Context())
 		k8sutil.RestartDeployment(cmd.Context(), clientsets.Kube, OperatorNamespace, "rook-ceph-operator")
 	},

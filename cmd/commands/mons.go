@@ -20,7 +20,6 @@ import (
 	"fmt"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/mons"
-
 	"github.com/spf13/cobra"
 )
 

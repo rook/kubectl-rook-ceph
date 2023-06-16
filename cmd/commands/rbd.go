@@ -18,7 +18,6 @@ package command
 
 import (
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
-
 	"github.com/spf13/cobra"
 )
 
