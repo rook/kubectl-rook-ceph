@@ -3,24 +3,40 @@ kind: Plugin
 metadata:
   name: rook-ceph
 spec:
-  version: "{{ .TagName }}"
+  version: {{ .TagName }}
   homepage: https://github.com/rook/kubectl-rook-ceph
-  shortDescription: "Rook plugin for Ceph management"
+  shortDescription: Rook plugin for Ceph management
   description: |
-     Krew plugin to provide insight to Rook configuration of the Ceph storage provider.
+    The kubectl-rook-ceph is a Krew plugin designed for Rook-Ceph. It simplifies the management, debugging, and
+    troubleshooting processes, while also offering valuable insights into the configuration of the Rook-Ceph clusters.
   platforms:
   - selector:
-      matchExpressions:
-      - key: "os"
-        operator: "In"
-        values:
-        - darwin
-        - linux
-        - windows
-    {{addURIAndSha "https://github.com/rook/kubectl-rook-ceph/archive/{{ .TagName }}.zip" .TagName }}
-    files:
-    - from: "kubectl-rook-ceph-*/kubectl-rook-ceph.sh"
-      to: "."
-    - from: "kubectl-rook-ceph-*/LICENSE"
-      to: "."
-    bin: kubectl-rook-ceph.sh
+      matchLabels:
+        os: darwin
+        arch: amd64
+    {{addURIAndSha "https://github.com/rook/kubectl-rook-ceph/releases/download/{{ .TagName }}/kubectl-rook-ceph_{{ .TagName }}_darwin_amd64.tar.gz" .TagName }}
+    bin: kubectl-rook-ceph
+  - selector:
+      matchLabels:
+        os: darwin
+        arch: arm64
+    {{addURIAndSha "https://github.com/rook/kubectl-rook-ceph/releases/download/{{ .TagName }}/kubectl-rook-ceph_{{ .TagName }}_darwin_arm64.tar.gz" .TagName }}
+    bin: kubectl-rook-ceph
+  - selector:
+      matchLabels:
+        os: linux
+        arch: amd64
+    {{addURIAndSha "https://github.com/rook/kubectl-rook-ceph/releases/download/{{ .TagName }}/kubectl-rook-ceph_{{ .TagName }}_linux_amd64.tar.gz" .TagName }}
+    bin: kubectl-rook-ceph
+  - selector:
+      matchLabels:
+        os: linux
+        arch: arm64
+    {{addURIAndSha "https://github.com/rook/kubectl-rook-ceph/releases/download/{{ .TagName }}/kubectl-rook-ceph_{{ .TagName }}_linux_arm64.tar.gz" .TagName }}
+    bin: kubectl-rook-ceph
+  - selector:
+      matchLabels:
+        os: windows
+        arch: amd64
+    {{addURIAndSha "https://github.com/rook/kubectl-rook-ceph/releases/download/{{ .TagName }}/kubectl-rook-ceph_{{ .TagName }}_windows_amd64.tar.gz" .TagName }}
+    bin: kubectl-rook-ceph.exe
