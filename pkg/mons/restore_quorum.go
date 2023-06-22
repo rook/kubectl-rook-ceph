@@ -156,7 +156,7 @@ func restoreQuorum(ctx context.Context, clientsets *k8sutil.Clientsets, operator
 	}
 	logging.Info(output)
 
-	err = debug.SetDeploymentScale(ctx, clientsets.Kube, clusterNamespace, "rook-ceph-operator", 1)
+	err = debug.SetDeploymentScale(ctx, clientsets.Kube, operatorNamespace, "rook-ceph-operator", 1)
 	if err != nil {
 		return fmt.Errorf("failed to start deployment rook-ceph-operator. %v", err)
 	}
