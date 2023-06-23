@@ -109,17 +109,17 @@ func startDebug(ctx context.Context, k8sclientset kubernetes.Interface, clusterN
 	return nil
 }
 
-func SetDeploymentScale(ctx context.Context, k8sclientset kubernetes.Interface, clusterNamespace, deploymentName string, scaleCount int) error {
+func SetDeploymentScale(ctx context.Context, k8sclientset kubernetes.Interface, namespace, deploymentName string, scaleCount int) error {
 	scale := &autoscalingv1.Scale{
 		ObjectMeta: v1.ObjectMeta{
 			Name:      deploymentName,
-			Namespace: clusterNamespace,
+			Namespace: namespace,
 		},
 		Spec: autoscalingv1.ScaleSpec{
 			Replicas: int32(scaleCount),
 		},
 	}
-	_, err := k8sclientset.AppsV1().Deployments(clusterNamespace).UpdateScale(ctx, deploymentName, scale, v1.UpdateOptions{})
+	_, err := k8sclientset.AppsV1().Deployments(namespace).UpdateScale(ctx, deploymentName, scale, v1.UpdateOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to update scale of deployment %s. %v\n", deploymentName, err)
 	}

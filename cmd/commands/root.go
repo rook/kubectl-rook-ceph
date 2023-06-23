@@ -45,6 +45,9 @@ var RootCmd = &cobra.Command{
 	Args:             cobra.MinimumNArgs(1),
 	TraverseChildren: true,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		if CephClusterNamespace != "" && OperatorNamespace == "" {
+			OperatorNamespace = CephClusterNamespace
+		}
 		// logging.Info("CephCluster namespace: %q", CephClusterNamespace)
 		// logging.Info("Rook operator namespace: %q", OperatorNamespace)
 	},
@@ -61,7 +64,7 @@ func init() {
 	// Define your flags and configuration settings.
 
 	RootCmd.PersistentFlags().StringVar(&KubeConfig, "kubeconfig", "", "kubernetes config path")
-	RootCmd.PersistentFlags().StringVar(&OperatorNamespace, "operator-namespace", "rook-ceph", "Kubernetes namespace where rook operator is running")
+	RootCmd.PersistentFlags().StringVar(&OperatorNamespace, "operator-namespace", "", "Kubernetes namespace where rook operator is running")
 	RootCmd.PersistentFlags().StringVarP(&CephClusterNamespace, "namespace", "n", "rook-ceph", "Kubernetes namespace where CephCluster is created")
 }
 
@@ -103,7 +106,7 @@ func PreValidationCheck(ctx context.Context, k8sclientset *k8sutil.Clientsets, o
 	}
 	_, err = k8sclientset.Kube.CoreV1().Namespaces().Get(ctx, cephClusterNamespace, v1.GetOptions{})
 	if err != nil {
-		logging.Error(fmt.Errorf("CephCluster namespace '%s' does not exist. %v", cephClusterNamespace, err))
+		logging.Fatal(fmt.Errorf("CephCluster namespace '%s' does not exist. %v", cephClusterNamespace, err))
 	}
 
 	rookVersionOutput := exec.RunCommandInOperatorPod(ctx, k8sclientset, "rook", []string{"version"}, operatorNamespace, cephClusterNamespace, true, false)
