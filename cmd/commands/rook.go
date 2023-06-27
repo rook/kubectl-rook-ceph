@@ -17,10 +17,16 @@ limitations under the License.
 package command
 
 import (
+	"fmt"
+	"strconv"
+
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
+	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 	"github.com/rook/kubectl-rook-ceph/pkg/rook"
 	"github.com/spf13/cobra"
 )
+
+var json bool
 
 // RookCmd represents the rook commands
 var RookCmd = &cobra.Command{
@@ -54,8 +60,13 @@ var purgeCmd = &cobra.Command{
 var statusCmd = &cobra.Command{
 	Use:   "status",
 	Short: "Print the phase and conditions of the CephCluster CR",
-	Run: func(_ *cobra.Command, args []string) {
-		rook.PrintCustomResourceStatus(CephClusterNamespace, args)
+	Run: func(cmd *cobra.Command, args []string) {
+		json := cmd.Flag("json").Value.String()
+		jsonValue, err := strconv.ParseBool(json)
+		if err != nil {
+			logging.Fatal(fmt.Errorf("failed to parse json flag: %v", err))
+		}
+		rook.PrintCustomResourceStatus(CephClusterNamespace, args, jsonValue)
 	},
 }
 
@@ -63,5 +74,6 @@ func init() {
 	RookCmd.AddCommand(versionCmd)
 	RookCmd.AddCommand(statusCmd)
 	RookCmd.AddCommand(purgeCmd)
+	statusCmd.PersistentFlags().Bool("json", false, "print status in json format")
 	purgeCmd.PersistentFlags().Bool("force", false, "force deletion of an OSD if the OSD still contains data")
 }

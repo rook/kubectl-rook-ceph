@@ -25,29 +25,45 @@ import (
 )
 
 var scriptPrintSpecificCRStatus = `
-kubectl -n %s get %s -ojson | jq --monochrome-output '.items[].status'
+kubectl -n %s get %s
 `
 
 var getCrdList = `
 kubectl -n  %s get crd | awk '{print $1}' | sed '1d'
 `
 
-func PrintCustomResourceStatus(clusterNamespace string, arg []string) {
+func PrintCustomResourceStatus(clusterNamespace string, arg []string, json bool) {
 	if len(arg) == 1 && arg[0] == "all" {
 		command := fmt.Sprintf(getCrdList, clusterNamespace)
 		allCRs := strings.Split(exec.ExecuteBashCommand(command), "\n")
 		allCRs = allCRs[:len(allCRs)-1] // remove last empty line which is not a CR
 		for _, cr := range allCRs {
 			logging.Info(cr)
+			if json {
+				cr = concatenateJsonflag(cr)
+			}
 			command := fmt.Sprintf(scriptPrintSpecificCRStatus, clusterNamespace, cr)
 			fmt.Println(exec.ExecuteBashCommand(command))
 		}
 
 	} else if len(arg) == 1 {
+		if json {
+			arg[0] = concatenateJsonflag(arg[0])
+		}
+
 		command := fmt.Sprintf(scriptPrintSpecificCRStatus, clusterNamespace, arg[0])
 		logging.Info(exec.ExecuteBashCommand(command))
 	} else {
-		command := fmt.Sprintf(scriptPrintSpecificCRStatus, clusterNamespace, "cephclusters.ceph.rook.io")
+		arg := "cephclusters.ceph.rook.io"
+		if json {
+			arg = concatenateJsonflag(arg)
+		}
+
+		command := fmt.Sprintf(scriptPrintSpecificCRStatus, clusterNamespace, arg)
 		logging.Info(exec.ExecuteBashCommand(command))
 	}
+}
+
+func concatenateJsonflag(arg string) string {
+	return arg + " -o json"
 }
