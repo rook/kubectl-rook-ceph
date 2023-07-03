@@ -47,6 +47,11 @@ jobs:
           set -ex
           kubectl rook-ceph ceph status
 
+      - name: Ceph status using context
+        run: |
+          set -ex
+          kubectl rook-ceph --context=$(kubectl config current-context) ceph status
+
       - name: Mon restore
         env:
           ROOK_PLUGIN_SKIP_PROMPTS: true
@@ -147,6 +152,11 @@ jobs:
         run: |
           set -ex
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster ceph status
+
+      - name: Ceph status using context
+        run: |
+          set -ex
+          kubectl rook-ceph --operator-namespace test-operator -n test-cluster --context=$(kubectl config current-context) ceph status
 
       - name: Mon restore
         env:

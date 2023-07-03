@@ -37,6 +37,7 @@ var (
 	KubeConfig           string
 	OperatorNamespace    string
 	CephClusterNamespace string
+	KubeContext          string
 )
 
 // rookCmd represents the rook command
@@ -67,6 +68,7 @@ func init() {
 	RootCmd.PersistentFlags().StringVar(&KubeConfig, "kubeconfig", "", "kubernetes config path")
 	RootCmd.PersistentFlags().StringVar(&OperatorNamespace, "operator-namespace", "", "Kubernetes namespace where rook operator is running")
 	RootCmd.PersistentFlags().StringVarP(&CephClusterNamespace, "namespace", "n", "rook-ceph", "Kubernetes namespace where CephCluster is created")
+	RootCmd.PersistentFlags().StringVar(&KubeContext, "context", "", "Kubernetes context to use")
 }
 
 func GetClientsets(ctx context.Context) *k8sutil.Clientsets {
@@ -74,10 +76,15 @@ func GetClientsets(ctx context.Context) *k8sutil.Clientsets {
 
 	clientsets := &k8sutil.Clientsets{}
 
+	congfigOverride := &clientcmd.ConfigOverrides{}
+	if KubeContext != "" {
+		congfigOverride = &clientcmd.ConfigOverrides{CurrentContext: KubeContext}
+	}
+
 	// 1. Create Kubernetes Client
 	kubeconfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
 		clientcmd.NewDefaultClientConfigLoadingRules(),
-		&clientcmd.ConfigOverrides{},
+		congfigOverride,
 	)
 
 	clientsets.KubeConfig, err = kubeconfig.ClientConfig()
