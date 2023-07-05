@@ -1,0 +1,102 @@
+name: Single Node test
+on:
+  pull_request:
+
+defaults:
+  run:
+    # reference: https://docs.github.com/en/actions/reference/workflow-syntax-for-github-actions#using-a-specific-shell
+    shell: bash --noprofile --norc -eo pipefail -x {0}
+
+# cancel the in-progress workflow when PR is refreshed.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event_name == 'pull_request' && github.head_ref || github.sha }}
+  cancel-in-progress: true
+
+jobs:
+  create-cluster:
+    runs-on: ubuntu-20.04
+    steps:
+      - name: checkout
+        uses: actions/checkout@v2
+        with:
+          fetch-depth: 0
+
+      - name: setup golang
+        uses: actions/setup-go@v2
+        with:
+          go-version: 1.19
+
+      - name: setup minikube
+        uses: manusa/actions-setup-minikube@v2.4.2
+        with:
+          minikube version: "v1.23.2"
+          kubernetes version: "v1.22.2"
+          start args: --memory 6g --cpus=2
+          github token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: consider debugging
+        uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: false
+          detached: true
+
+      - name: use local disk and create partitions for osds
+        run: |
+          tests/github-action-helper.sh use_local_disk
+          tests/github-action-helper.sh create_partitions_for_osds
+
+      - name: prepare loop devices for osds
+        run: |
+          tests/github-action-helper.sh prepare_loop_devices 1
+
+      - name: create cluster prerequisites
+        run: |
+          BLOCK=$(sudo lsblk --paths|awk '/14G/ {print $1}'| head -1)
+          tests/localPathPV.sh "$BLOCK"
+
+      - name: build the binary and run unit tests
+        run: |
+          make build
+          sudo cp bin/kubectl-rook-ceph /usr/local/bin/kubectl-rook_ceph
+          make test
+
+      - name: single node cluster
+        env:
+          CREATE_SINGLE_NODE_CEPH_CLUSTER: true
+        run: |
+          set -ex
+          kubectl rook-ceph create sample-cluster --storageclass=manual
+
+          # Wait for the operator pod to be ready
+          kubectl wait --for=condition=ready pod -l app=rook-ceph-operator -n rook-ceph --timeout=200s
+
+          timeout 200 bash <<-'EOF'
+            until [ $(kubectl get pod -l app=rook-ceph-osd-prepare -n rook-ceph -o jsonpath='{.items[*].metadata.name}' -o custom-columns=READY:status.containerStatuses[*].ready | grep -c true) -eq 1 ]; do
+              echo "waiting for the prepare pods to be in ready state"
+              sleep 1
+            done
+          EOF
+
+          timeout 200 bash <<-'EOF'
+            until [ $(kubectl get pod -l app=rook-ceph-osd -n rook-ceph -o jsonpath='{.items[*].metadata.name}' -o custom-columns=READY:status.containerStatuses[*].ready | grep -c true) -eq 1 ]; do
+              echo "waiting for the osd pods to be in ready state"
+              sleep 1
+            done
+          EOF
+
+          # Get the current count of pods in the rook-ceph namespace
+          currentCount=$(kubectl get pods -n rook-ceph --no-headers | wc -l)
+
+          # Check if the current count is equal to the desired count
+          if [ "$currentCount" -eq 9 ]; then
+              echo "Pod count in namespace rook-ceph is $currentCount, which is the desired count."
+          else
+              echo "Error: Pod count in namespace rook-ceph is $currentCount, but the desired count is 9."
+              exit 1
+          fi
+
+      - name: collect common logs
+        if: always()
+        uses: ./.github/workflows/collect-logs
+        with:
+          name: go-test

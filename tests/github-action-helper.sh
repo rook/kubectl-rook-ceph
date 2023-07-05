@@ -26,6 +26,28 @@ use_local_disk() {
   sudo lsblk
 }
 
+function prepare_loop_devices() {
+  if [ $# -ne 1 ]; then
+    echo "usage: $0 loop_deivce_count"
+    exit 1
+  fi
+  OSD_COUNT=$1
+  if [ $OSD_COUNT -le 0 ]; then
+    echo "Invalid OSD_COUNT $OSD_COUNT. OSD_COUNT must be larger than 0."
+    exit 1
+  fi
+  for i in $(seq 1 $OSD_COUNT); do
+    sudo dd if=/dev/zero of=~/data${i}.img bs=1M seek=6144 count=0
+    sudo losetup /dev/loop${i} ~/data${i}.img
+  done
+  sudo lsblk
+}
+
+function create_partitions_for_osds() {
+  tests/create-bluestore-partitions.sh --disk "$BLOCK" --osd-count 2
+  sudo lsblk
+}
+
 deploy_rook() {
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/common.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/crds.yaml

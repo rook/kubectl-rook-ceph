@@ -1,0 +1,52 @@
+apiVersion: ceph.rook.io/v1
+kind: CephCluster
+metadata:
+  name: rook-ceph
+  namespace: {{ .ClusterNamespace }} # namespace:cluster
+spec:
+  dataDirHostPath: /var/lib/rook
+  mon:
+    count: 1
+    volumeClaimTemplate:
+      spec:
+        storageClassName: {{ .StorageClassName }}
+        resources:
+          requests:
+            storage: 5Gi
+  cephVersion:
+    image: quay.io/ceph/ceph:v17.2.6
+  dashboard:
+    enabled: false
+  network:
+    hostNetwork: false
+  crashCollector:
+    disable: true
+  storage:
+    storageClassDeviceSets:
+      - name: set1
+        count: 1
+        portable: false
+        tuneDeviceClass: false
+        encrypted: false
+        volumeClaimTemplates:
+          - metadata:
+              name: data
+            spec:
+              resources:
+                requests:
+                  storage: 6Gi
+              storageClassName: {{ .StorageClassName }}
+              volumeMode: Block
+              accessModes:
+                - ReadWriteOnce
+---
+apiVersion: ceph.rook.io/v1
+kind: CephBlockPool
+metadata:
+  name: builtin-mgr
+  namespace: {{ .ClusterNamespace }} # namespace:cluster
+spec:
+  name: .mgr
+  replicated:
+    size: 1
+    requireSafeReplicaSize: false

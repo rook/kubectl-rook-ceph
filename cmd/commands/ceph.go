@@ -29,7 +29,7 @@ var CephCmd = &cobra.Command{
 	DisableFlagParsing: true,
 	Args:               cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		clientsets := GetClientsets(cmd.Context())
+		clientsets := GetClientsets(cmd.Context(), true)
 		logging.Info("running 'ceph' command with args: %v", args)
 		exec.RunCommandInOperatorPod(cmd.Context(), clientsets, cmd.Use, args, OperatorNamespace, CephClusterNamespace, false, true)
 	},

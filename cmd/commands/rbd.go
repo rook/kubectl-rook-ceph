@@ -28,7 +28,7 @@ var RbdCmd = &cobra.Command{
 	DisableFlagParsing: true,
 	Args:               cobra.MinimumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		clientsets := GetClientsets(cmd.Context())
+		clientsets := GetClientsets(cmd.Context(), true)
 		exec.RunCommandInOperatorPod(cmd.Context(), clientsets, cmd.Use, args, OperatorNamespace, CephClusterNamespace, false, true)
 	},
 }

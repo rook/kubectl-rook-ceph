@@ -18,7 +18,7 @@ var healthCmd = &cobra.Command{
 	DisableFlagParsing: true,
 	Args:               cobra.MaximumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		clientsets := GetClientsets(cmd.Context())
+		clientsets := GetClientsets(cmd.Context(), true)
 		dr.Health(cmd.Context(), clientsets, OperatorNamespace, CephClusterNamespace, args)
 	},
 }

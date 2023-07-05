@@ -27,7 +27,7 @@ var Health = &cobra.Command{
 	DisableFlagParsing: true,
 	Args:               cobra.NoArgs,
 	Run: func(cmd *cobra.Command, _ []string) {
-		clientsets := GetClientsets(cmd.Context())
+		clientsets := GetClientsets(cmd.Context(), true)
 		health.Health(cmd.Context(), clientsets, OperatorNamespace, CephClusterNamespace)
 	},
 }

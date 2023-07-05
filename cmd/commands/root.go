@@ -69,7 +69,7 @@ func init() {
 	RootCmd.PersistentFlags().StringVarP(&CephClusterNamespace, "namespace", "n", "rook-ceph", "Kubernetes namespace where CephCluster is created")
 }
 
-func GetClientsets(ctx context.Context) *k8sutil.Clientsets {
+func GetClientsets(ctx context.Context, preValidationCheck bool) *k8sutil.Clientsets {
 	var err error
 
 	clientsets := &k8sutil.Clientsets{}
@@ -95,26 +95,28 @@ func GetClientsets(ctx context.Context) *k8sutil.Clientsets {
 		logging.Fatal(err)
 	}
 
-	PreValidationCheck(ctx, clientsets, OperatorNamespace, CephClusterNamespace)
+	PreValidationCheck(ctx, clientsets, OperatorNamespace, CephClusterNamespace, preValidationCheck)
 
 	return clientsets
 }
 
-func PreValidationCheck(ctx context.Context, k8sclientset *k8sutil.Clientsets, operatorNamespace, cephClusterNamespace string) {
-	_, err := k8sclientset.Kube.CoreV1().Namespaces().Get(ctx, operatorNamespace, v1.GetOptions{})
-	if err != nil {
-		logging.Fatal(fmt.Errorf("Operator namespace '%s' does not exist. %v", operatorNamespace, err))
-	}
-	_, err = k8sclientset.Kube.CoreV1().Namespaces().Get(ctx, cephClusterNamespace, v1.GetOptions{})
-	if err != nil {
-		logging.Fatal(fmt.Errorf("CephCluster namespace '%s' does not exist. %v", cephClusterNamespace, err))
-	}
+func PreValidationCheck(ctx context.Context, k8sclientset *k8sutil.Clientsets, operatorNamespace, cephClusterNamespace string, preValidationCheck bool) {
+	if preValidationCheck {
+		_, err := k8sclientset.Kube.CoreV1().Namespaces().Get(ctx, operatorNamespace, v1.GetOptions{})
+		if err != nil {
+			logging.Fatal(fmt.Errorf("Operator namespace '%s' does not exist. %v", operatorNamespace, err))
+		}
+		_, err = k8sclientset.Kube.CoreV1().Namespaces().Get(ctx, cephClusterNamespace, v1.GetOptions{})
+		if err != nil {
+			logging.Fatal(fmt.Errorf("CephCluster namespace '%s' does not exist. %v", cephClusterNamespace, err))
+		}
 
-	rookVersionOutput := exec.RunCommandInOperatorPod(ctx, k8sclientset, "rook", []string{"version"}, operatorNamespace, cephClusterNamespace, true, false)
-	rookVersion := trimGoVersionFromRookVersion(rookVersionOutput)
-	if strings.Contains(rookVersion, "alpha") || strings.Contains(rookVersion, "beta") {
-		logging.Warning("rook version '%s' is running a pre-release version of Rook.", rookVersion)
-		fmt.Println()
+		rookVersionOutput := exec.RunCommandInOperatorPod(ctx, k8sclientset, "rook", []string{"version"}, operatorNamespace, cephClusterNamespace, true, false)
+		rookVersion := trimGoVersionFromRookVersion(rookVersionOutput)
+		if strings.Contains(rookVersion, "alpha") || strings.Contains(rookVersion, "beta") {
+			logging.Warning("rook version '%s' is running a pre-release version of Rook.", rookVersion)
+			fmt.Println()
+		}
 	}
 }
 
