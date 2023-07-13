@@ -26,31 +26,31 @@ import (
 func Info(output string, args ...interface{}) {
 	blue := color.New(color.FgBlue).SprintFunc()
 	if output != "" {
-		fmt.Print(blue("Info: "))
-		fmt.Printf(output, args...)
+		fmt.Fprintf(os.Stderr, blue("Info: "))
+		fmt.Fprintf(os.Stderr, output, args...)
 	}
 
-	fmt.Println()
+	fmt.Fprintf(os.Stderr, "\n")
 }
 
 func Warning(output string, args ...interface{}) {
 	yellow := color.New(color.FgYellow).SprintFunc()
-	fmt.Print(yellow("Warning: "))
-	fmt.Printf(output, args...)
-	fmt.Println()
+	fmt.Fprintf(os.Stderr, yellow("Warning: "))
+	fmt.Fprintf(os.Stderr, output, args...)
+	fmt.Fprintf(os.Stderr, "\n")
 }
 
 func Error(err error, args ...interface{}) {
 	red := color.New(color.FgRed).SprintFunc()
-	fmt.Print(red("Error: "))
-	fmt.Printf(err.Error(), args...)
-	fmt.Println()
+	fmt.Fprintf(os.Stderr, red("Error: "))
+	fmt.Fprintf(os.Stderr, err.Error(), args...)
+	fmt.Fprintf(os.Stderr, "\n")
 }
 
 func Fatal(err error, args ...interface{}) {
 	red := color.New(color.FgRed).SprintFunc()
-	fmt.Print(red("Error: "))
-	fmt.Printf(err.Error(), args...)
-	fmt.Println()
+	fmt.Fprintf(os.Stderr, red("Error: "))
+	fmt.Fprintf(os.Stderr, err.Error(), args...)
+	fmt.Fprintf(os.Stderr, "\n")
 	os.Exit(1)
 }
