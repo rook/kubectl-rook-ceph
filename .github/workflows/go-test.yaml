@@ -121,6 +121,8 @@ jobs:
       - name: consider debugging
         if: failure()
         uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: false
 
   custom-namespace:
     runs-on: ubuntu-20.04
@@ -227,3 +229,5 @@ jobs:
       - name: consider debugging
         if: failure()
         uses: mxschmitt/action-tmate@v3
+        with:
+          limit-access-to-actor: false
