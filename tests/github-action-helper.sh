@@ -1,8 +1,12 @@
 #!/usr/bin/env bash
 
-set -eEuo pipefail
+set -xeEo pipefail
 
+#############
+# VARIABLES #
+#############
 : "${FUNCTION:=${1}}"
+: "${BLOCK:=$(sudo lsblk --paths | awk '/14G/ {print $1}' | head -1)}"
 
 # source https://krew.sigs.k8s.io/docs/user-guide/setup/install/
 install_krew() {
@@ -19,11 +23,13 @@ install_krew() {
 
 # source https://github.com/rook/rook
 use_local_disk() {
+  BLOCK_DATA_PART=${BLOCK}1
+  sudo apt purge snapd -y
+  sudo dmsetup version || true
   sudo swapoff --all --verbose
   sudo umount /mnt
   # search for the device since it keeps changing between sda and sdb
-  sudo wipefs --all --force /dev/"$(lsblk | awk '/14G/ {print $1}' | head -1)"1
-  sudo lsblk
+  sudo wipefs --all --force "$BLOCK_DATA_PART"
 }
 
 deploy_rook() {
@@ -31,7 +37,7 @@ deploy_rook() {
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/crds.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/operator.yaml
   curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/cluster-test.yaml -o cluster-test.yaml
-  sed -i "s|#deviceFilter:|deviceFilter: $(lsblk | awk '/14G/ {print $1}' | head -1)|g" cluster-test.yaml
+  sed -i "s|#deviceFilter:|deviceFilter: ${BLOCK/\/dev\//}|g" cluster-test.yaml
   sed -i '0,/count: 1/ s/count: 1/count: 3/' cluster-test.yaml
   kubectl create -f cluster-test.yaml
   wait_for_pod_to_be_ready_state_default
@@ -53,7 +59,7 @@ deploy_rook_in_custom_namespace() {
   curl -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/operator.yaml -o operator.yaml
   deploy_with_custom_ns "$1" "$2" operator.yaml
   curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/cluster-test.yaml -o cluster-test.yaml
-  sed -i "s|#deviceFilter:|deviceFilter: $(lsblk | awk '/14G/ {print $1}' | head -1)|g" cluster-test.yaml
+  sed -i "s|#deviceFilter:|deviceFilter: ${BLOCK/\/dev\//}|g" cluster-test.yaml
   sed -i '0,/count: 1/ s/count: 1/count: 3/' cluster-test.yaml
   deploy_with_custom_ns "$1" "$2" cluster-test.yaml
   wait_for_pod_to_be_ready_state_custom
