@@ -7,9 +7,9 @@ require (
 	github.com/rook/rook v1.11.5
 	github.com/spf13/cobra v1.6.1
 	github.com/stretchr/testify v1.8.4
-	k8s.io/api v0.26.4
-	k8s.io/apimachinery v0.27.3
-	k8s.io/client-go v0.26.4
+	k8s.io/api v0.27.4
+	k8s.io/apimachinery v0.27.4
+	k8s.io/client-go v0.27.4
 )
 
 require (
