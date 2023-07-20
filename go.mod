@@ -3,7 +3,7 @@ module github.com/rook/kubectl-rook-ceph
 go 1.20
 
 require (
-	github.com/fatih/color v1.13.0
+	github.com/fatih/color v1.15.0
 	github.com/rook/rook v1.11.5
 	github.com/spf13/cobra v1.6.1
 	github.com/stretchr/testify v1.8.4
