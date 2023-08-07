@@ -4,7 +4,7 @@ go 1.20
 
 require (
 	github.com/fatih/color v1.15.0
-	github.com/rook/rook v1.12.0
+	github.com/rook/rook v1.12.1
 	github.com/rook/rook/pkg/apis v0.0.0-20230725213142-5979b3816292
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.4
