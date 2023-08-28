@@ -8,8 +8,8 @@ require (
 	github.com/rook/rook/pkg/apis v0.0.0-20230725213142-5979b3816292
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.4
-	k8s.io/api v0.28.0
-	k8s.io/apimachinery v0.28.0
+	k8s.io/api v0.28.1
+	k8s.io/apimachinery v0.28.1
 	k8s.io/client-go v0.28.0
 )
 
