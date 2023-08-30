@@ -41,6 +41,7 @@ deploy_rook() {
   sed -i '0,/count: 1/ s/count: 1/count: 3/' cluster-test.yaml
   kubectl create -f cluster-test.yaml
   wait_for_pod_to_be_ready_state_default
+  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/filesystem-test.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/toolbox.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/storageclass-test.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/pvc.yaml
@@ -130,6 +131,24 @@ wait_for_deployment_to_be_running() {
   namespace=$2
   echo "Waiting for the pod from deployment \"$deployment\" to be running"
   kubectl -n "$namespace" wait deployment "$deployment" --for condition=Available=True --timeout=90s
+}
+
+wait_for_crd_to_be_ready_default() {
+  timeout 150 bash <<-'EOF'
+    until [ $(kubectl -n rook-ceph get cephcluster my-cluster -o=jsonpath='{.status.phase}') == "Ready" ]; do
+      echo "Waiting for the CephCluster my-cluster to be in the Ready state..."
+      sleep 2
+    done
+EOF
+}
+
+wait_for_crd_to_be_ready_custom() {
+  timeout 150 bash <<-'EOF'
+    until [ $(kubectl -n test-cluster get cephcluster my-cluster -o=jsonpath='{.status.phase}') == "Ready" ]; do
+      echo "Waiting for the CephCluster my-cluster to be in the Ready state..."
+      sleep 2
+    done
+EOF
 }
 
 ########

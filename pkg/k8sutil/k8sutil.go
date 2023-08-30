@@ -23,6 +23,8 @@ import (
 
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 
+	appsv1 "k8s.io/api/apps/v1"
+	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -73,4 +75,32 @@ func UpdateConfigMap(ctx context.Context, k8sclientset kubernetes.Interface, nam
 	}
 
 	logging.Info("configmap/%s patched\n", configMapName)
+}
+
+func SetDeploymentScale(ctx context.Context, k8sclientset kubernetes.Interface, namespace, deploymentName string, scaleCount int) error {
+	scale := &autoscalingv1.Scale{
+		ObjectMeta: v1.ObjectMeta{
+			Name:      deploymentName,
+			Namespace: namespace,
+		},
+		Spec: autoscalingv1.ScaleSpec{
+			Replicas: int32(scaleCount),
+		},
+	}
+	_, err := k8sclientset.AppsV1().Deployments(namespace).UpdateScale(ctx, deploymentName, scale, v1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update scale of deployment %s. %v\n", deploymentName, err)
+	}
+	return nil
+}
+
+func GetDeployment(ctx context.Context, k8sclientset kubernetes.Interface, clusterNamespace, deploymentName string) (*appsv1.Deployment, error) {
+	logging.Info("fetching the deployment %s to be running\n", deploymentName)
+	deployment, err := k8sclientset.AppsV1().Deployments(clusterNamespace).Get(ctx, deploymentName, v1.GetOptions{})
+	if err != nil {
+		return nil, err
+	}
+
+	logging.Info("deployment %s exists\n", deploymentName)
+	return deployment, nil
 }

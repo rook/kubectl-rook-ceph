@@ -38,5 +38,6 @@ func addcommands() {
 		command.DebugCmd,
 		command.Health,
 		command.DrCmd,
+		command.RestoreCmd,
 	)
 }

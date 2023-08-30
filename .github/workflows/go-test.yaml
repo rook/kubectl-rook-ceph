@@ -15,6 +15,8 @@ concurrency:
 jobs:
   default-namespace:
     runs-on: ubuntu-20.04
+    env:
+      ROOK_PLUGIN_SKIP_PROMPTS: true
     steps:
       - name: checkout
         uses: actions/checkout@v4
@@ -53,8 +55,6 @@ jobs:
           kubectl rook-ceph --context=$(kubectl config current-context) ceph status
 
       - name: Mon restore
-        env:
-          ROOK_PLUGIN_SKIP_PROMPTS: true
         run: |
           set -ex
           # test the mon restore to restore to mon a, delete mons b and c, then add d and e
@@ -112,6 +112,22 @@ jobs:
           kubectl -n rook-ceph scale deployment rook-ceph-osd-0 --replicas 0
           kubectl rook-ceph rook purge-osd 0 --force
 
+      - name: Restore CRD without CRName
+        run: |
+          # First let's delete the cephCluster
+          kubectl -n rook-ceph delete cephcluster my-cluster --timeout 3s --wait=false
+
+          kubectl rook-ceph -n rook-ceph restore-deleted cephcluster
+          tests/github-action-helper.sh wait_for_crd_to_be_ready_default
+
+      - name: Restore CRD with CRName
+        run: |
+          # First let's delete the cephCluster
+          kubectl -n rook-ceph delete cephcluster my-cluster --timeout 3s --wait=false
+
+          kubectl rook-ceph -n rook-ceph restore-deleted cephcluster my-cluster
+          tests/github-action-helper.sh wait_for_crd_to_be_ready_default
+
       - name: collect common logs
         if: always()
         uses: ./.github/workflows/collect-logs
@@ -126,6 +142,8 @@ jobs:
 
   custom-namespace:
     runs-on: ubuntu-20.04
+    env:
+      ROOK_PLUGIN_SKIP_PROMPTS: true
     steps:
       - name: checkout
         uses: actions/checkout@v4
@@ -166,8 +184,6 @@ jobs:
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster --context=$(kubectl config current-context) ceph status
 
       - name: Mon restore
-        env:
-          ROOK_PLUGIN_SKIP_PROMPTS: true
         run: |
           set -ex
           # test the mon restore to restore to mon a, delete mons b and c, then add d and e
@@ -224,6 +240,22 @@ jobs:
           set -ex
           kubectl -n test-cluster scale deployment rook-ceph-osd-0 --replicas 0
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster rook purge-osd 0 --force
+
+      - name: Restore CRD without CRName
+        run: |
+          # First let's delete the cephCluster
+          kubectl -n test-cluster delete cephcluster my-cluster --timeout 3s --wait=false
+
+          kubectl rook-ceph --operator-namespace test-operator -n test-cluster restore-deleted cephcluster
+          tests/github-action-helper.sh wait_for_crd_to_be_ready_custom
+
+      - name: Restore CRD with CRName
+        run: |
+          # First let's delete the cephCluster
+          kubectl -n test-cluster delete cephcluster my-cluster --timeout 3s --wait=false
+
+          kubectl rook-ceph --operator-namespace test-operator -n test-cluster restore-deleted cephcluster my-cluster
+          tests/github-action-helper.sh wait_for_crd_to_be_ready_custom
 
       - name: collect common logs
         if: always()

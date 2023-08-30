@@ -71,7 +71,7 @@ func restoreQuorum(ctx context.Context, clientsets *k8sutil.Clientsets, operator
 	logging.Info("printing fsid secret %s\n", cephFsid)
 	logging.Info("Check for the running toolbox")
 
-	_, err = debug.GetDeployment(ctx, clientsets.Kube, clusterNamespace, "rook-ceph-tools")
+	_, err = k8sutil.GetDeployment(ctx, clientsets.Kube, clusterNamespace, "rook-ceph-tools")
 	if err != nil {
 		return fmt.Errorf("failed to deployment rook-ceph-tools. %v", err)
 	}
@@ -85,17 +85,17 @@ func restoreQuorum(ctx context.Context, clientsets *k8sutil.Clientsets, operator
 	logging.Info("The mons to discard are: %s\n", badMons)
 	logging.Info("The cluster fsid is %s\n", cephFsid)
 
-	var answer, output string
+	var answer string
 	logging.Warning("Are you sure you want to restore the quorum to mon %s? If so, enter 'yes-really-restore'\n", goodMon)
 	fmt.Scanf("%s", &answer)
-	output, err = promptToContinueOrCancel(answer)
+	err = PromptToContinueOrCancel("restore-quorum", "yes-really-restore", answer)
 	if err != nil {
 		return fmt.Errorf("restoring the mon quorum to mon %s cancelled", goodMon)
 	}
-	logging.Info(output)
+	logging.Info("proceeding with resorting quorum")
 
 	logging.Info("Waiting for operator pod to stop")
-	err = debug.SetDeploymentScale(ctx, clientsets.Kube, operatorNamespace, "rook-ceph-operator", 0)
+	err = k8sutil.SetDeploymentScale(ctx, clientsets.Kube, operatorNamespace, "rook-ceph-operator", 0)
 	if err != nil {
 		return fmt.Errorf("failed to stop deployment rook-ceph-operator. %v", err)
 	}
@@ -103,7 +103,7 @@ func restoreQuorum(ctx context.Context, clientsets *k8sutil.Clientsets, operator
 
 	logging.Info("Waiting for bad mon pod to stop")
 	for _, badMon := range badMons {
-		err = debug.SetDeploymentScale(ctx, clientsets.Kube, clusterNamespace, fmt.Sprintf("rook-ceph-mon-%s", badMon), 0)
+		err = k8sutil.SetDeploymentScale(ctx, clientsets.Kube, clusterNamespace, fmt.Sprintf("rook-ceph-mon-%s", badMon), 0)
 		if err != nil {
 			return fmt.Errorf("deployment %s still exist. %v", fmt.Sprintf("rook-ceph-mon-%s", badMon), err)
 		}
@@ -112,7 +112,7 @@ func restoreQuorum(ctx context.Context, clientsets *k8sutil.Clientsets, operator
 
 	debug.StartDebug(ctx, clientsets.Kube, clusterNamespace, fmt.Sprintf("rook-ceph-mon-%s", goodMon), "")
 
-	debugDeploymentSpec, err := debug.GetDeployment(ctx, clientsets.Kube, clusterNamespace, fmt.Sprintf("rook-ceph-mon-%s-debug", goodMon))
+	debugDeploymentSpec, err := k8sutil.GetDeployment(ctx, clientsets.Kube, clusterNamespace, fmt.Sprintf("rook-ceph-mon-%s-debug", goodMon))
 	if err != nil {
 		return fmt.Errorf("failed to deployment rook-ceph-mon-%s-debug", goodMon)
 	}
@@ -150,13 +150,14 @@ func restoreQuorum(ctx context.Context, clientsets *k8sutil.Clientsets, operator
 	logging.Info("Mon quorum was successfully restored to mon %s\n", goodMon)
 	logging.Info("Only a single mon is currently running")
 	logging.Info("Press Enter to start the operator and expand to full mon quorum again")
-	output, err = promptToContinueOrCancel(answer)
+
+	err = PromptToContinueOrCancel("restore-quorum", "yes-really-restore", answer)
 	if err != nil {
 		return fmt.Errorf("skipping operator start to expand full mon quorum.")
 	}
-	logging.Info(output)
+	logging.Info("proceeding with resorting quorum")
 
-	err = debug.SetDeploymentScale(ctx, clientsets.Kube, operatorNamespace, "rook-ceph-operator", 1)
+	err = k8sutil.SetDeploymentScale(ctx, clientsets.Kube, operatorNamespace, "rook-ceph-operator", 1)
 	if err != nil {
 		return fmt.Errorf("failed to start deployment rook-ceph-operator. %v", err)
 	}
@@ -278,14 +279,15 @@ func getMonDetails(goodMon string, monEndpoints []string) ([]string, string, str
 	return badMons, goodMonPublicIp, goodMonPort, nil
 }
 
-func promptToContinueOrCancel(answer string) (string, error) {
+func PromptToContinueOrCancel(inputSource, expectedAnswer, answer string) error {
 	if skip, ok := os.LookupEnv("ROOK_PLUGIN_SKIP_PROMPTS"); ok && skip == "true" {
-		return "skipped prompt since ROOK_PLUGIN_SKIP_PROMPTS=true", nil
+		logging.Info("skipped prompt since ROOK_PLUGIN_SKIP_PROMPTS=true")
+		return nil
 	}
 
-	if answer == "yes-really-restore" {
-		return "proceeding", nil
+	if answer == expectedAnswer {
+		return nil
 	}
 
-	return "", fmt.Errorf("cancelled")
+	return fmt.Errorf("cancelled")
 }
