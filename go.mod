@@ -4,6 +4,7 @@ go 1.20
 
 require (
 	github.com/fatih/color v1.16.0
+	github.com/golang/mock v1.6.0
 	github.com/pkg/errors v0.9.1
 	github.com/rook/rook v1.12.9
 	github.com/spf13/cobra v1.8.0

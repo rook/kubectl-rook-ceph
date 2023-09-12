@@ -18,6 +18,7 @@ package command
 import (
 	"context"
 	"fmt"
+	"k8s.io/client-go/dynamic"
 	"regexp"
 	"strings"
 
@@ -97,6 +98,11 @@ func getClientsets(ctx context.Context) *k8sutil.Clientsets {
 	}
 
 	clientsets.Kube, err = k8s.NewForConfig(clientsets.KubeConfig)
+	if err != nil {
+		logging.Fatal(err)
+	}
+
+	clientsets.Dynamic, err = dynamic.NewForConfig(clientsets.KubeConfig)
 	if err != nil {
 		logging.Fatal(err)
 	}

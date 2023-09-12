@@ -39,6 +39,7 @@ func addcommands() {
 		command.Health,
 		command.DrCmd,
 		command.RestoreCmd,
+		command.DestroyClusterCmd,
 		command.SubvolumeCmd,
 	)
 }

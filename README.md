@@ -104,6 +104,7 @@ Visit docs below for complete details about each command and their flags uses.
 1. [Restore mon quorum](docs/mons.md#restore-quorum)
 1. [Disaster Recovery](docs/dr-health.md)
 1. [Restore deleted CRs](docs/crd.md)
+1. [Destroy cluster](docs/destroy-cluster.md)
 
 ## Examples
 
