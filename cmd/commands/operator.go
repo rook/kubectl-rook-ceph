@@ -35,6 +35,7 @@ var restartCmd = &cobra.Command{
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, _ []string) {
 		clientsets := GetClientsets(cmd.Context())
+		VerifyOperatorPodIsRunning(cmd.Context(), clientsets, OperatorNamespace, CephClusterNamespace)
 		k8sutil.RestartDeployment(cmd.Context(), clientsets.Kube, OperatorNamespace, "rook-ceph-operator")
 	},
 }

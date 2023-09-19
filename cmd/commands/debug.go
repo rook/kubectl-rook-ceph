@@ -35,6 +35,7 @@ var startDebugCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		clientsets := GetClientsets(cmd.Context())
+		VerifyOperatorPodIsRunning(cmd.Context(), clientsets, OperatorNamespace, CephClusterNamespace)
 		alternateImage := cmd.Flag("alternate-image").Value.String()
 		debug.StartDebug(cmd.Context(), clientsets.Kube, CephClusterNamespace, args[0], alternateImage)
 	},
@@ -46,6 +47,7 @@ var stopDebugCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		clientsets := GetClientsets(cmd.Context())
+		VerifyOperatorPodIsRunning(cmd.Context(), clientsets, OperatorNamespace, CephClusterNamespace)
 		debug.StopDebug(cmd.Context(), clientsets.Kube, CephClusterNamespace, args[0])
 	},
 }
