@@ -51,6 +51,7 @@ var purgeCmd = &cobra.Command{
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		clientsets := GetClientsets(cmd.Context())
+		VerifyOperatorPodIsRunning(cmd.Context(), clientsets, OperatorNamespace, CephClusterNamespace)
 		forceflagValue := cmd.Flag("force").Value.String()
 		osdID := args[0]
 		rook.PurgeOsd(cmd.Context(), clientsets, OperatorNamespace, CephClusterNamespace, osdID, forceflagValue)

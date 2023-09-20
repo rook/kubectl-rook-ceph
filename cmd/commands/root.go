@@ -116,7 +116,9 @@ func PreValidationCheck(ctx context.Context, k8sclientset *k8sutil.Clientsets, o
 	if err != nil {
 		logging.Fatal(fmt.Errorf("CephCluster namespace '%s' does not exist. %v", cephClusterNamespace, err))
 	}
+}
 
+func VerifyOperatorPodIsRunning(ctx context.Context, k8sclientset *k8sutil.Clientsets, operatorNamespace, cephClusterNamespace string) {
 	rookVersionOutput := exec.RunCommandInOperatorPod(ctx, k8sclientset, "rook", []string{"version"}, operatorNamespace, cephClusterNamespace, true, false)
 	rookVersion := trimGoVersionFromRookVersion(rookVersionOutput)
 	if strings.Contains(rookVersion, "alpha") || strings.Contains(rookVersion, "beta") {

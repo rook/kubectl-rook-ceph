@@ -19,6 +19,7 @@ var healthCmd = &cobra.Command{
 	Args:               cobra.MaximumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		clientsets := GetClientsets(cmd.Context())
+		VerifyOperatorPodIsRunning(cmd.Context(), clientsets, OperatorNamespace, CephClusterNamespace)
 		dr.Health(cmd.Context(), clientsets, OperatorNamespace, CephClusterNamespace, args)
 	},
 }
