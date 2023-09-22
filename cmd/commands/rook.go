@@ -47,7 +47,7 @@ var versionCmd = &cobra.Command{
 
 var purgeCmd = &cobra.Command{
 	Use:   "purge-osd",
-	Short: "Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs.",
+	Short: "Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs, for example, purge-osd 0,1",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		clientsets := GetClientsets(cmd.Context())
