@@ -149,10 +149,10 @@ func restoreQuorum(ctx context.Context, clientsets *k8sutil.Clientsets, operator
 
 	logging.Info("Mon quorum was successfully restored to mon %s\n", goodMon)
 	logging.Info("Only a single mon is currently running")
-
+	logging.Info("Press Enter to start the operator and expand to full mon quorum again")
 	output, err = promptToContinueOrCancel(answer)
 	if err != nil {
-		return fmt.Errorf("restoring the mon quorum to mon %s cancelled", goodMon)
+		return fmt.Errorf("skipping operator start to expand full mon quorum.")
 	}
 	logging.Info(output)
 
