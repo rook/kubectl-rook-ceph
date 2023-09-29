@@ -6,7 +6,7 @@ Provide common management and troubleshooting tools for the [Rook Ceph](https://
 
 ## Install
 
-> Note: This required kubectl [krew](https://krew.sigs.k8s.io/docs/user-guide/setup/install/) to be installed.
+> Note: This requires kubectl [krew](https://krew.sigs.k8s.io/docs/user-guide/setup/install/) to be installed.
 
 To install the plugin, run:
 
