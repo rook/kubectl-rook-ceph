@@ -1,17 +1,21 @@
 # Rook
 
-Rook is parent command which requires sub-command to get working. Currently, rook supports these sub-commands:
+The `rook` command supports the following sub-commands:
 
-1. `purge-osd <osd-id> [--force]` : [purge osd](#purge-osd) permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs.
+1. `purge-osd <osd-id> [--force]` : [purge osd](#purge-osd) permanently remove an OSD from the cluster. Multiple OSDs can be removed in a single command with a comma-separated list of IDs.
 2. `version`: [version](#version) prints the rook version.
 3. `status`      : [status](#status) print the phase and conditions of the CephCluster CR
 4. `status all`  : [status all](#status-all) print the phase and conditions of all CRs
 5. `status <CR>` : [status  cr](#status-cr-name) print the phase and conditions of CRs of a specific type, such as 'cephobjectstore', 'cephfilesystem', etc
 
-## Purge OSD
+## Purge an OSD
 
-Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs.
+Permanently remove an OSD from the cluster. 
 
+
+!!! warning
+    Data loss is possible when passing the --force flag if the PGs are not healthy on other OSDs.
+    
 ```bash
 kubectl rook-ceph rook purge-osd 0 --force
 
@@ -23,6 +27,8 @@ kubectl rook-ceph rook purge-osd 0 --force
 # 2022-09-14 08:58:29.421345 I | cephosd: validating status of osd.0
 # 2022-09-14 08:58:29.421371 I | cephosd: osd.0 is healthy. It cannot be removed unless it is 'down'
 ```
+
+Multiple OSDs can be removed in one invocation with a comma-separated list of IDs.
 
 ## Version
 
