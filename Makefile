@@ -19,7 +19,7 @@ build:
 	env GOOS=$(shell go env GOOS) GOARCH=$(shell go env GOARCH) go build -o bin/kubectl-rook-ceph  cmd/main.go
 
 clean:
-	rm kubectl-rook-ceph
+	@rm -f bin/kubectl-rook-ceph
 
 test:
 	@echo "running unit tests"
