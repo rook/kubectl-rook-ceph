@@ -13,7 +13,7 @@ Health commands logs have three ways of logging:
 
 1. `Info`: This is just a logging information for the users.
 2. `Warning`: which mean there is some improvement required in the cluster.
-3. `Error`: This reuires immediate user attentions to get the cluster in healthy state.
+3. `Error`: This requires immediate user attentions to get the cluster in healthy state.
 
 ## Output
 
