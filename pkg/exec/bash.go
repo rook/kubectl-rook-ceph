@@ -17,6 +17,7 @@ limitations under the License.
 package exec
 
 import (
+	"os"
 	"os/exec"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
@@ -24,12 +25,10 @@ import (
 
 func ExecuteBashCommand(command string) string {
 	cmd := exec.Command("/bin/bash",
-		"-x", // Print commands and their arguments as they are executed
-		"-e", // Exit immediately if a command exits with a non-zero status.
-		"-m", // Terminal job control, allows job to be terminated by SIGTERM
 		"-c", // Command to run
 		command,
 	)
+	cmd.Stderr = os.Stderr
 	stdout, err := cmd.Output()
 	if err != nil {
 		logging.Fatal(err)

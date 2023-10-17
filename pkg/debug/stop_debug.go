@@ -21,6 +21,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
@@ -41,7 +42,7 @@ func stopDebug(ctx context.Context, k8sclientset kubernetes.Interface, clusterNa
 		deploymentName = deploymentName + "-debug"
 	}
 
-	debugDeployment, err := GetDeployment(ctx, k8sclientset, clusterNamespace, deploymentName)
+	debugDeployment, err := k8sutil.GetDeployment(ctx, k8sclientset, clusterNamespace, deploymentName)
 	if err != nil {
 		return fmt.Errorf("Missing mon or osd debug deployment name %s. %v\n", deploymentName, err)
 	}
@@ -53,7 +54,7 @@ func stopDebug(ctx context.Context, k8sclientset kubernetes.Interface, clusterNa
 	}
 
 	original_deployment_name := strings.ReplaceAll(deploymentName, "-debug", "")
-	if err := SetDeploymentScale(ctx, k8sclientset, clusterNamespace, original_deployment_name, 1); err != nil {
+	if err := k8sutil.SetDeploymentScale(ctx, k8sclientset, clusterNamespace, original_deployment_name, 1); err != nil {
 		return err
 	}
 	logging.Info("Successfully deleted debug deployment and restored deployment %q", original_deployment_name)

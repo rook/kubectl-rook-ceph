@@ -81,6 +81,8 @@ These are args currently supported:
 - `dr` :
   - `health [ceph status args]`: Print the `ceph status` of a peer cluster in a mirroring-enabled environment thereby validating connectivity between ceph clusters. Ceph status args can be optionally passed, such as to change the log level: `--debug-ms 1`.
 
+- `restore-deleted <CRD> [CRName]`: Restore the ceph resources which are stuck in deleting state due to underlying resources being present in the cluster
+
 - `help` : Output help text
 
 ## Documentation
@@ -101,6 +103,7 @@ Visit docs below for complete details about each command and their flags uses.
 1. [Debug OSDs and Mons](docs/debug.md)
 1. [Restore mon quorum](docs/mons.md#restore-quorum)
 1. [Disaster Recovery](docs/dr-health.md)
+1. [Restore deleted CRs](docs/crd.md)
 
 ## Examples
 
