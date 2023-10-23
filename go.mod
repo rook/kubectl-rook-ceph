@@ -4,12 +4,13 @@ go 1.20
 
 require (
 	github.com/fatih/color v1.15.0
+	github.com/pkg/errors v0.9.1
 	github.com/rook/rook v1.12.2
 	github.com/rook/rook/pkg/apis v0.0.0-20230725213142-5979b3816292
 	github.com/spf13/cobra v1.7.0
 	github.com/stretchr/testify v1.8.4
 	k8s.io/api v0.28.2
-	k8s.io/apimachinery v0.28.2
+	k8s.io/apimachinery v0.28.3
 	k8s.io/client-go v0.28.2
 )
 
@@ -71,7 +72,6 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/openshift/api v0.0.0-20210105115604-44119421ec6b // indirect
 	github.com/pierrec/lz4 v2.6.1+incompatible // indirect
-	github.com/pkg/errors v0.9.1 // indirect
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/prometheus/client_golang v1.16.0 // indirect
 	github.com/prometheus/client_model v0.4.0 // indirect
@@ -80,12 +80,12 @@ require (
 	github.com/ryanuber/go-glob v1.0.0 // indirect
 	github.com/sirupsen/logrus v1.9.3 // indirect
 	github.com/spf13/pflag v1.0.5 // indirect
-	golang.org/x/crypto v0.11.0 // indirect
-	golang.org/x/net v0.13.0 // indirect
+	golang.org/x/crypto v0.14.0 // indirect
+	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/oauth2 v0.9.0 // indirect
-	golang.org/x/sys v0.10.0 // indirect
-	golang.org/x/term v0.10.0 // indirect
-	golang.org/x/text v0.11.0 // indirect
+	golang.org/x/sys v0.13.0 // indirect
+	golang.org/x/term v0.13.0 // indirect
+	golang.org/x/text v0.13.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
 	gomodules.xyz/jsonpatch/v2 v2.3.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
