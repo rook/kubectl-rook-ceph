@@ -1,0 +1,38 @@
+{
+    "extends": [
+        "@commitlint/config-conventional"
+    ],
+    "rules": {
+        "type-enum": [
+            2,
+            "always",
+            [
+                "build",
+                "ci",
+                "core",
+                "csi",
+                "doc",
+                "docs",
+                "mds",
+                "mgr",
+                "mon",
+                "operator",
+                "osd",
+                "test",
+                "tests"
+            ]
+        ],
+        "body-leading-blank": [
+            2,
+            "always"
+        ],
+        "footer-leading-blank": [
+            2,
+            "always"
+        ],
+        "body-max-line-length": [
+            0,
+            "always"
+        ]
+    }
+}
