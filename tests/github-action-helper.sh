@@ -6,7 +6,7 @@ set -xeEo pipefail
 # VARIABLES #
 #############
 : "${FUNCTION:=${1}}"
-: "${BLOCK:=$(sudo lsblk --paths | awk '/14G/ {print $1}' | head -1)}"
+: "${BLOCK:=$(sudo lsblk --paths | awk '/14G/ || /64G/ {print $1}' | head -1)}"
 
 # source https://krew.sigs.k8s.io/docs/user-guide/setup/install/
 install_krew() {
