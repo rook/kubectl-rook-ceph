@@ -88,7 +88,7 @@ func restoreQuorum(ctx context.Context, clientsets *k8sutil.Clientsets, operator
 	var answer string
 	logging.Warning("Are you sure you want to restore the quorum to mon %s? If so, enter 'yes-really-restore'\n", goodMon)
 	fmt.Scanf("%s", &answer)
-	err = PromptToContinueOrCancel("restore-quorum", "yes-really-restore", answer)
+	err = PromptToContinueOrCancel("yes-really-restore", answer)
 	if err != nil {
 		return fmt.Errorf("restoring the mon quorum to mon %s cancelled", goodMon)
 	}
@@ -151,7 +151,7 @@ func restoreQuorum(ctx context.Context, clientsets *k8sutil.Clientsets, operator
 	logging.Info("Only a single mon is currently running")
 	logging.Info("Press Enter to start the operator and expand to full mon quorum again")
 
-	err = PromptToContinueOrCancel("restore-quorum", "yes-really-restore", answer)
+	err = PromptToContinueOrCancel("yes-really-restore", answer)
 	if err != nil {
 		return fmt.Errorf("skipping operator start to expand full mon quorum.")
 	}
@@ -279,7 +279,7 @@ func getMonDetails(goodMon string, monEndpoints []string) ([]string, string, str
 	return badMons, goodMonPublicIp, goodMonPort, nil
 }
 
-func PromptToContinueOrCancel(inputSource, expectedAnswer, answer string) error {
+func PromptToContinueOrCancel(expectedAnswer, answer string) error {
 	if skip, ok := os.LookupEnv("ROOK_PLUGIN_SKIP_PROMPTS"); ok && skip == "true" {
 		logging.Info("skipped prompt since ROOK_PLUGIN_SKIP_PROMPTS=true")
 		return nil

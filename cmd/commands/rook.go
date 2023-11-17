@@ -22,6 +22,7 @@ import (
 
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
+	"github.com/rook/kubectl-rook-ceph/pkg/mons"
 	"github.com/rook/kubectl-rook-ceph/pkg/rook"
 	"github.com/spf13/cobra"
 )
@@ -50,10 +51,17 @@ var purgeCmd = &cobra.Command{
 	Short: "Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs, for example, purge-osd 0,1",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
+		var answer string
+		osdID := args[0]
+		logging.Warning("Are you sure you want to purge osd ID %s? If so, enter 'yes-i-really-mean-it'\n", osdID)
+		fmt.Scanf("%s", &answer)
+		if err := mons.PromptToContinueOrCancel("yes-i-really-mean-it", answer); err != nil {
+			logging.Fatal(fmt.Errorf("Purge osd osd.%s %s ", osdID, err))
+		}
+
 		clientsets := GetClientsets(cmd.Context())
 		VerifyOperatorPodIsRunning(cmd.Context(), clientsets, OperatorNamespace, CephClusterNamespace)
 		forceflagValue := cmd.Flag("force").Value.String()
-		osdID := args[0]
 		rook.PurgeOsd(cmd.Context(), clientsets, OperatorNamespace, CephClusterNamespace, osdID, forceflagValue)
 	},
 }

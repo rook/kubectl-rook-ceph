@@ -51,7 +51,7 @@ func RestoreCrd(ctx context.Context, k8sclientset *k8sutil.Clientsets, operatorN
 	var answer string
 	logging.Warning("The resource %s was found deleted. Do you want to restore it? yes | no\n", crName)
 	fmt.Scanf("%s", &answer)
-	err := mons.PromptToContinueOrCancel("restore-deleted", "yes", answer)
+	err := mons.PromptToContinueOrCancel("yes", answer)
 	if err != nil {
 		logging.Fatal(fmt.Errorf("Restoring the resource %s cancelled", crName))
 	}
