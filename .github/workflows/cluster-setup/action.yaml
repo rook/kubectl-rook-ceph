@@ -14,13 +14,10 @@ inputs:
 runs:
   using: "composite"
   steps:
-    - name: setup minikube
-      uses: manusa/actions-setup-minikube@v2.4.2
-      with:
-        minikube version: "v1.23.2"
-        kubernetes version: "v1.22.2"
-        start args: --memory 6g --cpus=2
-        github token: ${{ inputs.github-token }}
+    - name: Setup Minikube
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        tests/github-action-helper.sh install_minikube_with_none_driver v1.28.4
 
     - name: print k8s cluster status
       shell: bash --noprofile --norc -eo pipefail -x {0}
