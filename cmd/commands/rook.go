@@ -40,21 +40,22 @@ var versionCmd = &cobra.Command{
 	Short: "Prints rook version",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, _ []string) {
-		clientsets := GetClientsets(cmd.Context())
-		exec.RunCommandInOperatorPod(cmd.Context(), clientsets, "rook", []string{cmd.Use}, OperatorNamespace, CephClusterNamespace, false, true)
+		exec.RunCommandInOperatorPod(cmd.Context(), clientSets, "rook", []string{cmd.Use}, operatorNamespace, cephClusterNamespace, false, true)
 	},
 }
 
 var purgeCmd = &cobra.Command{
-	Use:   "purge-osd",
-	Short: "Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs, for example, purge-osd 0,1",
-	Args:  cobra.ExactArgs(1),
+	Use:     "purge-osd",
+	Short:   "Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs, for example, purge-osd 0,1",
+	PreRunE: validateOsdID,
+	Args:    cobra.ExactArgs(1),
+	PreRun: func(cmd *cobra.Command, args []string) {
+		verifyOperatorPodIsRunning(cmd.Context(), clientSets)
+	},
 	Run: func(cmd *cobra.Command, args []string) {
-		clientsets := GetClientsets(cmd.Context())
-		VerifyOperatorPodIsRunning(cmd.Context(), clientsets, OperatorNamespace, CephClusterNamespace)
 		forceflagValue := cmd.Flag("force").Value.String()
 		osdID := args[0]
-		rook.PurgeOsd(cmd.Context(), clientsets, OperatorNamespace, CephClusterNamespace, osdID, forceflagValue)
+		rook.PurgeOsd(cmd.Context(), clientSets, operatorNamespace, cephClusterNamespace, osdID, forceflagValue)
 	},
 }
 
@@ -67,7 +68,7 @@ var statusCmd = &cobra.Command{
 		if err != nil {
 			logging.Fatal(fmt.Errorf("failed to parse json flag: %v", err))
 		}
-		rook.PrintCustomResourceStatus(CephClusterNamespace, args, jsonValue)
+		rook.PrintCustomResourceStatus(cephClusterNamespace, args, jsonValue)
 	},
 }
 
@@ -77,4 +78,14 @@ func init() {
 	RookCmd.AddCommand(purgeCmd)
 	statusCmd.PersistentFlags().Bool("json", false, "print status in json format")
 	purgeCmd.PersistentFlags().Bool("force", false, "force deletion of an OSD if the OSD still contains data")
+}
+
+func validateOsdID(cmd *cobra.Command, args []string) error {
+	osdID := args[0]
+	_, err := strconv.Atoi(osdID)
+	if err != nil {
+		return fmt.Errorf("Invalid ID %s, the OSD ID must be an integer. %v", osdID, err)
+	}
+
+	return nil
 }

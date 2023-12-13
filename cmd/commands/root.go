@@ -34,10 +34,11 @@ import (
 )
 
 var (
-	KubeConfig           string
-	OperatorNamespace    string
-	CephClusterNamespace string
-	KubeContext          string
+	kubeConfig           string
+	operatorNamespace    string
+	cephClusterNamespace string
+	kubeContext          string
+	clientSets           *k8sutil.Clientsets
 )
 
 // rookCmd represents the rook command
@@ -47,11 +48,11 @@ var RootCmd = &cobra.Command{
 	Args:             cobra.MinimumNArgs(1),
 	TraverseChildren: true,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		if CephClusterNamespace != "" && OperatorNamespace == "" {
-			OperatorNamespace = CephClusterNamespace
+		if cephClusterNamespace != "" && operatorNamespace == "" {
+			operatorNamespace = cephClusterNamespace
 		}
-		// logging.Info("CephCluster namespace: %q", CephClusterNamespace)
-		// logging.Info("Rook operator namespace: %q", OperatorNamespace)
+		clientSets = getClientsets(cmd.Context())
+		preValidationCheck(cmd.Context(), clientSets)
 	},
 }
 
@@ -62,23 +63,21 @@ func Execute() {
 }
 
 func init() {
-
 	// Define your flags and configuration settings.
-
-	RootCmd.PersistentFlags().StringVar(&KubeConfig, "kubeconfig", "", "kubernetes config path")
-	RootCmd.PersistentFlags().StringVar(&OperatorNamespace, "operator-namespace", "", "Kubernetes namespace where rook operator is running")
-	RootCmd.PersistentFlags().StringVarP(&CephClusterNamespace, "namespace", "n", "rook-ceph", "Kubernetes namespace where CephCluster is created")
-	RootCmd.PersistentFlags().StringVar(&KubeContext, "context", "", "Kubernetes context to use")
+	RootCmd.PersistentFlags().StringVar(&kubeConfig, "kubeconfig", "", "kubernetes config path")
+	RootCmd.PersistentFlags().StringVar(&operatorNamespace, "operator-namespace", "", "Kubernetes namespace where rook operator is running")
+	RootCmd.PersistentFlags().StringVarP(&cephClusterNamespace, "namespace", "n", "rook-ceph", "Kubernetes namespace where CephCluster is created")
+	RootCmd.PersistentFlags().StringVar(&kubeContext, "context", "", "Kubernetes context to use")
 }
 
-func GetClientsets(ctx context.Context) *k8sutil.Clientsets {
+func getClientsets(ctx context.Context) *k8sutil.Clientsets {
 	var err error
 
 	clientsets := &k8sutil.Clientsets{}
 
 	congfigOverride := &clientcmd.ConfigOverrides{}
-	if KubeContext != "" {
-		congfigOverride = &clientcmd.ConfigOverrides{CurrentContext: KubeContext}
+	if kubeContext != "" {
+		congfigOverride = &clientcmd.ConfigOverrides{CurrentContext: kubeContext}
 	}
 
 	// 1. Create Kubernetes Client
@@ -102,12 +101,10 @@ func GetClientsets(ctx context.Context) *k8sutil.Clientsets {
 		logging.Fatal(err)
 	}
 
-	PreValidationCheck(ctx, clientsets, OperatorNamespace, CephClusterNamespace)
-
 	return clientsets
 }
 
-func PreValidationCheck(ctx context.Context, k8sclientset *k8sutil.Clientsets, operatorNamespace, cephClusterNamespace string) {
+func preValidationCheck(ctx context.Context, k8sclientset *k8sutil.Clientsets) {
 	_, err := k8sclientset.Kube.CoreV1().Namespaces().Get(ctx, operatorNamespace, v1.GetOptions{})
 	if err != nil {
 		logging.Fatal(fmt.Errorf("Operator namespace '%s' does not exist. %v", operatorNamespace, err))
@@ -118,7 +115,7 @@ func PreValidationCheck(ctx context.Context, k8sclientset *k8sutil.Clientsets, o
 	}
 }
 
-func VerifyOperatorPodIsRunning(ctx context.Context, k8sclientset *k8sutil.Clientsets, operatorNamespace, cephClusterNamespace string) {
+func verifyOperatorPodIsRunning(ctx context.Context, k8sclientset *k8sutil.Clientsets) {
 	rookVersionOutput := exec.RunCommandInOperatorPod(ctx, k8sclientset, "rook", []string{"version"}, operatorNamespace, cephClusterNamespace, true, false)
 	rookVersion := trimGoVersionFromRookVersion(rookVersionOutput)
 	if strings.Contains(rookVersion, "alpha") || strings.Contains(rookVersion, "beta") {

@@ -23,7 +23,10 @@ import (
 var SubvolumeCmd = &cobra.Command{
 	Use:   "subvolume",
 	Short: "manages stale subvolumes",
-	Args:  cobra.ExactArgs(1),
+	PreRun: func(cmd *cobra.Command, args []string) {
+		verifyOperatorPodIsRunning(cmd.Context(), clientSets)
+	},
+	Args: cobra.ExactArgs(1),
 }
 
 var listCmd = &cobra.Command{
@@ -31,10 +34,8 @@ var listCmd = &cobra.Command{
 	Short: "Print the list of subvolumes.",
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := cmd.Context()
-		clientsets := GetClientsets(ctx)
-		VerifyOperatorPodIsRunning(ctx, clientsets, OperatorNamespace, CephClusterNamespace)
 		staleSubvol, _ := cmd.Flags().GetBool("stale")
-		subvolume.List(ctx, clientsets, OperatorNamespace, CephClusterNamespace, staleSubvol)
+		subvolume.List(ctx, clientSets, operatorNamespace, cephClusterNamespace, staleSubvol)
 	},
 }
 
@@ -45,12 +46,10 @@ var deleteCmd = &cobra.Command{
 	Args:               cobra.ExactArgs(3),
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := cmd.Context()
-		clientsets := GetClientsets(ctx)
-		VerifyOperatorPodIsRunning(ctx, clientsets, OperatorNamespace, CephClusterNamespace)
 		subList := args[0]
 		fs := args[1]
 		svg := args[2]
-		subvolume.Delete(ctx, clientsets, OperatorNamespace, CephClusterNamespace, subList, fs, svg)
+		subvolume.Delete(ctx, clientSets, operatorNamespace, cephClusterNamespace, subList, fs, svg)
 	},
 }
 
