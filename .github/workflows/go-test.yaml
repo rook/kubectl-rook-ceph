@@ -28,6 +28,11 @@ jobs:
         with:
           go-version: "1.20"
 
+      - name: consider debugging
+        uses: ./.github/workflows/tmate_debug
+        with:
+          use-tmate: ${{ secrets.USE_TMATE }}
+
       - name: setup cluster
         uses: ./.github/workflows/cluster-setup
         with:
@@ -73,7 +78,7 @@ jobs:
       - name: Subvolume command
         run: |
           set -ex
-          kubectl rook-ceph ceph fs subvolume create myfs test-subvol group-a 
+          kubectl rook-ceph ceph fs subvolume create myfs test-subvol group-a
           kubectl rook-ceph subvolume ls
           kubectl rook-ceph subvolume ls --stale
           kubectl rook-ceph subvolume delete test-subvol myfs group-a
@@ -163,6 +168,11 @@ jobs:
         with:
           go-version: "1.20"
 
+      - name: consider debugging
+        uses: ./.github/workflows/tmate_debug
+        with:
+          use-tmate: ${{ secrets.USE_TMATE }}
+
       - name: setup cluster
         uses: ./.github/workflows/cluster-setup
         with:
@@ -210,7 +220,7 @@ jobs:
       - name: Subvolume command
         run: |
           set -ex
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster ceph fs subvolume create myfs test-subvol group-a 
+          kubectl rook-ceph --operator-namespace test-operator -n test-cluster ceph fs subvolume create myfs test-subvol group-a
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster subvolume ls
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster subvolume ls --stale
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster subvolume delete test-subvol myfs group-a
