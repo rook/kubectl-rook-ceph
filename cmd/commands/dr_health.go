@@ -10,6 +10,9 @@ var DrCmd = &cobra.Command{
 	Short:              "Calls subcommand health",
 	DisableFlagParsing: true,
 	Args:               cobra.ExactArgs(1),
+	PreRun: func(cmd *cobra.Command, args []string) {
+		verifyOperatorPodIsRunning(cmd.Context(), clientSets)
+	},
 }
 
 var healthCmd = &cobra.Command{
@@ -18,9 +21,7 @@ var healthCmd = &cobra.Command{
 	DisableFlagParsing: true,
 	Args:               cobra.MaximumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		clientsets := GetClientsets(cmd.Context())
-		VerifyOperatorPodIsRunning(cmd.Context(), clientsets, OperatorNamespace, CephClusterNamespace)
-		dr.Health(cmd.Context(), clientsets, OperatorNamespace, CephClusterNamespace, args)
+		dr.Health(cmd.Context(), clientSets, operatorNamespace, cephClusterNamespace, args)
 	},
 }
 

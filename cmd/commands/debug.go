@@ -27,6 +27,9 @@ var DebugCmd = &cobra.Command{
 	Short:              "Debug a deployment by scaling it down and creating a debug copy. This is supported for mons and OSDs only",
 	DisableFlagParsing: true,
 	Args:               cobra.ExactArgs(1),
+	PreRun: func(cmd *cobra.Command, args []string) {
+		verifyOperatorPodIsRunning(cmd.Context(), clientSets)
+	},
 }
 
 var startDebugCmd = &cobra.Command{
@@ -34,10 +37,8 @@ var startDebugCmd = &cobra.Command{
 	Short: "Start debugging a deployment with an optional alternative ceph container image",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		clientsets := GetClientsets(cmd.Context())
-		VerifyOperatorPodIsRunning(cmd.Context(), clientsets, OperatorNamespace, CephClusterNamespace)
 		alternateImage := cmd.Flag("alternate-image").Value.String()
-		debug.StartDebug(cmd.Context(), clientsets.Kube, CephClusterNamespace, args[0], alternateImage)
+		debug.StartDebug(cmd.Context(), clientSets.Kube, cephClusterNamespace, args[0], alternateImage)
 	},
 }
 
@@ -46,9 +47,7 @@ var stopDebugCmd = &cobra.Command{
 	Short: "Stop debugging a deployment",
 	Args:  cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		clientsets := GetClientsets(cmd.Context())
-		VerifyOperatorPodIsRunning(cmd.Context(), clientsets, OperatorNamespace, CephClusterNamespace)
-		debug.StopDebug(cmd.Context(), clientsets.Kube, CephClusterNamespace, args[0])
+		debug.StopDebug(cmd.Context(), clientSets.Kube, cephClusterNamespace, args[0])
 	},
 }
 

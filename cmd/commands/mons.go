@@ -31,8 +31,7 @@ var MonCmd = &cobra.Command{
 	Args:               cobra.MaximumNArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
 		if len(args) == 0 {
-			clientsets := GetClientsets(cmd.Context())
-			fmt.Println(mons.GetMonEndpoint(cmd.Context(), clientsets.Kube, CephClusterNamespace))
+			fmt.Println(mons.GetMonEndpoint(cmd.Context(), clientSets.Kube, cephClusterNamespace))
 		}
 	},
 }
@@ -44,8 +43,7 @@ var RestoreQuorum = &cobra.Command{
 	DisableFlagParsing: true,
 	Args:               cobra.ExactArgs(1),
 	Run: func(cmd *cobra.Command, args []string) {
-		clientsets := GetClientsets(cmd.Context())
-		mons.RestoreQuorum(cmd.Context(), clientsets, OperatorNamespace, CephClusterNamespace, args[0])
+		mons.RestoreQuorum(cmd.Context(), clientSets, operatorNamespace, cephClusterNamespace, args[0])
 	},
 }
 
