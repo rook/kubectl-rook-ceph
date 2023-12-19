@@ -141,6 +141,20 @@ jobs:
           kubectl rook-ceph -n rook-ceph restore-deleted cephcluster my-cluster
           tests/github-action-helper.sh wait_for_crd_to_be_ready_default
 
+      - name: Show Cluster State
+        run: |
+          set -ex
+          kubectl -n rook-ceph get all
+
+      - name: Destroy Cluster (removing CRs)
+        env:
+          ROOK_PLUGIN_SKIP_PROMPTS: true
+        run: |
+          set -ex
+          kubectl rook-ceph destroy-cluster
+          sleep 1
+          kubectl get deployments -n rook-ceph --no-headers| wc -l | (read n && [ $n -le 1 ] || { echo "the crs could not be deleted"; exit 1;})        
+
       - name: collect common logs
         if: always()
         uses: ./.github/workflows/collect-logs
@@ -282,6 +296,20 @@ jobs:
 
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster restore-deleted cephcluster my-cluster
           tests/github-action-helper.sh wait_for_crd_to_be_ready_custom
+
+      - name: Show Cluster State
+        run: |
+          set -ex
+          kubectl -n test-cluster get all
+
+      - name: Destroy Cluster (removing CRs)
+        env:
+          ROOK_PLUGIN_SKIP_PROMPTS: true
+        run: |
+          set -ex
+          kubectl rook-ceph --operator-namespace test-operator -n test-cluster destroy-cluster
+          sleep 1
+          kubectl get deployments -n rook-ceph --no-headers| wc -l | (read n && [ $n -le 1 ] || { echo "the crs could not be deleted"; exit 1;})
 
       - name: collect common logs
         if: always()

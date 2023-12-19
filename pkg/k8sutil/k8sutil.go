@@ -19,6 +19,7 @@ package k8sutil
 import (
 	"context"
 	"fmt"
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	"time"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
@@ -103,4 +104,17 @@ func GetDeployment(ctx context.Context, k8sclientset kubernetes.Interface, clust
 
 	logging.Info("deployment %s exists\n", deploymentName)
 	return deployment, nil
+}
+
+func DeleteDeployment(ctx context.Context, k8sclientset kubernetes.Interface, clusterNamespace string, deployment string) {
+	logging.Info("removing deployment %s", deployment)
+
+	err := k8sclientset.AppsV1().Deployments(clusterNamespace).Delete(ctx, deployment, v1.DeleteOptions{})
+	if err != nil {
+		if k8sErrors.IsNotFound(err) {
+			logging.Info("the server could not find the requested deployment: %s", deployment)
+			return
+		}
+		logging.Fatal(err)
+	}
 }

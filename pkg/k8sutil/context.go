@@ -17,6 +17,7 @@ limitations under the License.
 package k8sutil
 
 import (
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 
@@ -32,4 +33,7 @@ type Clientsets struct {
 
 	// Rook is a typed connection to the rook API
 	Rook rookclient.Interface
+
+	// Dynamic is used for manage dynamic resources
+	Dynamic dynamic.Interface
 }

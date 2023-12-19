@@ -29,3 +29,8 @@ help :
 	@echo "build : Create go binary."
 	@echo "test  : Runs unit tests"
 	@echo "clean : Remove go binary file."
+
+codegen:
+	@echo "generating mocks..."
+	@go generate ./...
+	@echo completed
