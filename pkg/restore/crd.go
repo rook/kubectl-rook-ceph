@@ -18,40 +18,57 @@ package restore
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
-	"os"
-	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/rook/kubectl-rook-ceph/pkg/exec"
+	"github.com/rook/kubectl-rook-ceph/pkg/crds"
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 	"github.com/rook/kubectl-rook-ceph/pkg/mons"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/types"
 )
 
 func RestoreCrd(ctx context.Context, k8sclientset *k8sutil.Clientsets, operatorNamespace, clusterNamespace string, args []string) {
 	crd := args[0]
+
+	var crName string
+	var crdResource unstructured.Unstructured
+	if len(args) == 2 {
+		crName = args[1]
+	}
+
 	logging.Info("Detecting which resources to restore for crd %q", crd)
-	getCrName := `kubectl -n %s get %s -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.metadata.deletionGracePeriodSeconds}{"\n"}{end}' | awk '$2=="0" {print $1}' | head -n 1`
-	command := fmt.Sprintf(getCrName, clusterNamespace, crd)
-	crName := strings.TrimSpace(exec.ExecuteBashCommand(command))
+	crdList, err := k8sclientset.ListResourcesDynamically(ctx, crds.CephRookIoGroup, crds.CephRookResourcesVersion, crd, clusterNamespace)
+	if err != nil {
+		logging.Fatal(fmt.Errorf("Failed to list resources for crd %v", err))
+	}
+	if len(crdList) == 0 {
+		logging.Info("No Ceph CRDs found to restore")
+		return
+	}
+
+	for _, cr := range crdList {
+		if cr.GetDeletionTimestamp() != nil && (crName == "" || crName == cr.GetName()) {
+			crName = cr.GetName()
+			crdResource = *cr.DeepCopy()
+			break
+		}
+	}
 
 	if crName == "" {
 		logging.Info("Nothing to do here, no %q resources in deleted state", crd)
 		return
 	}
 
-	if len(args) == 2 {
-		crName = args[1]
-	}
-
 	logging.Info("Restoring CR %s", crName)
 	var answer string
 	logging.Warning("The resource %s was found deleted. Do you want to restore it? yes | no\n", crName)
 	fmt.Scanf("%s", &answer)
-	err := mons.PromptToContinueOrCancel("restore-deleted", "yes", answer)
+	err = mons.PromptToContinueOrCancel("restore-deleted", "yes", answer)
 	if err != nil {
 		logging.Fatal(fmt.Errorf("Restoring the resource %s cancelled", crName))
 	}
@@ -69,13 +86,6 @@ func RestoreCrd(ctx context.Context, k8sclientset *k8sutil.Clientsets, operatorN
 		}
 	}
 
-	logging.Info("Backing up kubernetes and crd resources")
-	crFileName := crd + "-" + crName + ".yaml"
-	getCrYamlContent := `kubectl -n %s get %s %s -oyaml > %s`
-	command = fmt.Sprintf(getCrYamlContent, clusterNamespace, crd, crName, crFileName)
-	exec.ExecuteBashCommand(command)
-	logging.Info("Backed up crd %s/%s in file %s", crd, crName, crFileName)
-
 	webhookConfigName := "rook-ceph-webhook"
 	logging.Info("Deleting validating webhook %s if present", webhookConfigName)
 	err = k8sclientset.Kube.AdmissionregistrationV1().ValidatingWebhookConfigurations().Delete(ctx, webhookConfigName, v1.DeleteOptions{})
@@ -83,32 +93,30 @@ func RestoreCrd(ctx context.Context, k8sclientset *k8sutil.Clientsets, operatorN
 		logging.Fatal(fmt.Errorf("failed to delete validating webhook %s. %v", webhookConfigName, err))
 	}
 
-	logging.Info("Fetching the UID for %s/%s", crd, crName)
-	getCrUID := `kubectl -n %s get %s %s -o 'jsonpath={.metadata.uid}'`
-	command = fmt.Sprintf(getCrUID, clusterNamespace, crd, crName)
-	uid := exec.ExecuteBashCommand(command)
-	logging.Info("Successfully fetched uid %s from %s/%s", uid, crd, crName)
-
-	removeOwnerRefOfUID(ctx, k8sclientset, operatorNamespace, clusterNamespace, uid)
+	removeOwnerRefOfUID(ctx, k8sclientset, operatorNamespace, clusterNamespace, string(crdResource.GetUID()))
 
 	logging.Info("Removing finalizers from %s/%s", crd, crName)
-	removeFinalizers := `kubectl -n %s patch %s/%s --type json --patch='[ { "op": "remove", "path": "/metadata/finalizers" } ]'`
-	command = fmt.Sprintf(removeFinalizers, clusterNamespace, crd, crName)
-	logging.Info(exec.ExecuteBashCommand(command))
 
-	logging.Info("Re-creating the CR %s from file %s created above", crd, crFileName)
-	recreateCR := `kubectl create -f %s`
-	command = fmt.Sprintf(recreateCR, crFileName)
-	logging.Info(exec.ExecuteBashCommand(command))
+	jsonPatchData, _ := json.Marshal(crds.DefaultResourceRemoveFinalizers)
+	err = k8sclientset.PatchResourcesDynamically(ctx, crds.CephRookIoGroup, crds.CephRookResourcesVersion, crd, clusterNamespace, crName, types.MergePatchType, jsonPatchData)
+	if err != nil {
+		logging.Fatal(fmt.Errorf("Failed to update resource %q for crd. %v", crName, err))
+	}
+
+	crdResource.SetResourceVersion("")
+	crdResource.SetUID("")
+	crdResource.SetSelfLink("")
+	crdResource.SetCreationTimestamp(v1.Time{})
+	logging.Info("Re-creating the CR %s from dynamic resource", crd)
+	_, err = k8sclientset.CreateResourcesDynamically(ctx, crds.CephRookIoGroup, crds.CephRookResourcesVersion, crd, &crdResource, clusterNamespace)
+	if err != nil {
+		logging.Fatal((fmt.Errorf("Failed to create updated resource %q for crd. %v", crName, err)))
+	}
 
 	logging.Info("Scaling up the operator")
 	err = k8sutil.SetDeploymentScale(ctx, k8sclientset.Kube, operatorNamespace, "rook-ceph-operator", 1)
 	if err != nil {
 		logging.Fatal(errors.Wrapf(err, "Operator pod still being scaled up"))
-	}
-
-	if err = os.Remove(crFileName); err != nil {
-		logging.Warning("Unable to remove. Please remove the file %s manually.%v", crFileName, err)
 	}
 
 	logging.Info("CR is successfully restored. Please watch the operator logs and check the crd")
