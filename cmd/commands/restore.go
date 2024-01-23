@@ -23,9 +23,10 @@ import (
 
 // RestoreCmd represents the restore commands
 var RestoreCmd = &cobra.Command{
-	Use:   "restore-deleted",
-	Short: "Restores a CR that was accidentally deleted and is still in terminating state. Ex: restore cephcluster <my-cluster>",
-	Args:  cobra.MinimumNArgs(1),
+	Use:     "restore-deleted",
+	Short:   "Restores a CR that was accidentally deleted and is still in terminating state.",
+	Args:    cobra.RangeArgs(1, 2),
+	Example: "kubectl rook-ceph restore-deleted <CRD> [CR_Name]",
 	PreRun: func(cmd *cobra.Command, args []string) {
 		verifyOperatorPodIsRunning(cmd.Context(), clientSets)
 	},

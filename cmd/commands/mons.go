@@ -42,6 +42,7 @@ var RestoreQuorum = &cobra.Command{
 	Short:              "When quorum is lost, restore quorum to the remaining healthy mon",
 	DisableFlagParsing: true,
 	Args:               cobra.ExactArgs(1),
+	Example:            "kubectl rook-ceph mons restore-quorum <Mon_ID>",
 	Run: func(cmd *cobra.Command, args []string) {
 		mons.RestoreQuorum(cmd.Context(), clientSets, operatorNamespace, cephClusterNamespace, args[0])
 	},
