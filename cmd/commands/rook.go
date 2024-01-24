@@ -26,8 +26,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var json bool
-
 // RookCmd represents the rook commands
 var RookCmd = &cobra.Command{
 	Use:   "rook",
@@ -49,6 +47,7 @@ var purgeCmd = &cobra.Command{
 	Short:   "Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs, for example, purge-osd 0,1",
 	PreRunE: validateOsdID,
 	Args:    cobra.ExactArgs(1),
+	Example: "kubectl rook-ceph rook purge-osd <OSD_ID>",
 	PreRun: func(cmd *cobra.Command, args []string) {
 		verifyOperatorPodIsRunning(cmd.Context(), clientSets)
 	},
@@ -60,8 +59,10 @@ var purgeCmd = &cobra.Command{
 }
 
 var statusCmd = &cobra.Command{
-	Use:   "status",
-	Short: "Print the phase and conditions of the CephCluster CR",
+	Use:     "status",
+	Short:   "Print the phase and conditions of the CephCluster CR",
+	Args:    cobra.MaximumNArgs(1),
+	Example: "kubectl rook-ceph rook status [CR_Name]",
 	Run: func(cmd *cobra.Command, args []string) {
 		json := cmd.Flag("json").Value.String()
 		jsonValue, err := strconv.ParseBool(json)
@@ -84,7 +85,7 @@ func validateOsdID(cmd *cobra.Command, args []string) error {
 	osdID := args[0]
 	_, err := strconv.Atoi(osdID)
 	if err != nil {
-		return fmt.Errorf("Invalid ID %s, the OSD ID must be an integer. %v", osdID, err)
+		return fmt.Errorf("invalid ID %s, the OSD ID must be an integer. %v", osdID, err)
 	}
 
 	return nil

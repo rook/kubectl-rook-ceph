@@ -44,6 +44,7 @@ var deleteCmd = &cobra.Command{
 	Short:              "Deletes a stale subvolume.",
 	DisableFlagParsing: true,
 	Args:               cobra.ExactArgs(3),
+	Example:            "kubectl rook-ceph delete <subvolumes> <filesystem> <subvolumegroup>",
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := cmd.Context()
 		subList := args[0]

@@ -18,9 +18,10 @@ package command
 import (
 	"context"
 	"fmt"
-	"k8s.io/client-go/dynamic"
 	"regexp"
 	"strings"
+
+	"k8s.io/client-go/dynamic"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
@@ -113,11 +114,11 @@ func getClientsets(ctx context.Context) *k8sutil.Clientsets {
 func preValidationCheck(ctx context.Context, k8sclientset *k8sutil.Clientsets) {
 	_, err := k8sclientset.Kube.CoreV1().Namespaces().Get(ctx, operatorNamespace, v1.GetOptions{})
 	if err != nil {
-		logging.Fatal(fmt.Errorf("Operator namespace '%s' does not exist. %v", operatorNamespace, err))
+		logging.Fatal(fmt.Errorf("operator namespace '%s' does not exist. %v", operatorNamespace, err))
 	}
 	_, err = k8sclientset.Kube.CoreV1().Namespaces().Get(ctx, cephClusterNamespace, v1.GetOptions{})
 	if err != nil {
-		logging.Fatal(fmt.Errorf("CephCluster namespace '%s' does not exist. %v", cephClusterNamespace, err))
+		logging.Fatal(fmt.Errorf("cephCluster namespace '%s' does not exist. %v", cephClusterNamespace, err))
 	}
 }
 

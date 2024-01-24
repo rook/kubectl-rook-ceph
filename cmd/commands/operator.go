@@ -42,9 +42,10 @@ var restartCmd = &cobra.Command{
 }
 
 var setCmd = &cobra.Command{
-	Use:   "set",
-	Short: "Set the property in the rook-ceph-operator-config configmap.",
-	Args:  cobra.ExactArgs(2),
+	Use:     "set",
+	Short:   "Set the property in the rook-ceph-operator-config configmap.",
+	Example: "kubectl rook-ceph operator set <KEY> <VALUE>",
+	Args:    cobra.ExactArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
 		k8sutil.UpdateConfigMap(cmd.Context(), clientSets.Kube, operatorNamespace, "rook-ceph-operator-config", args[0], args[1])
 	},
