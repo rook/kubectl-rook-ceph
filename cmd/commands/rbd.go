@@ -18,6 +18,7 @@ package command
 
 import (
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
+	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 	"github.com/spf13/cobra"
 )
 
@@ -31,6 +32,9 @@ var RbdCmd = &cobra.Command{
 		verifyOperatorPodIsRunning(cmd.Context(), clientSets)
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		exec.RunCommandInOperatorPod(cmd.Context(), clientSets, cmd.Use, args, operatorNamespace, cephClusterNamespace, false, true)
+		_, err := exec.RunCommandInOperatorPod(cmd.Context(), clientSets, cmd.Use, args, operatorNamespace, cephClusterNamespace, false)
+		if err != nil {
+			logging.Fatal(err)
+		}
 	},
 }

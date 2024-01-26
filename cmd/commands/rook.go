@@ -38,7 +38,10 @@ var versionCmd = &cobra.Command{
 	Short: "Prints rook version",
 	Args:  cobra.NoArgs,
 	Run: func(cmd *cobra.Command, _ []string) {
-		exec.RunCommandInOperatorPod(cmd.Context(), clientSets, "rook", []string{cmd.Use}, operatorNamespace, cephClusterNamespace, false, true)
+		_, err := exec.RunCommandInOperatorPod(cmd.Context(), clientSets, "rook", []string{cmd.Use}, operatorNamespace, cephClusterNamespace, false)
+		if err != nil {
+			logging.Fatal(err)
+		}
 	},
 }
 

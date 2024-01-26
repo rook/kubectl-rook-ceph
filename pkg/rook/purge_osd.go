@@ -39,9 +39,9 @@ func PurgeOsd(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNames
 		"auth", "print-key", "client.admin",
 	}
 
-	adminKey := exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", cephArgs, operatorNamespace, clusterNamespace, true, false)
-	if adminKey == "" {
-		logging.Fatal(fmt.Errorf("failed to get ceph key"))
+	adminKey, err := exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", cephArgs, operatorNamespace, clusterNamespace, true)
+	if err != nil {
+		logging.Fatal(err, "failed to get ceph key")
 	}
 
 	cmd := "/bin/sh"
@@ -51,5 +51,8 @@ func PurgeOsd(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNames
 	}
 	logging.Info("Running purge osd command")
 
-	exec.RunCommandInOperatorPod(ctx, clientsets, cmd, args, operatorNamespace, clusterNamespace, false, true)
+	_, err = exec.RunCommandInOperatorPod(ctx, clientsets, cmd, args, operatorNamespace, clusterNamespace, false)
+	if err != nil {
+		logging.Fatal(err, "failed to remove osd %s", osdId)
+	}
 }

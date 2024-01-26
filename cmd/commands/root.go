@@ -122,7 +122,10 @@ func preValidationCheck(ctx context.Context, k8sclientset *k8sutil.Clientsets) {
 }
 
 func verifyOperatorPodIsRunning(ctx context.Context, k8sclientset *k8sutil.Clientsets) {
-	rookVersionOutput := exec.RunCommandInOperatorPod(ctx, k8sclientset, "rook", []string{"version"}, operatorNamespace, cephClusterNamespace, true, false)
+	rookVersionOutput, err := exec.RunCommandInOperatorPod(ctx, k8sclientset, "rook", []string{"version"}, operatorNamespace, cephClusterNamespace, true)
+	if err != nil {
+		logging.Fatal(err, "failed to get rook version")
+	}
 	rookVersion := trimGoVersionFromRookVersion(rookVersionOutput)
 	if strings.Contains(rookVersion, "alpha") || strings.Contains(rookVersion, "beta") {
 		logging.Warning("rook version '%s' is running a pre-release version of Rook.", rookVersion)

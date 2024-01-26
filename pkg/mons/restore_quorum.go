@@ -193,27 +193,42 @@ func updateMonMap(ctx context.Context, clientsets *k8sutil.Clientsets, clusterNa
 	extractMonMapArgs := append(monMapArgs, extractMonMap...)
 
 	logging.Info("Extracting the monmap")
-	exec.RunCommandInLabeledPod(ctx, clientsets, labelSelector, "mon", "ceph-mon", extractMonMapArgs, clusterNamespace, false, true)
+	_, err := exec.RunCommandInLabeledPod(ctx, clientsets, labelSelector, "mon", "ceph-mon", extractMonMapArgs, clusterNamespace, false)
+	if err != nil {
+		logging.Fatal(err, "failed to extract monmap")
+	}
 
 	logging.Info("Printing monmap")
-	exec.RunCommandInLabeledPod(ctx, clientsets, labelSelector, "mon", "monmaptool", []string{"--print", monmapPath}, clusterNamespace, false, true)
+	_, err = exec.RunCommandInLabeledPod(ctx, clientsets, labelSelector, "mon", "monmaptool", []string{"--print", monmapPath}, clusterNamespace, false)
+	if err != nil {
+		logging.Fatal(err, "failed to print monmap")
+	}
 
 	// remove all the mons except the good one
 	for _, badMonId := range badMons {
 		logging.Info("Removing mon %s.\n", badMonId)
-		exec.RunCommandInLabeledPod(ctx, clientsets, labelSelector, "mon", "monmaptool", []string{monmapPath, "--rm", badMonId}, clusterNamespace, false, true)
+		_, err = exec.RunCommandInLabeledPod(ctx, clientsets, labelSelector, "mon", "monmaptool", []string{monmapPath, "--rm", badMonId}, clusterNamespace, false)
+		if err != nil {
+			logging.Fatal(err, "failed to remove mon %s", badMonId)
+		}
 	}
 
 	injectMonMap := []string{fmt.Sprintf("--inject-monmap=%s", monmapPath)}
 	injectMonMapArgs := append(monMapArgs, injectMonMap...)
 
 	logging.Info("Injecting the monmap")
-	exec.RunCommandInLabeledPod(ctx, clientsets, labelSelector, "mon", "ceph-mon", injectMonMapArgs, clusterNamespace, false, true)
+	_, err = exec.RunCommandInLabeledPod(ctx, clientsets, labelSelector, "mon", "ceph-mon", injectMonMapArgs, clusterNamespace, false)
+	if err != nil {
+		logging.Fatal(err, "failed to inject the monmap")
+	}
 
 	logging.Info("Finished updating the monmap!")
 
 	logging.Info("Printing final monmap")
-	exec.RunCommandInLabeledPod(ctx, clientsets, labelSelector, "mon", "monmaptool", []string{"--print", monmapPath}, clusterNamespace, false, true)
+	_, err = exec.RunCommandInLabeledPod(ctx, clientsets, labelSelector, "mon", "monmaptool", []string{"--print", monmapPath}, clusterNamespace, false)
+	if err != nil {
+		logging.Fatal(err, "failed to print final monmap")
+	}
 }
 
 func removeBadMonsResources(ctx context.Context, k8sclientset kubernetes.Interface, clusterNamespace string, badMons []string) error {
@@ -238,11 +253,23 @@ func removeBadMonsResources(ctx context.Context, k8sclientset kubernetes.Interfa
 	return nil
 }
 
+func wait(i int, output string) {
+	logging.Info("%d: waiting for ceph status to confirm single mon quorum. \n", i+1)
+	logging.Info("current ceph status output %s\n", output)
+	logging.Info("sleeping for 5 seconds")
+	time.Sleep(5 * time.Second)
+}
+
 func waitForMonStatusResponse(ctx context.Context, clientsets *k8sutil.Clientsets, clusterNamespace string) error {
 	maxRetries := 20
 
 	for i := 0; i < maxRetries; i++ {
-		output := exec.RunCommandInToolboxPod(ctx, clientsets, "ceph", []string{"status"}, clusterNamespace, true, false)
+		output, err := exec.RunCommandInToolboxPod(ctx, clientsets, "ceph", []string{"status"}, clusterNamespace, true)
+		if err != nil {
+			logging.Error(err, "failed to get the status of ceph cluster")
+			wait(i, "")
+			continue
+		}
 		if strings.Contains(output, "HEALTH_WARN") || strings.Contains(output, "HEALTH_OK") || strings.Contains(output, "HEALTH_ERROR") {
 			logging.Info("finished waiting for ceph status %s\n", output)
 			break
@@ -250,10 +277,7 @@ func waitForMonStatusResponse(ctx context.Context, clientsets *k8sutil.Clientset
 		if i == maxRetries-1 {
 			return fmt.Errorf("timed out waiting for mon quorum to respond")
 		}
-		logging.Info("%d: waiting for ceph status to confirm single mon quorum. \n", i+1)
-		logging.Info("current ceph status output %s\n", output)
-		logging.Info("sleeping for 5 seconds")
-		time.Sleep(5 * time.Second)
+		wait(i, output)
 	}
 
 	return nil
