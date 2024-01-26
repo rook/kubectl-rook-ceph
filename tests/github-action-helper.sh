@@ -267,6 +267,28 @@ install_minikube_with_none_driver() {
   sudo -E minikube start --kubernetes-version="$1" --driver=none --memory 6g --cpus=2 --addons ingress --cni=calico
 }
 
+install_external_snapshotter() {
+  EXTERNAL_SNAPSHOTTER_VERSION=7.0.2
+  curl -L "https://github.com/kubernetes-csi/external-snapshotter/archive/refs/tags/v${EXTERNAL_SNAPSHOTTER_VERSION}.zip" -o external-snapshotter.zip
+  unzip -d /tmp external-snapshotter.zip
+  cd "/tmp/external-snapshotter-${EXTERNAL_SNAPSHOTTER_VERSION}"
+
+  kubectl kustomize client/config/crd | kubectl create -f -
+  kubectl -n kube-system kustomize deploy/kubernetes/snapshot-controller | kubectl create -f -
+}
+
+wait_for_rbd_pvc_clone_to_be_bound() {
+  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/pvc-clone.yaml
+
+  timeout 100 bash <<-'EOF'
+    until [ $(kubectl get pvc rbd-pvc-clone -o jsonpath='{.status.phase}') == "Bound" ]; do
+      echo "waiting for the pvc clone to be in bound state"
+      sleep 1
+    done
+EOF
+  timeout_command_exit_code
+}
+
 ########
 # MAIN #
 ########
