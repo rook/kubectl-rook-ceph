@@ -52,7 +52,7 @@ func getK8sRefSubvolume(ctx context.Context, clientsets *k8sutil.Clientsets) map
 	}
 	subvolumeNames := make(map[string]subVolumeInfo)
 	for _, pv := range pvList.Items {
-		if pv.Spec.CSI.VolumeAttributes["subvolumeName"] != "" {
+		if pv.Spec.CSI != nil && pv.Spec.CSI.VolumeAttributes["subvolumeName"] != "" {
 			subvolumeNames[pv.Spec.CSI.VolumeAttributes["subvolumeName"]] = subVolumeInfo{}
 		}
 	}
