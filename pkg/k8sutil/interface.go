@@ -18,12 +18,14 @@ package k8sutil
 
 import (
 	"context"
+
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 )
 
 //go:generate mockgen -package=k8sutil --build_flags=--mod=mod -destination=mocks.go github.com/rook/kubectl-rook-ceph/pkg/k8sutil ClientsetsInterface
 type ClientsetsInterface interface {
+	CreateResourcesDynamically(ctx context.Context, group string, version string, resource string, name *unstructured.Unstructured, namespace string) (*unstructured.Unstructured, error)
 	ListResourcesDynamically(ctx context.Context, group string, version string, resource string, namespace string) ([]unstructured.Unstructured, error)
 	GetResourcesDynamically(ctx context.Context, group string, version string, resource string, name string, namespace string) (*unstructured.Unstructured, error)
 	DeleteResourcesDynamically(ctx context.Context, group string, version string, resource string, namespace string, resourceName string) error

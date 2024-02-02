@@ -18,6 +18,7 @@ package k8sutil
 
 import (
 	"context"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
@@ -112,6 +113,30 @@ func (c *Clientsets) GetResourcesDynamically(
 
 	item, err := c.Dynamic.Resource(resourceId).Namespace(namespace).
 		Get(ctx, name, metav1.GetOptions{})
+
+	if err != nil {
+		return nil, err
+	}
+
+	return item, nil
+}
+
+func (c *Clientsets) CreateResourcesDynamically(
+	ctx context.Context,
+	group string,
+	version string,
+	resource string,
+	name *unstructured.Unstructured,
+	namespace string,
+) (*unstructured.Unstructured, error) {
+	resourceId := schema.GroupVersionResource{
+		Group:    group,
+		Version:  version,
+		Resource: resource,
+	}
+
+	item, err := c.Dynamic.Resource(resourceId).Namespace(namespace).
+		Create(ctx, name, metav1.CreateOptions{})
 
 	if err != nil {
 		return nil, err

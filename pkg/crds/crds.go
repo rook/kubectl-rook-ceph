@@ -20,6 +20,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
+
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 	corev1 "k8s.io/api/core/v1"
@@ -28,7 +30,6 @@ import (
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
-	"time"
 )
 
 var cephResources = []string{
@@ -52,8 +53,8 @@ var cephResources = []string{
 }
 
 const (
-	cephRookIoGroup          = "ceph.rook.io"
-	cephRookResourcesVersion = "v1"
+	CephRookIoGroup          = "ceph.rook.io"
+	CephRookResourcesVersion = "v1"
 )
 
 const (
@@ -73,7 +74,7 @@ var (
 		},
 	}
 
-	defaultResourceRemoveFinalizers = map[string]interface{}{
+	DefaultResourceRemoveFinalizers = map[string]interface{}{
 		"metadata": map[string]interface{}{
 			"finalizers": nil,
 		},
@@ -93,7 +94,7 @@ func DeleteCustomResources(ctx context.Context, clientsets k8sutil.ClientsetsInt
 func deleteCustomResources(ctx context.Context, clientsets k8sutil.ClientsetsInterface, clusterNamespace string) error {
 	for _, resource := range cephResources {
 		logging.Info("getting resource kind %s", resource)
-		items, err := clientsets.ListResourcesDynamically(ctx, cephRookIoGroup, cephRookResourcesVersion, resource, clusterNamespace)
+		items, err := clientsets.ListResourcesDynamically(ctx, CephRookIoGroup, CephRookResourcesVersion, resource, clusterNamespace)
 		if err != nil {
 			if k8sErrors.IsNotFound(err) {
 				logging.Info("the server could not find the requested resource: %s", resource)
@@ -109,7 +110,7 @@ func deleteCustomResources(ctx context.Context, clientsets k8sutil.ClientsetsInt
 
 		for _, item := range items {
 			logging.Info(fmt.Sprintf("removing resource %s: %s", resource, item.GetName()))
-			err = clientsets.DeleteResourcesDynamically(ctx, cephRookIoGroup, cephRookResourcesVersion, resource, clusterNamespace, item.GetName())
+			err = clientsets.DeleteResourcesDynamically(ctx, CephRookIoGroup, CephRookResourcesVersion, resource, clusterNamespace, item.GetName())
 			if err != nil {
 				if k8sErrors.IsNotFound(err) {
 					logging.Info(err.Error())
@@ -118,7 +119,7 @@ func deleteCustomResources(ctx context.Context, clientsets k8sutil.ClientsetsInt
 				return err
 			}
 
-			itemResource, err := clientsets.GetResourcesDynamically(ctx, cephRookIoGroup, cephRookResourcesVersion, resource, item.GetName(), clusterNamespace)
+			itemResource, err := clientsets.GetResourcesDynamically(ctx, CephRookIoGroup, CephRookResourcesVersion, resource, item.GetName(), clusterNamespace)
 			if err != nil {
 				if !k8sErrors.IsNotFound(err) {
 					return err
@@ -136,7 +137,7 @@ func deleteCustomResources(ctx context.Context, clientsets k8sutil.ClientsetsInt
 					return err
 				}
 
-				err = clientsets.DeleteResourcesDynamically(ctx, cephRookIoGroup, cephRookResourcesVersion, resource, clusterNamespace, item.GetName())
+				err = clientsets.DeleteResourcesDynamically(ctx, CephRookIoGroup, CephRookResourcesVersion, resource, clusterNamespace, item.GetName())
 				if err != nil {
 					if !k8sErrors.IsNotFound(err) {
 						return err
@@ -144,7 +145,7 @@ func deleteCustomResources(ctx context.Context, clientsets k8sutil.ClientsetsInt
 				}
 			}
 
-			itemResource, err = clientsets.GetResourcesDynamically(ctx, cephRookIoGroup, cephRookResourcesVersion, resource, item.GetName(), clusterNamespace)
+			itemResource, err = clientsets.GetResourcesDynamically(ctx, CephRookIoGroup, CephRookResourcesVersion, resource, item.GetName(), clusterNamespace)
 			if err != nil {
 				if !k8sErrors.IsNotFound(err) {
 					return err
@@ -160,14 +161,14 @@ func deleteCustomResources(ctx context.Context, clientsets k8sutil.ClientsetsInt
 func updatingFinalizers(ctx context.Context, clientsets k8sutil.ClientsetsInterface, itemResource *unstructured.Unstructured, resource, clusterNamespace string) error {
 	if resource == CephResourceCephClusters {
 		jsonPatchData, _ := json.Marshal(clusterResourcePatchFinalizer)
-		err := clientsets.PatchResourcesDynamically(ctx, cephRookIoGroup, cephRookResourcesVersion, resource, clusterNamespace, itemResource.GetName(), types.MergePatchType, jsonPatchData)
+		err := clientsets.PatchResourcesDynamically(ctx, CephRookIoGroup, CephRookResourcesVersion, resource, clusterNamespace, itemResource.GetName(), types.MergePatchType, jsonPatchData)
 		if err != nil {
 			return err
 		}
 	}
 
-	jsonPatchData, _ := json.Marshal(defaultResourceRemoveFinalizers)
-	err := clientsets.PatchResourcesDynamically(ctx, cephRookIoGroup, cephRookResourcesVersion, resource, clusterNamespace, itemResource.GetName(), types.MergePatchType, jsonPatchData)
+	jsonPatchData, _ := json.Marshal(DefaultResourceRemoveFinalizers)
+	err := clientsets.PatchResourcesDynamically(ctx, CephRookIoGroup, CephRookResourcesVersion, resource, clusterNamespace, itemResource.GetName(), types.MergePatchType, jsonPatchData)
 	if err != nil {
 		return err
 	}

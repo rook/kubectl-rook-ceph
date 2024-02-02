@@ -130,7 +130,7 @@ jobs:
           # First let's delete the cephCluster
           kubectl -n rook-ceph delete cephcluster my-cluster --timeout 3s --wait=false
 
-          kubectl rook-ceph -n rook-ceph restore-deleted cephcluster
+          kubectl rook-ceph -n rook-ceph restore-deleted cephclusters
           tests/github-action-helper.sh wait_for_crd_to_be_ready_default
 
       - name: Restore CRD with CRName
@@ -138,7 +138,7 @@ jobs:
           # First let's delete the cephCluster
           kubectl -n rook-ceph delete cephcluster my-cluster --timeout 3s --wait=false
 
-          kubectl rook-ceph -n rook-ceph restore-deleted cephcluster my-cluster
+          kubectl rook-ceph -n rook-ceph restore-deleted cephclusters my-cluster
           tests/github-action-helper.sh wait_for_crd_to_be_ready_default
 
       - name: Show Cluster State
@@ -153,7 +153,7 @@ jobs:
           set -ex
           kubectl rook-ceph destroy-cluster
           sleep 1
-          kubectl get deployments -n rook-ceph --no-headers| wc -l | (read n && [ $n -le 1 ] || { echo "the crs could not be deleted"; exit 1;})        
+          kubectl get deployments -n rook-ceph --no-headers| wc -l | (read n && [ $n -le 1 ] || { echo "the crs could not be deleted"; exit 1;})
 
       - name: collect common logs
         if: always()
@@ -286,7 +286,7 @@ jobs:
           # First let's delete the cephCluster
           kubectl -n test-cluster delete cephcluster my-cluster --timeout 3s --wait=false
 
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster restore-deleted cephcluster
+          kubectl rook-ceph --operator-namespace test-operator -n test-cluster restore-deleted cephclusters
           tests/github-action-helper.sh wait_for_crd_to_be_ready_custom
 
       - name: Restore CRD with CRName
@@ -294,7 +294,7 @@ jobs:
           # First let's delete the cephCluster
           kubectl -n test-cluster delete cephcluster my-cluster --timeout 3s --wait=false
 
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster restore-deleted cephcluster my-cluster
+          kubectl rook-ceph --operator-namespace test-operator -n test-cluster restore-deleted cephclusters my-cluster
           tests/github-action-helper.sh wait_for_crd_to_be_ready_custom
 
       - name: Show Cluster State
