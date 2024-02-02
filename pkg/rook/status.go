@@ -17,53 +17,51 @@ limitations under the License.
 package rook
 
 import (
+	"context"
 	"fmt"
-	"strings"
+	"os"
 
-	"github.com/rook/kubectl-rook-ceph/pkg/exec"
+	"github.com/rook/kubectl-rook-ceph/pkg/crds"
+	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
+	"gopkg.in/yaml.v3"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 )
 
-var scriptPrintSpecificCRStatus = `
-kubectl -n %s get %s
-`
-
-var getCrdList = `
-kubectl -n  %s get crd | awk '{print $1}' | sed '1d'
-`
-
-func PrintCustomResourceStatus(clusterNamespace string, arg []string, json bool) {
+func PrintCustomResourceStatus(ctx context.Context, k8sclientset *k8sutil.Clientsets, clusterNamespace string, arg []string) {
 	if len(arg) == 1 && arg[0] == "all" {
-		command := fmt.Sprintf(getCrdList, clusterNamespace)
-		allCRs := strings.Split(exec.ExecuteBashCommand(command), "\n")
-		allCRs = allCRs[:len(allCRs)-1] // remove last empty line which is not a CR
-		for _, cr := range allCRs {
-			logging.Info(cr)
-			if json {
-				cr = concatenateJsonflag(cr)
-			}
-			command := fmt.Sprintf(scriptPrintSpecificCRStatus, clusterNamespace, cr)
-			fmt.Println(exec.ExecuteBashCommand(command))
+		for _, resource := range crds.CephResources {
+			printStatus(ctx, k8sclientset, clusterNamespace, resource)
 		}
-
 	} else if len(arg) == 1 {
-		if json {
-			arg[0] = concatenateJsonflag(arg[0])
-		}
-
-		command := fmt.Sprintf(scriptPrintSpecificCRStatus, clusterNamespace, arg[0])
-		logging.Info(exec.ExecuteBashCommand(command))
+		printStatus(ctx, k8sclientset, clusterNamespace, arg[0])
 	} else {
-		arg := "cephclusters.ceph.rook.io"
-		if json {
-			arg = concatenateJsonflag(arg)
-		}
-
-		command := fmt.Sprintf(scriptPrintSpecificCRStatus, clusterNamespace, arg)
-		logging.Info(exec.ExecuteBashCommand(command))
+		printStatus(ctx, k8sclientset, clusterNamespace, "cephclusters")
 	}
+
 }
 
-func concatenateJsonflag(arg string) string {
-	return arg + " -o json"
+func printStatus(ctx context.Context, k8sclientset *k8sutil.Clientsets, clusterNamespace, resource string) {
+	items, err := k8sclientset.ListResourcesDynamically(ctx, crds.CephRookIoGroup, crds.CephRookResourcesVersion, resource, clusterNamespace)
+	if err != nil {
+		logging.Fatal(err)
+	}
+
+	if len(items) == 0 {
+		logging.Info("resource %s was not found on the cluster", resource)
+	}
+
+	for _, crResource := range items {
+		status, _, err := unstructured.NestedMap(crResource.Object, "status")
+		if err != nil {
+			fmt.Printf("Error accessing 'status': %v\n", err)
+			os.Exit(1)
+		}
+		statusYamlData, err := yaml.Marshal(status)
+		if err != nil {
+			logging.Fatal(err)
+		}
+		logging.Info(fmt.Sprint(resource, " ", crResource.GetName()))
+		fmt.Println(string(statusYamlData))
+	}
 }
