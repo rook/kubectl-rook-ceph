@@ -40,17 +40,19 @@ var listCmd = &cobra.Command{
 }
 
 var deleteCmd = &cobra.Command{
-	Use:                "delete",
-	Short:              "Deletes a stale subvolume.",
-	DisableFlagParsing: true,
-	Args:               cobra.ExactArgs(3),
-	Example:            "kubectl rook-ceph delete <subvolumes> <filesystem> <subvolumegroup>",
+	Use:     "delete",
+	Short:   "Deletes a stale subvolume.",
+	Args:    cobra.RangeArgs(2, 3),
+	Example: "kubectl rook-ceph delete <filesystem> <subvolume> [subvolumegroup]",
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := cmd.Context()
-		subList := args[0]
-		fs := args[1]
-		svg := args[2]
-		subvolume.Delete(ctx, clientSets, operatorNamespace, cephClusterNamespace, subList, fs, svg)
+		fs := args[0]
+		subvol := args[1]
+		svg := "csi"
+		if len(args) > 2 {
+			svg = args[2]
+		}
+		subvolume.Delete(ctx, clientSets, operatorNamespace, cephClusterNamespace, fs, subvol, svg)
 	},
 }
 

@@ -20,7 +20,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
@@ -34,9 +33,16 @@ type fsStruct struct {
 }
 
 type subVolumeInfo struct {
-	svg string
-	fs  string
+	svg   string
+	fs    string
+	state string
 }
+
+const (
+	inUse             = "in-use"
+	stale             = "stale"
+	staleWithSnapshot = "stale-with-snapshot"
+)
 
 func List(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string, includeStaleOnly bool) {
 
@@ -52,7 +58,7 @@ func getK8sRefSubvolume(ctx context.Context, clientsets *k8sutil.Clientsets) map
 	}
 	subvolumeNames := make(map[string]subVolumeInfo)
 	for _, pv := range pvList.Items {
-		if pv.Spec.CSI != nil && pv.Spec.CSI.VolumeAttributes["subvolumeName"] != "" {
+		if pv.Spec.CSI != nil {
 			subvolumeNames[pv.Spec.CSI.VolumeAttributes["subvolumeName"]] = subVolumeInfo{}
 		}
 	}
@@ -90,26 +96,59 @@ func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, o
 			}
 			// append the subvolume which doesn't have any snapshot attached to it.
 			for _, sv := range subvol {
+				state := getSubvolumeState(ctx, clientsets, operatorNamespace, clusterNamespace, fs.Name, sv.Name, svg.Name)
+
 				// Assume the volume is stale unless proven otherwise
-				stale := true
+				stalevol := true
 				// lookup for subvolume in list of the PV references
 				_, ok := subvolumeNames[sv.Name]
-				if ok || checkSnapshot(ctx, clientsets, operatorNamespace, clusterNamespace, fs.Name, sv.Name, svg.Name) {
-					// The volume is not stale if a PV was found, or it has a snapshot
-					stale = false
+				if ok {
+					// The volume is not stale if a PV was found
+					stalevol = false
 				}
-				status := "stale"
-				if !stale {
+				status := stale
+				if !stalevol {
 					if includeStaleOnly {
 						continue
 					}
-					status = "in-use"
+					status = inUse
+				} else {
+					// check the state of the stale subvolume
+					// if it is snapshot-retained then skip listing it.
+					if state == "snapshot-retained" {
+						status = state
+						continue
+					}
+					// check if the stale subvolume has snapshots.
+					if checkSnapshot(ctx, clientsets, operatorNamespace, clusterNamespace, fs.Name, sv.Name, svg.Name) {
+						status = staleWithSnapshot
+					}
+
 				}
-				subvolumeNames[sv.Name] = subVolumeInfo{fs.Name, svg.Name}
+				subvolumeNames[sv.Name] = subVolumeInfo{fs.Name, svg.Name, state}
 				fmt.Println(fs.Name, sv.Name, svg.Name, status)
 			}
 		}
 	}
+}
+
+// getSubvolumeState returns the state of the subvolume
+func getSubvolumeState(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, fsName, SubVol, SubvolumeGroup string) string {
+	subVolumeInfo, errvol := exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", []string{"fs", "subvolume", "info", fsName, SubVol, SubvolumeGroup}, operatorNamespace, clusterNamespace, true)
+	if errvol != nil {
+		logging.Error(errvol, "failed to get filesystems")
+		return ""
+	}
+	var info map[string]interface{}
+	err := json.Unmarshal([]byte(subVolumeInfo), &info)
+	if err != nil {
+		logging.Fatal(fmt.Errorf("failed to unmarshal: %q", err))
+	}
+	state, ok := info["state"].(string)
+	if !ok {
+		logging.Fatal(fmt.Errorf("failed to get the state of subvolume: %q", SubVol))
+	}
+	return state
 }
 
 // gets list of filesystem
@@ -166,36 +205,13 @@ func unMarshaljson(list string) []fsStruct {
 	return unmarshal
 }
 
-func Delete(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, subList, fs, svg string) {
-	subvollist := strings.Split(subList, ",")
+func Delete(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, fs, subvol, svg string) {
 	k8sSubvolume := getK8sRefSubvolume(ctx, clientsets)
-	for _, subvolume := range subvollist {
-		check := checkStaleSubvolume(ctx, clientsets, OperatorNamespace, CephClusterNamespace, fs, subvolume, svg, k8sSubvolume)
-		if check {
-			_, err := exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", []string{"fs", "subvolume", "rm", fs, subvolume, svg}, OperatorNamespace, CephClusterNamespace, true)
-			if err != nil {
-				logging.Error(err, "failed to delete stale subvolume %q", subvolume)
-				continue
-			}
-			logging.Info("subvolume %q deleted", subvolume)
-		} else {
-			logging.Info("subvolume %q is not stale", subvolume)
-		}
+	_, check := k8sSubvolume[subvol]
+	if !check {
+		exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", []string{"fs", "subvolume", "rm", fs, subvol, svg, "--retain-snapshots"}, OperatorNamespace, CephClusterNamespace, true)
+		logging.Info("subvolume %q deleted", subvol)
+	} else {
+		logging.Info("subvolume %q is not stale", subvol)
 	}
-}
-
-// checkStaleSubvolume checks if there are any stale subvolume to be deleted
-func checkStaleSubvolume(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, fs, subvolume, svg string, k8sSubvolume map[string]subVolumeInfo) bool {
-	_, ok := k8sSubvolume[subvolume]
-	if !ok {
-		snapshot := checkSnapshot(ctx, clientsets, OperatorNamespace, CephClusterNamespace, fs, subvolume, svg)
-		if snapshot {
-			logging.Error(fmt.Errorf("subvolume %s has snapshots", subvolume))
-			return false
-		} else {
-			return true
-		}
-	}
-	logging.Error(fmt.Errorf("Subvolume %s is referenced by a PV", subvolume))
-	return false
 }
