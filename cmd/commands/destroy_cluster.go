@@ -18,6 +18,7 @@ package command
 
 import (
 	"fmt"
+
 	"github.com/rook/kubectl-rook-ceph/pkg/crds"
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 	"github.com/rook/kubectl-rook-ceph/pkg/mons"
@@ -39,7 +40,7 @@ var DestroyClusterCmd = &cobra.Command{
 		var answer string
 		logging.Warning(destroyClusterQuestion, cephClusterNamespace)
 		fmt.Scanf("%s", &answer)
-		err := mons.PromptToContinueOrCancel("", destroyClusterAnswer, answer)
+		err := mons.PromptToContinueOrCancel(destroyClusterAnswer, answer)
 		if err != nil {
 			logging.Fatal(fmt.Errorf("the response %q to confirm the cluster deletion", destroyClusterAnswer))
 		}
