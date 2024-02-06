@@ -77,11 +77,13 @@ jobs:
         run: |
           set -ex
           kubectl rook-ceph ceph fs subvolume create myfs test-subvol group-a
-          kubectl rook-ceph ceph fs subvolume create myfs test-subvol-1 group-a
           kubectl rook-ceph subvolume ls
           kubectl rook-ceph subvolume ls --stale
           kubectl rook-ceph subvolume delete myfs test-subvol group-a
-          kubectl rook-ceph subvolume delete myfs test-subvol-1
+          tests/github-action-helper.sh create_sc_with_retain_policy
+          tests/github-action-helper.sh create_stale_subvolume
+          subVol=$(kubectl rook-ceph subvolume ls --stale | awk '{print $2}' | grep csi-vol)
+          kubectl rook_ceph subvolume delete myfs $subVol
 
       - name: Get mon endpoints
         run: |
@@ -232,12 +234,14 @@ jobs:
       - name: Subvolume command
         run: |
           set -ex
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster ceph fs subvolume create myfs test-subvol-1 group-a
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster ceph fs subvolume create myfs test-subvol group-a
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster subvolume ls
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster subvolume ls --stale
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster subvolume delete myfs test-subvol group-a
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster subvolume delete myfs test-subvol-1
+          tests/github-action-helper.sh create_sc_with_retain_policy_custom_ns test-operator test-cluster
+          tests/github-action-helper.sh create_stale_subvolume
+          subVol=$(kubectl rook-ceph --operator-namespace test-operator -n test-cluster subvolume ls --stale | awk '{print $2}' | grep csi-vol)
+          kubectl rook_ceph --operator-namespace test-operator -n test-cluster subvolume delete myfs $subVol
 
       - name: Get mon endpoints
         run: |

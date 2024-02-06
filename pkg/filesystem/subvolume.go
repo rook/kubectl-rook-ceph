@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
@@ -28,8 +29,9 @@ import (
 )
 
 type fsStruct struct {
-	Name string
-	data []string
+	Name         string
+	MetadataName string `json:"metadata_pool"`
+	data         []string
 }
 
 type subVolumeInfo struct {
@@ -201,7 +203,6 @@ func unMarshaljson(list string) []fsStruct {
 	if errg != nil {
 		logging.Fatal(errg)
 	}
-
 	return unmarshal
 }
 
@@ -209,9 +210,100 @@ func Delete(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespa
 	k8sSubvolume := getK8sRefSubvolume(ctx, clientsets)
 	_, check := k8sSubvolume[subvol]
 	if !check {
-		exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", []string{"fs", "subvolume", "rm", fs, subvol, svg, "--retain-snapshots"}, OperatorNamespace, CephClusterNamespace, true)
-		logging.Info("subvolume %q deleted", subvol)
+		deleteOmapForSubvolume(ctx, clientsets, OperatorNamespace, CephClusterNamespace, subvol, fs)
+		_, err := exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", []string{"fs", "subvolume", "rm", fs, subvol, svg, "--retain-snapshots"}, OperatorNamespace, CephClusterNamespace, true)
+		if err != nil {
+			logging.Fatal(err, "failed to delete subvolume of %s/%s/%s", fs, svg, subvol)
+		}
+		logging.Info("subvolume %s/%s/%s deleted", fs, svg, subvol)
+
 	} else {
-		logging.Info("subvolume %q is not stale", subvol)
+		logging.Info("subvolume %s/%s/%s is not stale", fs, svg, subvol)
 	}
+}
+
+func getMetadataPoolName(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, fs string) (string, error) {
+	fsstruct, err := getFileSystem(ctx, clientsets, OperatorNamespace, CephClusterNamespace)
+	if err != nil {
+		return "", err
+	}
+
+	for _, pool := range fsstruct {
+		if pool.Name == fs {
+			return pool.MetadataName, nil
+		}
+	}
+	return "", fmt.Errorf("metadataPool not found for %q filesystem", fs)
+}
+
+// deleteOmap deletes omap object and key for the given subvolume.
+func deleteOmapForSubvolume(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, subVol, fs string) {
+	logging.Info("Deleting the omap object and key for subvolume %q", subVol)
+	omapkey := getOmapKey(ctx, clientsets, OperatorNamespace, CephClusterNamespace, subVol, fs)
+	omapval := getOmapVal(subVol)
+	poolName, err := getMetadataPoolName(ctx, clientsets, OperatorNamespace, CephClusterNamespace, fs)
+	if err != nil || poolName == "" {
+		logging.Fatal(fmt.Errorf("pool name not found: %q", err))
+	}
+	if omapval != "" {
+		// remove omap object.
+		_, err := exec.RunCommandInOperatorPod(ctx, clientsets, "rados", []string{"rm", omapval, "-p", poolName, "--namespace", "csi"}, OperatorNamespace, CephClusterNamespace, true)
+		if err != nil {
+			logging.Fatal(err, "failed to remove omap object for subvolume %q", subVol)
+		}
+		logging.Info("omap object:%q deleted", omapval)
+
+	}
+	if omapkey != "" {
+		// remove omap key.
+		_, err := exec.RunCommandInOperatorPod(ctx, clientsets, "rados", []string{"rmomapkey", "csi.volumes.default", omapkey, "-p", poolName, "--namespace", "csi"}, OperatorNamespace, CephClusterNamespace, true)
+		if err != nil {
+			logging.Fatal(err, "failed to remove omap key for subvolume %q", subVol)
+		}
+		logging.Info("omap key:%q deleted", omapkey)
+
+	}
+}
+
+// getOmapKey gets the omap key and value details for a given subvolume.
+// Deletion of omap object required the subvolumeName which is of format
+// csi.volume.subvolume, where subvolume is the name of subvolume that needs to be
+// deleted.
+// similarly to delete of omap key requires csi.volume.ompakey, where
+// omapkey is the pv name which is extracted the omap object.
+func getOmapKey(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, subVol, fs string) string {
+
+	poolName, err := getMetadataPoolName(ctx, clientsets, OperatorNamespace, CephClusterNamespace, fs)
+	if err != nil || poolName == "" {
+		logging.Fatal(fmt.Errorf("pool name not found: %q", err))
+	}
+	omapval := getOmapVal(subVol)
+
+	cmd := []string{"getomapval", omapval, "csi.volname", "-p", poolName, "--namespace", "csi", "/dev/stdout"}
+	pvname, err := exec.RunCommandInOperatorPod(ctx, clientsets, "rados", cmd, OperatorNamespace, CephClusterNamespace, true)
+	if err != nil || pvname == "" {
+		logging.Info("No PV found for subvolume %s: %s", subVol, err)
+		return ""
+	}
+	// omap key is for format csi.volume.pvc-fca205e5-8788-4132-979c-e210c0133182
+	// hence, attaching pvname to required prefix.
+	omapkey := "csi.volume." + pvname
+
+	return omapkey
+}
+
+// func getOmapVal is used to get the omapval from the given subvolume
+// omapval is of format csi.volume.427774b4-340b-11ed-8d66-0242ac110005
+// which is similar to volume name csi-vol-427774b4-340b-11ed-8d66-0242ac110005
+// hence, replacing 'csi-vol-' to 'csi.volume.' to get the omapval
+func getOmapVal(subVol string) string {
+
+	splitSubvol := strings.SplitAfterN(subVol, "-", 3)
+	if len(splitSubvol) < 3 {
+		return ""
+	}
+	subvol_id := splitSubvol[len(splitSubvol)-1]
+	omapval := "csi.volume." + subvol_id
+
+	return omapval
 }

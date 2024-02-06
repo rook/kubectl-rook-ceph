@@ -76,6 +76,37 @@ deploy_rook_in_custom_namespace() {
   deploy_csi_driver_custom_ns "$1" "$2"
 }
 
+create_sc_with_retain_policy(){
+  curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/storageclass.yaml -o storageclass.yaml
+  sed -i "s|name: rook-cephfs|name: rook-cephfs-retain|g" storageclass.yaml
+  sed -i "s|reclaimPolicy: Delete|reclaimPolicy: Retain|g" storageclass.yaml
+  kubectl create -f storageclass.yaml 
+}
+
+create_sc_with_retain_policy_custom_ns(){
+  export OPERATOR_NS=$1
+  export CLUSTER_NS=$2
+
+  curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/storageclass.yaml -o storageclass.yaml
+  sed -i "s|name: rook-cephfs|name: rook-cephfs-retain|g" storageclass.yaml
+  sed -i "s|reclaimPolicy: Delete|reclaimPolicy: Retain|g" storageclass.yaml
+  sed -i "s|provisioner: rook-ceph.cephfs.csi.ceph.com |provisioner: test-operator.cephfs.csi.ceph.com |g" storageclass.yaml
+  deploy_with_custom_ns $OPERATOR_NS $CLUSTER_NS storageclass.yaml
+}
+
+create_stale_subvolume() {
+  curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/pvc.yaml -o pvc.yaml
+  sed -i "s|name: cephfs-pvc|name: cephfs-pvc-retain|g" pvc.yaml
+  sed -i "s|storageClassName: rook-cephfs|storageClassName: rook-cephfs-retain|g" pvc.yaml
+  kubectl create -f pvc.yaml
+  kubectl get pvc cephfs-pvc-retain
+  : "${PVNAME:=$(kubectl get pvc cephfs-pvc-retain -o=jsonpath='{.spec.volumeName}')}"
+  wait_for_pvc_to_be_bound_state_default
+  kubectl get pvc cephfs-pvc-retain
+  kubectl delete pvc cephfs-pvc-retain
+  kubectl delete pv "$PVNAME"
+}
+
 deploy_with_custom_ns() {
   sed -i "s|rook-ceph # namespace:operator|$1 # namespace:operator|g" "$3"
   sed -i "s|rook-ceph # namespace:cluster|$2 # namespace:cluster|g" "$3"
@@ -107,6 +138,16 @@ deploy_csi_driver_custom_ns() {
   curl -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/subvolumegroup.yaml -o subvolumegroup.yaml
   deploy_with_custom_ns "$1" "$2" subvolumegroup.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/pvc.yaml
+}
+
+wait_for_pvc_to_be_bound_state_default() {
+  timeout 100 bash <<-'EOF'
+    until [ $(kubectl get pvc cephfs-pvc-retain -o jsonpath='{.status.phase}') == "Bound" ]; do
+      echo "waiting for the pvc to be in bound state"
+      sleep 1
+    done
+EOF
+  timeout_command_exit_code
 }
 
 wait_for_pod_to_be_ready_state_default() {
