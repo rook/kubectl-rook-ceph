@@ -64,8 +64,8 @@ func Health(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespa
 		cephArgs = append(cephArgs, args...)
 	}
 
-	cephStatus := exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", cephArgs, operatorNamespace, cephClusterNamespace, true, false)
-	if cephStatus == "" {
+	cephStatus, err := exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", cephArgs, operatorNamespace, cephClusterNamespace, true)
+	if err != nil {
 		logging.Warning("failed to get ceph status from peer cluster, please check for network issues between the clusters")
 		return
 	}
@@ -73,7 +73,10 @@ func Health(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespa
 
 	logging.Info("running mirroring daemon health")
 
-	exec.RunCommandInOperatorPod(ctx, clientsets, "rbd", []string{"-p", mirrorBlockPool.Name, "mirror", "pool", "status"}, cephClusterNamespace, operatorNamespace, false, false)
+	_, err = exec.RunCommandInOperatorPod(ctx, clientsets, "rbd", []string{"-p", mirrorBlockPool.Name, "mirror", "pool", "status"}, cephClusterNamespace, operatorNamespace, false)
+	if err != nil {
+		logging.Error(err)
+	}
 }
 
 func extractSecretData(ctx context.Context, k8sclientset kubernetes.Interface, operatorNamespace, cephClusterNamespace, secretName string) (*secretData, error) {

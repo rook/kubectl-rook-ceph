@@ -33,6 +33,9 @@ var CephCmd = &cobra.Command{
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		logging.Info("running 'ceph' command with args: %v", args)
-		exec.RunCommandInOperatorPod(cmd.Context(), clientSets, cmd.Use, args, operatorNamespace, cephClusterNamespace, false, true)
+		_, err := exec.RunCommandInOperatorPod(cmd.Context(), clientSets, cmd.Use, args, operatorNamespace, cephClusterNamespace, false)
+		if err != nil {
+			logging.Fatal(err)
+		}
 	},
 }

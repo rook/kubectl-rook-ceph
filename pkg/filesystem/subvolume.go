@@ -63,16 +63,27 @@ func getK8sRefSubvolume(ctx context.Context, clientsets *k8sutil.Clientsets) map
 func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string, includeStaleOnly bool, subvolumeNames map[string]subVolumeInfo) {
 
 	// getFilesystem gets the filesystem
-	fsstruct := getFileSystem(ctx, clientsets, operatorNamespace, clusterNamespace)
-	var svList string
+	fsstruct, err := getFileSystem(ctx, clientsets, operatorNamespace, clusterNamespace)
+	if err != nil {
+		logging.Error(err, "failed to get filesystem")
+		return
+	}
 	fmt.Println("Filesystem  Subvolume  SubvolumeGroup  State")
 
 	// this iterates over the filesystems and subvolumegroup to get the list of subvolumes that exist
 	for _, fs := range fsstruct {
 		// gets the subvolumegroup in the filesystem
-		subvolg := getSubvolumeGroup(ctx, clientsets, operatorNamespace, clusterNamespace, fs.Name)
+		subvolg, err := getSubvolumeGroup(ctx, clientsets, operatorNamespace, clusterNamespace, fs.Name)
+		if err != nil {
+			logging.Error(err, "failed to get subvolume groups")
+			continue
+		}
 		for _, svg := range subvolg {
-			svList = exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", []string{"fs", "subvolume", "ls", fs.Name, svg.Name}, operatorNamespace, clusterNamespace, true, false)
+			svList, err := exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", []string{"fs", "subvolume", "ls", fs.Name, svg.Name}, operatorNamespace, clusterNamespace, true)
+			if err != nil {
+				logging.Error(err, "failed to get subvolumes of %q", fs.Name)
+				continue
+			}
 			subvol := unMarshaljson(svList)
 			if len(subvol) == 0 {
 				continue
@@ -102,19 +113,27 @@ func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, o
 }
 
 // gets list of filesystem
-func getFileSystem(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string) []fsStruct {
-	fsList := exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", []string{"fs", "ls", "--format", "json"}, operatorNamespace, clusterNamespace, true, false)
+func getFileSystem(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string) ([]fsStruct, error) {
+	fsList, err := exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", []string{"fs", "ls", "--format", "json"}, operatorNamespace, clusterNamespace, true)
+	if err != nil {
+		logging.Error(err, "failed to get filesystems")
+		return []fsStruct{}, err
+	}
 	fsstruct := unMarshaljson(fsList)
 	if len(fsstruct) == 0 {
-		logging.Fatal(fmt.Errorf("failed to get filesystem"))
+		logging.Fatal(fmt.Errorf("no filesystem found"))
 	}
-	return fsstruct
+	return []fsStruct{}, nil
 }
 
 // checkSnapshot checks if there are any snapshots in the subvolume
 func checkSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, fs, sv, svg string) bool {
 
-	snapList := exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", []string{"fs", "subvolume", "snapshot", "ls", fs, sv, svg}, operatorNamespace, clusterNamespace, true, false)
+	snapList, err := exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", []string{"fs", "subvolume", "snapshot", "ls", fs, sv, svg}, operatorNamespace, clusterNamespace, true)
+	if err != nil {
+		logging.Error(err, "failed to get subvolume snapshots of %q/%q/%q", fs, sv, svg)
+		return false
+	}
 	snap := unMarshaljson(snapList)
 	if len(snap) == 0 {
 		return false
@@ -124,13 +143,17 @@ func checkSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, operator
 }
 
 // gets the list of subvolumegroup for the specified filesystem
-func getSubvolumeGroup(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, fs string) []fsStruct {
-	svgList := exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", []string{"fs", "subvolumegroup", "ls", fs, "--format", "json"}, operatorNamespace, clusterNamespace, true, false)
+func getSubvolumeGroup(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, fs string) ([]fsStruct, error) {
+	svgList, err := exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", []string{"fs", "subvolumegroup", "ls", fs, "--format", "json"}, operatorNamespace, clusterNamespace, true)
+	if err != nil {
+		logging.Error(err, "failed to get subvolume groups for filesystem %q", fs)
+		return []fsStruct{}, err
+	}
 	subvolg := unMarshaljson(svgList)
 	if len(subvolg) == 0 {
-		logging.Fatal(fmt.Errorf("failed to get subvolumegroup for filesystem %q", fs))
+		logging.Fatal(fmt.Errorf("no subvolumegroups found for filesystem %q", fs))
 	}
-	return subvolg
+	return subvolg, nil
 }
 
 func unMarshaljson(list string) []fsStruct {
@@ -149,7 +172,11 @@ func Delete(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespa
 	for _, subvolume := range subvollist {
 		check := checkStaleSubvolume(ctx, clientsets, OperatorNamespace, CephClusterNamespace, fs, subvolume, svg, k8sSubvolume)
 		if check {
-			exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", []string{"fs", "subvolume", "rm", fs, subvolume, svg}, OperatorNamespace, CephClusterNamespace, true, false)
+			_, err := exec.RunCommandInOperatorPod(ctx, clientsets, "ceph", []string{"fs", "subvolume", "rm", fs, subvolume, svg}, OperatorNamespace, CephClusterNamespace, true)
+			if err != nil {
+				logging.Error(err, "failed to delete stale subvolume %q", subvolume)
+				continue
+			}
 			logging.Info("subvolume %q deleted", subvolume)
 		} else {
 			logging.Info("subvolume %q is not stale", subvolume)
