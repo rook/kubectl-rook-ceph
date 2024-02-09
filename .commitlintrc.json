@@ -16,6 +16,7 @@
                 "mds",
                 "mgr",
                 "mon",
+                "mons",
                 "operator",
                 "osd",
                 "test",
