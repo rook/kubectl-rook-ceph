@@ -95,7 +95,6 @@ func RunCommandInLabeledPod(ctx context.Context, clientsets *k8sutil.Clientsets,
 		return "", fmt.Errorf("failed to get rook mon pod where the command could be executed. %w", err)
 	}
 	var stdout, stderr bytes.Buffer
-
 	err = execCmdInPod(ctx, clientsets, cmd, list.Items[0].Name, container, list.Items[0].Namespace, clusterNamespace, args, &stdout, &stderr, returnOutput)
 	if err != nil {
 		err := fmt.Errorf("failed to run command. %w", err)
@@ -117,13 +116,17 @@ func execCmdInPod(ctx context.Context, clientsets *k8sutil.Clientsets,
 	command, podName, containerName, podNamespace, clusterNamespace string,
 	args []string, stdout, stderr io.Writer, returnOutput bool) error {
 
+	if len(args) < 1 {
+		return fmt.Errorf("no arg passed to exec with %q command", command)
+	}
+
 	cmd := []string{}
 	cmd = append(cmd, command)
 	cmd = append(cmd, args...)
 
 	if containerName == "rook-ceph-tools" {
 		cmd = append(cmd, "--connect-timeout=10")
-	} else if cmd[0] == "ceph" {
+	} else if cmd[0] == "ceph" && args[0] != "daemon" {
 		cmd = append(cmd, "--connect-timeout=10", fmt.Sprintf("--conf=/var/lib/rook/%s/%s.config", clusterNamespace, clusterNamespace))
 	} else if cmd[0] == "rbd" {
 		cmd = append(cmd, fmt.Sprintf("--conf=/var/lib/rook/%s/%s.config", clusterNamespace, clusterNamespace))
