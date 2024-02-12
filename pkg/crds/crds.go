@@ -32,7 +32,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-var cephResources = []string{
+var CephResources = []string{
 	"cephclusters",
 	"cephblockpoolradosnamespaces",
 	"cephblockpools",
@@ -92,7 +92,7 @@ func DeleteCustomResources(ctx context.Context, clientsets k8sutil.ClientsetsInt
 }
 
 func deleteCustomResources(ctx context.Context, clientsets k8sutil.ClientsetsInterface, clusterNamespace string) error {
-	for _, resource := range cephResources {
+	for _, resource := range CephResources {
 		logging.Info("getting resource kind %s", resource)
 		items, err := clientsets.ListResourcesDynamically(ctx, CephRookIoGroup, CephRookResourcesVersion, resource, clusterNamespace)
 		if err != nil {

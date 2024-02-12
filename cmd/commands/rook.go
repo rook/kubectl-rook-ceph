@@ -67,12 +67,7 @@ var statusCmd = &cobra.Command{
 	Args:    cobra.MaximumNArgs(1),
 	Example: "kubectl rook-ceph rook status [CR_Name]",
 	Run: func(cmd *cobra.Command, args []string) {
-		json := cmd.Flag("json").Value.String()
-		jsonValue, err := strconv.ParseBool(json)
-		if err != nil {
-			logging.Fatal(fmt.Errorf("failed to parse json flag: %v", err))
-		}
-		rook.PrintCustomResourceStatus(cephClusterNamespace, args, jsonValue)
+		rook.PrintCustomResourceStatus(cmd.Context(), clientSets, cephClusterNamespace, args)
 	},
 }
 
