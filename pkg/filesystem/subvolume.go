@@ -123,7 +123,7 @@ func getFileSystem(ctx context.Context, clientsets *k8sutil.Clientsets, operator
 	if len(fsstruct) == 0 {
 		logging.Fatal(fmt.Errorf("no filesystem found"))
 	}
-	return []fsStruct{}, nil
+	return fsstruct, nil
 }
 
 // checkSnapshot checks if there are any snapshots in the subvolume
