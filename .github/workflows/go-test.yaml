@@ -79,9 +79,11 @@ jobs:
         run: |
           set -ex
           kubectl rook-ceph ceph fs subvolume create myfs test-subvol group-a
+          kubectl rook-ceph ceph fs subvolume create myfs test-subvol-1 group-a
           kubectl rook-ceph subvolume ls
           kubectl rook-ceph subvolume ls --stale
-          kubectl rook-ceph subvolume delete test-subvol myfs group-a
+          kubectl rook-ceph subvolume delete myfs test-subvol group-a
+          kubectl rook-ceph subvolume delete myfs test-subvol-1
 
       - name: Get mon endpoints
         run: |
@@ -234,10 +236,12 @@ jobs:
       - name: Subvolume command
         run: |
           set -ex
+          kubectl rook-ceph --operator-namespace test-operator -n test-cluster ceph fs subvolume create myfs test-subvol-1 group-a
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster ceph fs subvolume create myfs test-subvol group-a
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster subvolume ls
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster subvolume ls --stale
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster subvolume delete test-subvol myfs group-a
+          kubectl rook-ceph --operator-namespace test-operator -n test-cluster subvolume delete myfs test-subvol group-a
+          kubectl rook-ceph --operator-namespace test-operator -n test-cluster subvolume delete myfs test-subvol-1 
 
       - name: Get mon endpoints
         run: |
