@@ -20,7 +20,8 @@
                 "operator",
                 "osd",
                 "test",
-                "tests"
+                "tests",
+                "clean"
             ]
         ],
         "body-leading-blank": [
