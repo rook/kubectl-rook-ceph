@@ -44,6 +44,7 @@ For example, here is the output in a test cluster up to the point of starting th
 
 ```
 $ kubectl rook-ceph mons restore-quorum c
+Info: mon c state is leader
 mon=b, endpoint=192.168.64.168:6789
 mon=c, endpoint=192.168.64.167:6789
 mon=a, endpoint=192.168.64.169:6789

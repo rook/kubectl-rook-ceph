@@ -18,6 +18,7 @@ package mons
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -34,7 +35,12 @@ import (
 )
 
 func RestoreQuorum(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, goodMon string) {
-	err := restoreQuorum(ctx, clientsets, operatorNamespace, clusterNamespace, goodMon)
+	err := validateMonIsUp(ctx, clientsets, clusterNamespace, goodMon)
+	if err != nil {
+		logging.Fatal(err)
+	}
+
+	err = restoreQuorum(ctx, clientsets, operatorNamespace, clusterNamespace, goodMon)
 	if err != nil {
 		logging.Fatal(err)
 	}
@@ -302,6 +308,31 @@ func getMonDetails(goodMon string, monEndpoints []string) ([]string, string, str
 		logging.Info("mon=%s, endpoints=%s\n", monName, monEndpoint)
 	}
 	return badMons, goodMonPublicIp, goodMonPort, nil
+}
+
+func validateMonIsUp(ctx context.Context, clientsets *k8sutil.Clientsets, clusterNamespace, monID string) error {
+	args := []string{"daemon", fmt.Sprintf("mon.%s", monID), "mon_status"}
+	out, err := exec.RunCommandInLabeledPod(ctx, clientsets, fmt.Sprintf("mon=%s", monID), "mon", "ceph", args, clusterNamespace, true)
+	if err != nil {
+		return fmt.Errorf("failed to run command ceph daemon mon.%s mon_status %v", monID, err)
+	}
+
+	type monStatus struct {
+		State string `json:"state"`
+	}
+	var monStatusOut monStatus
+	err = json.Unmarshal([]byte(out), &monStatusOut)
+	if err != nil {
+		return fmt.Errorf("failed to unmarshal mon stat output %v", err)
+	}
+
+	logging.Info("mon %q state is %q", monID, monStatusOut.State)
+
+	if monStatusOut.State == "leader" || monStatusOut.State == "peon" {
+		return nil
+	}
+
+	return fmt.Errorf("mon %q in %q state but must be in leader/peon state", monID, monStatusOut.State)
 }
 
 func PromptToContinueOrCancel(expectedAnswer, answer string) error {
