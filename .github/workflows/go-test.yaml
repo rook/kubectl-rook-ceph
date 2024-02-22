@@ -24,9 +24,7 @@ jobs:
           fetch-depth: 0
 
       - name: setup golang
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.20"
+        uses: ./.github/workflows/set-up-go
 
       - name: consider debugging
         uses: ./.github/workflows/tmate_debug
@@ -180,9 +178,7 @@ jobs:
           fetch-depth: 0
 
       - name: setup golang
-        uses: actions/setup-go@v5
-        with:
-          go-version: "1.20"
+        uses: ./.github/workflows/set-up-go
 
       - name: consider debugging
         uses: ./.github/workflows/tmate_debug
@@ -241,7 +237,7 @@ jobs:
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster subvolume ls
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster subvolume ls --stale
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster subvolume delete myfs test-subvol group-a
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster subvolume delete myfs test-subvol-1 
+          kubectl rook-ceph --operator-namespace test-operator -n test-cluster subvolume delete myfs test-subvol-1
 
       - name: Get mon endpoints
         run: |

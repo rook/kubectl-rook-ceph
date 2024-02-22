@@ -13,6 +13,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: setup golang
+        uses: ./.github/workflows/set-up-go
+
       - name: GoReleaser
         uses: goreleaser/goreleaser-action@v5
         with:
