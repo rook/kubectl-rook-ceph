@@ -14,7 +14,7 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package debug
+package maintenance
 
 import (
 	"context"
@@ -30,24 +30,24 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-func StartDebug(ctx context.Context, k8sclientset kubernetes.Interface, clusterNamespace, deploymentName, alternateImageValue string) {
-	err := startDebug(ctx, k8sclientset, clusterNamespace, deploymentName, alternateImageValue)
+func StartMaintenance(ctx context.Context, k8sclientset kubernetes.Interface, clusterNamespace, deploymentName, alternateImageValue string) {
+	err := startmaintenance(ctx, k8sclientset, clusterNamespace, deploymentName, alternateImageValue)
 	if err != nil {
 		logging.Fatal(err)
 	}
 }
 
-func startDebug(ctx context.Context, k8sclientset kubernetes.Interface, clusterNamespace, deploymentName, alternateImageValue string) error {
+func startmaintenance(ctx context.Context, k8sclientset kubernetes.Interface, clusterNamespace, deploymentName, alternateImageValue string) error {
 	originalDeployment, err := k8sutil.GetDeployment(ctx, k8sclientset, clusterNamespace, deploymentName)
 	if err != nil {
 		return fmt.Errorf("Missing mon or osd deployment name %s. %v\n", deploymentName, err)
 	}
 
-	// We need to dereference the deployment as it is required for the debug deployment
+	// We need to dereference the deployment as it is required for the maintenance deployment
 	deployment := *originalDeployment
 
 	if alternateImageValue != "" {
-		logging.Info("setting debug image to %s\n", alternateImageValue)
+		logging.Info("setting maintenance image to %s\n", alternateImageValue)
 		deployment.Spec.Template.Spec.Containers[0].Image = alternateImageValue
 	}
 
@@ -57,7 +57,7 @@ func startDebug(ctx context.Context, k8sclientset kubernetes.Interface, clusterN
 	deployment.Spec.Template.Spec.Containers[0].LivenessProbe = nil
 	deployment.Spec.Template.Spec.Containers[0].StartupProbe = nil
 
-	logging.Info("setting debug command to main container")
+	logging.Info("setting maintenance command to main container")
 
 	deployment.Spec.Template.Spec.Containers[0].Command = []string{"sleep", "infinity"}
 	deployment.Spec.Template.Spec.Containers[0].Args = []string{}
@@ -80,22 +80,22 @@ func startDebug(ctx context.Context, k8sclientset kubernetes.Interface, clusterN
 		return err
 	}
 
-	debugDeploymentSpec := &appsv1.Deployment{
+	maintenanceDeploymentSpec := &appsv1.Deployment{
 		ObjectMeta: v1.ObjectMeta{
-			Name:      fmt.Sprintf("%s-debug", deploymentName),
+			Name:      fmt.Sprintf("%s-maintenance", deploymentName),
 			Namespace: clusterNamespace,
 			Labels:    labels,
 		},
 		Spec: deployment.Spec,
 	}
 
-	debugDeployment, err := k8sclientset.AppsV1().Deployments(clusterNamespace).Create(ctx, debugDeploymentSpec, v1.CreateOptions{})
+	maintenanceDeployment, err := k8sclientset.AppsV1().Deployments(clusterNamespace).Create(ctx, maintenanceDeploymentSpec, v1.CreateOptions{})
 	if err != nil {
-		return fmt.Errorf("Error creating deployment %s. %v\n", debugDeploymentSpec, err)
+		return fmt.Errorf("Error creating deployment %s. %v\n", maintenanceDeploymentSpec, err)
 	}
-	logging.Info("ensure the debug deployment %s is scaled up\n", deploymentName)
+	logging.Info("ensure the maintenance deployment %s is scaled up\n", deploymentName)
 
-	if err := k8sutil.SetDeploymentScale(ctx, k8sclientset, clusterNamespace, debugDeployment.Name, 1); err != nil {
+	if err := k8sutil.SetDeploymentScale(ctx, k8sclientset, clusterNamespace, maintenanceDeployment.Name, 1); err != nil {
 		return err
 	}
 
@@ -104,7 +104,7 @@ func startDebug(ctx context.Context, k8sclientset kubernetes.Interface, clusterN
 		logging.Fatal(err)
 	}
 
-	logging.Info("pod %s is ready for debugging", pod.Name)
+	logging.Info("pod %s is ready for maintenance operations", pod.Name)
 	return nil
 }
 
