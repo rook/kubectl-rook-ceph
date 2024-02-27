@@ -114,7 +114,7 @@ jobs:
         run: |
           set -ex
           kubectl rook_ceph maintenance start rook-ceph-osd-0
-          tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-osd-0-debug rook-ceph
+          tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-osd-0-maintenance rook-ceph
 
           kubectl rook_ceph maintenance stop rook-ceph-osd-0
           tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-osd-0 rook-ceph
@@ -270,7 +270,7 @@ jobs:
         run: |
           set -ex
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster maintenance start rook-ceph-osd-0
-          tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-osd-0-debug test-cluster
+          tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-osd-0-maintenance test-cluster
 
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster maintenance stop rook-ceph-osd-0
           tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-osd-0 test-cluster
