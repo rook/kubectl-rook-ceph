@@ -73,10 +73,10 @@ These are args currently supported:
   - `status <CR>` : Print the phase and conditions of CRs of a specific type, such as `cephobjectstore`, `cephfilesystem`, etc
   - `purge-osd <osd-id> [--force]` : Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs.
 
-- `debug` : [Debug a deployment](docs/debug.md)  by scaling it down and creating a debug copy. This is supported for mons and OSDs only
+- `maintenance` : [Perform maintenance operations](docs/maintenance.md) on mons or OSDs. The mon or OSD deployment will be scaled down and replaced temporarily by a maintenance deployment.
   - `start  <deployment-name>`
-    `[--alternate-image <alternate-image>]` : Start debugging a deployment with an optional alternative ceph container image
-  - `stop  <deployment-name>` : Stop debugging a deployment
+    `[--alternate-image <alternate-image>]` : Start a maintenance deployment with an optional alternative ceph container image
+  - `stop  <deployment-name>` : Stop the maintenance deployment and restore the mon or OSD deployment
 
 - `dr` :
   - `health [ceph status args]`: Print the `ceph status` of a peer cluster in a mirroring-enabled environment thereby validating connectivity between ceph clusters. Ceph status args can be optionally passed, such as to change the log level: `--debug-ms 1`.
@@ -100,7 +100,7 @@ Visit docs below for complete details about each command and their flags uses.
 1. [Get cephCluster CR status](docs/rook.md#status)
 1. [Get specific CR status](docs/rook.md#status-cr-name)
 1. [To purge OSD](docs/rook.md#operator.md)
-1. [Debug OSDs and Mons](docs/debug.md)
+1. [Perform maintenance for OSDs and Mons](docs/maintenance.md)
 1. [Restore mon quorum](docs/mons.md#restore-quorum)
 1. [Disaster Recovery](docs/dr-health.md)
 1. [Restore deleted CRs](docs/crd.md)

@@ -110,13 +110,13 @@ jobs:
           kubectl -n rook-ceph wait --for=delete pod/$POD --timeout=100s
           tests/github-action-helper.sh wait_for_operator_pod_to_be_ready_state_default
 
-      - name: Debug Mode
+      - name: Maintenance Mode
         run: |
           set -ex
-          kubectl rook_ceph debug start rook-ceph-osd-0
-          tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-osd-0-debug rook-ceph
+          kubectl rook_ceph maintenance start rook-ceph-osd-0
+          tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-osd-0-maintenance rook-ceph
 
-          kubectl rook_ceph debug stop rook-ceph-osd-0
+          kubectl rook_ceph maintenance stop rook-ceph-osd-0
           tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-osd-0 rook-ceph
 
       - name: Purge Osd
@@ -266,13 +266,13 @@ jobs:
           kubectl -n test-operator wait --for=delete pod/$POD --timeout=100s
           tests/github-action-helper.sh wait_for_operator_pod_to_be_ready_state_custom
 
-      - name: Debug Mode
+      - name: Maintenance Mode
         run: |
           set -ex
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster debug start rook-ceph-osd-0
-          tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-osd-0-debug test-cluster
+          kubectl rook-ceph --operator-namespace test-operator -n test-cluster maintenance start rook-ceph-osd-0
+          tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-osd-0-maintenance test-cluster
 
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster debug stop rook-ceph-osd-0
+          kubectl rook-ceph --operator-namespace test-operator -n test-cluster maintenance stop rook-ceph-osd-0
           tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-osd-0 test-cluster
 
       - name: Purge Osd

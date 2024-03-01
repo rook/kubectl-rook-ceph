@@ -21,7 +21,8 @@
                 "osd",
                 "test",
                 "tests",
-                "clean"
+                "clean",
+                "maintenance"
             ]
         ],
         "body-leading-blank": [

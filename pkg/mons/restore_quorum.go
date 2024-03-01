@@ -24,10 +24,10 @@ import (
 	"strings"
 	"time"
 
-	"github.com/rook/kubectl-rook-ceph/pkg/debug"
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
+	"github.com/rook/kubectl-rook-ceph/pkg/maintenance"
 
 	kerrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -116,17 +116,17 @@ func restoreQuorum(ctx context.Context, clientsets *k8sutil.Clientsets, operator
 		logging.Info("deployment.apps/%s scaled\n", fmt.Sprintf("rook-ceph-mon-%s", badMon))
 	}
 
-	debug.StartDebug(ctx, clientsets.Kube, clusterNamespace, fmt.Sprintf("rook-ceph-mon-%s", goodMon), "")
+	maintenance.StartMaintenance(ctx, clientsets.Kube, clusterNamespace, fmt.Sprintf("rook-ceph-mon-%s", goodMon), "")
 
-	debugDeploymentSpec, err := k8sutil.GetDeployment(ctx, clientsets.Kube, clusterNamespace, fmt.Sprintf("rook-ceph-mon-%s-debug", goodMon))
+	maintenanceDeploymentSpec, err := k8sutil.GetDeployment(ctx, clientsets.Kube, clusterNamespace, fmt.Sprintf("rook-ceph-mon-%s-maintenance", goodMon))
 	if err != nil {
-		return fmt.Errorf("failed to deployment rook-ceph-mon-%s-debug", goodMon)
+		return fmt.Errorf("failed to deployment rook-ceph-mon-%s-maintenance", goodMon)
 	}
 
-	labelSelector := fmt.Sprintf("ceph_daemon_type=%s,ceph_daemon_id=%s", debugDeploymentSpec.Spec.Template.Labels["ceph_daemon_type"], debugDeploymentSpec.Spec.Template.Labels["ceph_daemon_id"])
+	labelSelector := fmt.Sprintf("ceph_daemon_type=%s,ceph_daemon_id=%s", maintenanceDeploymentSpec.Spec.Template.Labels["ceph_daemon_type"], maintenanceDeploymentSpec.Spec.Template.Labels["ceph_daemon_id"])
 	_, err = k8sutil.WaitForPodToRun(ctx, clientsets.Kube, clusterNamespace, labelSelector)
 	if err != nil {
-		return fmt.Errorf("failed to start deployment %s", fmt.Sprintf("rook-ceph-mon-%s-debug", goodMon))
+		return fmt.Errorf("failed to start deployment %s", fmt.Sprintf("rook-ceph-mon-%s-maintenance", goodMon))
 	}
 
 	updateMonMap(ctx, clientsets, clusterNamespace, labelSelector, cephFsid, goodMon, goodMonPublicIp, badMons)
@@ -139,8 +139,8 @@ func restoreQuorum(ctx context.Context, clientsets *k8sutil.Clientsets, operator
 		logging.Error(fmt.Errorf("failed to update mon configmap %s %v", MonConfigMap, err))
 	}
 
-	logging.Info("Stopping the debug pod for mon %s.\n", goodMon)
-	debug.StopDebug(ctx, clientsets.Kube, clusterNamespace, fmt.Sprintf("rook-ceph-mon-%s", goodMon))
+	logging.Info("Stopping the maintenance pod for mon %s.\n", goodMon)
+	maintenance.StopMaintenance(ctx, clientsets.Kube, clusterNamespace, fmt.Sprintf("rook-ceph-mon-%s", goodMon))
 
 	logging.Info("Check that the restored mon is responding")
 	err = waitForMonStatusResponse(ctx, clientsets, clusterNamespace)
@@ -173,7 +173,7 @@ func restoreQuorum(ctx context.Context, clientsets *k8sutil.Clientsets, operator
 }
 
 func updateMonMap(ctx context.Context, clientsets *k8sutil.Clientsets, clusterNamespace, labelSelector, cephFsid, goodMon, goodMonPublicIp string, badMons []string) {
-	logging.Info("Started debug pod, restoring the mon quorum in the debug pod")
+	logging.Info("Started maintenance pod, restoring the mon quorum in the maintenance pod")
 
 	monmapPath := "/tmp/monmap"
 
@@ -272,7 +272,7 @@ func waitForMonStatusResponse(ctx context.Context, clientsets *k8sutil.Clientset
 	for i := 0; i < maxRetries; i++ {
 		output, err := exec.RunCommandInToolboxPod(ctx, clientsets, "ceph", []string{"status"}, clusterNamespace, true)
 		if err != nil {
-			logging.Error(err, "failed to get the status of ceph cluster")
+			logging.Error(fmt.Errorf("failed to get the status of ceph cluster. %v", err))
 			wait(i, "")
 			continue
 		}
