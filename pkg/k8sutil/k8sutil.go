@@ -19,7 +19,6 @@ package k8sutil
 import (
 	"context"
 	"fmt"
-	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	"time"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
@@ -27,6 +26,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
+	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -67,6 +67,10 @@ func UpdateConfigMap(ctx context.Context, k8sclientset kubernetes.Interface, nam
 	cm, err := k8sclientset.CoreV1().ConfigMaps(namespace).Get(ctx, configMapName, v1.GetOptions{})
 	if err != nil {
 		logging.Fatal(err)
+	}
+
+	if cm.Data == nil {
+		cm.Data = map[string]string{}
 	}
 
 	cm.Data[key] = value
