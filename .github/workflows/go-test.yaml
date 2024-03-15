@@ -68,11 +68,11 @@ jobs:
           kubectl -n rook-ceph wait deployment rook-ceph-mon-d --for condition=Available=True --timeout=90s
           kubectl -n rook-ceph wait deployment rook-ceph-mon-e --for condition=Available=True --timeout=90s
 
-      # TODO: To fix when running in CI
-      # - name: Rbd command
-      #   run: |
-      #     set -ex
-      #     kubectl rook-ceph rbd ls replicapool
+      - name: Rbd command
+        run: |
+          set -ex
+          kubectl rook-ceph ceph -s
+          kubectl rook-ceph rbd ls replicapool --debug_ms=20 --debug_rbd=20
 
       - name: Subvolume command
         run: |
@@ -225,11 +225,11 @@ jobs:
           kubectl -n test-cluster wait deployment rook-ceph-mon-d --for condition=Available=True --timeout=90s
           kubectl -n test-cluster wait deployment rook-ceph-mon-e --for condition=Available=True --timeout=90s
 
-      # TODO: To fix when running in CI
-      # - name: Rbd command
-      #   run: |
-      #     set -ex
-      #     kubectl rook-ceph --operator-namespace test-operator -n test-cluster rbd ls replicapool
+      - name: Rbd command
+        run: |
+          set -ex
+          kubectl rook-ceph --operator-namespace test-operator -n test-cluster ceph -s
+          kubectl rook-ceph --operator-namespace test-operator -n test-cluster rbd ls replicapool --debug_ms=20 --debug_rbd=20
 
       - name: Subvolume command
         run: |
