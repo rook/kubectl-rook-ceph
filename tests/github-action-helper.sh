@@ -6,11 +6,28 @@ set -xeEo pipefail
 # VARIABLES #
 #############
 : "${FUNCTION:=${1}}"
-: "${BLOCK:=$(sudo lsblk --paths | awk '/14G/ || /75G/ {print $1}' | head -1)}"
+
+# source https://github.com/rook/rook
+function find_extra_block_dev() {
+  # shellcheck disable=SC2005 # redirect doesn't work with sudo, so use echo
+  echo "$(sudo lsblk)" >/dev/stderr # print lsblk output to stderr for debugging in case of future errors
+  # relevant lsblk --pairs example: (MOUNTPOINT identifies boot partition)(PKNAME is Parent dev ID)
+  # NAME="sda15" SIZE="106M" TYPE="part" MOUNTPOINT="/boot/efi" PKNAME="sda"
+  # NAME="sdb"   SIZE="75G"  TYPE="disk" MOUNTPOINT=""          PKNAME=""
+  # NAME="sdb1"  SIZE="75G"  TYPE="part" MOUNTPOINT="/mnt"      PKNAME="sdb"
+  boot_dev="$(sudo lsblk --noheading --list --output MOUNTPOINT,PKNAME | grep boot | awk '{print $2}')"
+  echo "  == find_extra_block_dev(): boot_dev='$boot_dev'" >/dev/stderr # debug in case of future errors
+  # --nodeps ignores partitions
+  extra_dev="$(sudo lsblk --noheading --list --nodeps --output KNAME | grep -v loop | grep -v "$boot_dev" | head -1)"
+  echo "  == find_extra_block_dev(): extra_dev='$extra_dev'" >/dev/stderr # debug in case of future errors
+  echo "$extra_dev"                                                       # output of function
+}
+
+: "${BLOCK:=$(find_extra_block_dev)}"
 
 # source https://github.com/rook/rook
 use_local_disk() {
-  BLOCK_DATA_PART=${BLOCK}1
+  BLOCK_DATA_PART="/dev/${BLOCK}1"
   sudo apt purge snapd -y
   sudo dmsetup version || true
   sudo swapoff --all --verbose
@@ -28,12 +45,9 @@ deploy_rook() {
   sed -i '0,/count: 1/ s/count: 1/count: 3/' cluster-test.yaml
   kubectl create -f cluster-test.yaml
   wait_for_pod_to_be_ready_state_default
-  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/filesystem-test.yaml
-  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/subvolumegroup.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/toolbox.yaml
-  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/storageclass-test.yaml
-  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/pvc.yaml
-  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/pvc.yaml
+
+  deploy_csi_driver_default_ns
 }
 
 deploy_rook_in_custom_namespace() {
@@ -46,32 +60,53 @@ deploy_rook_in_custom_namespace() {
   curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/common.yaml -o common.yaml
   deploy_with_custom_ns "$1" "$2" common.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/crds.yaml
+
   curl -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/operator.yaml -o operator.yaml
   deploy_with_custom_ns "$1" "$2" operator.yaml
+
   curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/cluster-test.yaml -o cluster-test.yaml
   sed -i "s|#deviceFilter:|deviceFilter: ${BLOCK/\/dev\//}|g" cluster-test.yaml
   sed -i '0,/count: 1/ s/count: 1/count: 3/' cluster-test.yaml
   deploy_with_custom_ns "$1" "$2" cluster-test.yaml
   wait_for_pod_to_be_ready_state_custom
 
-  curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/storageclass-test.yaml -o storageclass-test.yaml
-  sed -i "s|provisioner: rook-ceph.rbd.csi.ceph.com |provisioner: test-operator.rbd.csi.ceph.com |g" storageclass-test.yaml
-  deploy_with_custom_ns "$1" "$2" storageclass-test.yaml
-  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/pvc.yaml
-  curl -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/filesystem-test.yaml -o filesystem.yaml
-  deploy_with_custom_ns "$1" "$2" filesystem.yaml
-  curl -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/subvolumegroup.yaml -o subvolumegroup.yaml
-  deploy_with_custom_ns "$1" "$2" subvolumegroup.yaml
-  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/pvc.yaml
-
   curl -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/toolbox.yaml -o toolbox.yaml
   deploy_with_custom_ns "$1" "$2" toolbox.yaml
+
+  deploy_csi_driver_custom_ns "$1" "$2"
 }
 
 deploy_with_custom_ns() {
   sed -i "s|rook-ceph # namespace:operator|$1 # namespace:operator|g" "$3"
   sed -i "s|rook-ceph # namespace:cluster|$2 # namespace:cluster|g" "$3"
   kubectl create -f "$3"
+}
+
+deploy_csi_driver_default_ns() {
+  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/filesystem-test.yaml
+  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/subvolumegroup.yaml
+  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/storageclass-test.yaml
+  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/pvc.yaml
+  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/storageclass.yaml
+  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/pvc.yaml
+}
+
+deploy_csi_driver_custom_ns() {
+  curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/storageclass-test.yaml -o storageclass-rbd-test.yaml
+  sed -i "s|provisioner: rook-ceph.rbd.csi.ceph.com |provisioner: test-operator.rbd.csi.ceph.com |g" storageclass-rbd-test.yaml
+  deploy_with_custom_ns "$1" "$2" storageclass-rbd-test.yaml
+
+  curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/storageclass.yaml -o storageclass-cephfs-test.yaml
+  sed -i "s|provisioner: rook-ceph.cephfs.csi.ceph.com |provisioner: test-operator.cephfs.csi.ceph.com |g" storageclass-cephfs-test.yaml
+  deploy_with_custom_ns "$1" "$2" storageclass-cephfs-test.yaml
+  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/pvc.yaml
+
+  curl -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/filesystem-test.yaml -o filesystem.yaml
+  deploy_with_custom_ns "$1" "$2" filesystem.yaml
+
+  curl -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/subvolumegroup.yaml -o subvolumegroup.yaml
+  deploy_with_custom_ns "$1" "$2" subvolumegroup.yaml
+  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/pvc.yaml
 }
 
 wait_for_pod_to_be_ready_state_default() {
@@ -81,6 +116,7 @@ wait_for_pod_to_be_ready_state_default() {
       sleep 1
     done
 EOF
+  timeout_command_exit_code
 }
 
 wait_for_pod_to_be_ready_state_custom() {
@@ -90,6 +126,7 @@ wait_for_pod_to_be_ready_state_custom() {
       sleep 1
     done
 EOF
+  timeout_command_exit_code
 }
 
 wait_for_operator_pod_to_be_ready_state_default() {
@@ -99,6 +136,7 @@ wait_for_operator_pod_to_be_ready_state_default() {
       sleep 1
     done
 EOF
+  timeout_command_exit_code
 }
 
 wait_for_operator_pod_to_be_ready_state_custom() {
@@ -108,6 +146,7 @@ wait_for_operator_pod_to_be_ready_state_custom() {
       sleep 1
     done
 EOF
+  timeout_command_exit_code
 }
 
 wait_for_three_mons() {
@@ -118,6 +157,7 @@ wait_for_three_mons() {
       sleep 2
     done
 EOF
+  timeout_command_exit_code
 }
 
 wait_for_deployment_to_be_running() {
@@ -134,6 +174,7 @@ wait_for_crd_to_be_ready_default() {
       sleep 2
     done
 EOF
+  timeout_command_exit_code
 }
 
 wait_for_crd_to_be_ready_custom() {
@@ -143,6 +184,14 @@ wait_for_crd_to_be_ready_custom() {
       sleep 2
     done
 EOF
+}
+
+timeout_command_exit_code() {
+  # timeout command return exit status 124 if command times out
+  if [ $? -eq 124 ]; then
+    echo "Timeout reached"
+    exit 1
+  fi
 }
 
 install_minikube_with_none_driver() {
