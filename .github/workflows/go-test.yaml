@@ -68,11 +68,10 @@ jobs:
           kubectl -n rook-ceph wait deployment rook-ceph-mon-d --for condition=Available=True --timeout=90s
           kubectl -n rook-ceph wait deployment rook-ceph-mon-e --for condition=Available=True --timeout=90s
 
-      # TODO: To fix when running in CI
-      # - name: Rbd command
-      #   run: |
-      #     set -ex
-      #     kubectl rook-ceph rbd ls replicapool
+      - name: RBD command
+        run: |
+          set -ex
+          kubectl rook-ceph rbd ls replicapool
 
       - name: Subvolume command
         run: |
@@ -225,11 +224,10 @@ jobs:
           kubectl -n test-cluster wait deployment rook-ceph-mon-d --for condition=Available=True --timeout=90s
           kubectl -n test-cluster wait deployment rook-ceph-mon-e --for condition=Available=True --timeout=90s
 
-      # TODO: To fix when running in CI
-      # - name: Rbd command
-      #   run: |
-      #     set -ex
-      #     kubectl rook-ceph --operator-namespace test-operator -n test-cluster rbd ls replicapool
+      - name: RBD command
+        run: |
+          set -ex
+          kubectl rook-ceph --operator-namespace test-operator -n test-cluster rbd ls replicapool
 
       - name: Subvolume command
         run: |
@@ -317,7 +315,7 @@ jobs:
         if: always()
         uses: ./.github/workflows/collect-logs
         with:
-          name: go-test
+          name: go-test-custom-namespace
 
       - name: consider debugging
         if: failure()
