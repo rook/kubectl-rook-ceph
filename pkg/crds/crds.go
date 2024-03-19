@@ -61,7 +61,7 @@ const (
 	CephResourceCephClusters = "cephclusters"
 	toolBoxDeployment        = "rook-ceph-tools"
 	timeOutCheckResources    = 5 * time.Second
-	maxExecutionTime         = 10 * time.Minute
+	maxExecutionTime         = 15 * time.Minute
 	maxDisplayedPods         = 10
 )
 
