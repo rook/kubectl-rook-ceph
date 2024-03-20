@@ -130,6 +130,8 @@ func execCmdInPod(ctx context.Context, clientsets *k8sutil.Clientsets,
 		cmd = append(cmd, "--connect-timeout=10", fmt.Sprintf("--conf=/var/lib/rook/%s/%s.config", clusterNamespace, clusterNamespace))
 	} else if cmd[0] == "rbd" {
 		cmd = append(cmd, fmt.Sprintf("--conf=/var/lib/rook/%s/%s.config", clusterNamespace, clusterNamespace))
+	} else if cmd[0] == "rados" {
+		cmd = append(cmd, fmt.Sprintf("--conf=/var/lib/rook/%s/%s.config", clusterNamespace, clusterNamespace))
 	}
 
 	// Prepare the API URL used to execute another process within the Pod.  In
