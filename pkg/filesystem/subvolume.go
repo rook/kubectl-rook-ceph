@@ -62,7 +62,7 @@ func checkForExternalStorage(ctx context.Context, clientsets *k8sutil.Clientsets
 	enable := false
 	cephclusters, err := clientsets.Rook.CephV1().CephClusters(clusterNamespace).List(ctx, v1.ListOptions{})
 	if err != nil {
-		logging.Fatal(fmt.Errorf("failed to list CephClusters: %q", err))
+		logging.Fatal(fmt.Errorf("failed to list CephClusters in namespace %q: %v", clusterNamespace, err))
 	}
 	for i := range cephclusters.Items {
 		enable = cephclusters.Items[i].Spec.External.Enable
@@ -80,13 +80,13 @@ func getExternalClusterDetails(ctx context.Context, clientsets *k8sutil.Clientse
 
 	scList, err := clientsets.Kube.CoreV1().Secrets(clusterNamespace).List(ctx, v1.ListOptions{})
 	if err != nil {
-		logging.Fatal(fmt.Errorf("Error fetching secrets: %v\n", err))
+		logging.Fatal(fmt.Errorf("Error fetching secrets in namespace %q: %v", clusterNamespace, err))
 	}
 	for i := range scList.Items {
 		if strings.HasPrefix(scList.Items[i].ObjectMeta.Name, "rook-csi-cephfs-provisioner") {
 			data := scList.Items[i].Data
 			if data == nil {
-				logging.Fatal(fmt.Errorf("Secret data is empty"))
+				logging.Fatal(fmt.Errorf("Secret data is empty for %s/%s", clusterNamespace, scList.Items[i].ObjectMeta.Name))
 			}
 			adminId = string(data["adminID"])
 			adminKey = string(data["adminKey"])
@@ -97,18 +97,18 @@ func getExternalClusterDetails(ctx context.Context, clientsets *k8sutil.Clientse
 
 	cm, err := clientsets.Kube.CoreV1().ConfigMaps(clusterNamespace).Get(ctx, "rook-ceph-mon-endpoints", v1.GetOptions{})
 	if err != nil {
-		logging.Fatal(fmt.Errorf("Error fetching configmaps: %v\n", err))
+		logging.Fatal(fmt.Errorf("Error fetching configmaps %s/rook-ceph-mon-endpoints: %v", clusterNamespace, err))
 	}
 
 	if len(cm.Data) == 0 || cm.Data == nil {
-		logging.Fatal(fmt.Errorf("Configmap data is empty"))
+		logging.Fatal(fmt.Errorf("Configmap data is empty for %s/rook-ceph-mon-endpoints", clusterNamespace))
 	}
 	monpoint := cm.Data["csi-cluster-config-json"]
 	var monip []monitor
 	json.Unmarshal([]byte(monpoint), &monip)
 	for _, mp := range monip {
 		if len(mp.Monitors) == 0 || mp.Monitors[0] == "" {
-			logging.Fatal(fmt.Errorf("mon ip is empty"))
+			logging.Fatal(fmt.Errorf("mon ip for %s/rook-ceph-mon-endpoints with clusterID:%q is empty", clusterNamespace, mp.ClusterID))
 		}
 		m = mp.Monitors[0]
 	}
