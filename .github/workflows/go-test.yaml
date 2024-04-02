@@ -56,6 +56,11 @@ jobs:
         run: |
           set -ex
           kubectl rook-ceph --context=$(kubectl config current-context) ceph status
+      
+      - name: Rados df using context
+        run: |
+          set -ex
+          kubectl rook-ceph --context=$(kubectl config current-context) rados df
 
       - name: Mon restore
         run: |
@@ -209,6 +214,11 @@ jobs:
         run: |
           set -ex
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster ceph status
+
+      - name: Rados df
+        run: |
+          set -ex
+          kubectl rook-ceph --operator-namespace test-operator -n test-cluster rados df
 
       - name: Ceph status using context
         run: |

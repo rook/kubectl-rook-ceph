@@ -55,6 +55,8 @@ These are args currently supported:
 
 - `ceph <args>` : Run a Ceph CLI command. Supports any arguments the `ceph` command supports. See [Ceph docs](https://docs.ceph.com/en/pacific/start/intro/) for more.
 
+- `rados <args>` : Run a Rados CLI command. Supports any arguments the `rados` command supports. See [Rados docs](https://docs.ceph.com/en/latest/man/8/rados/) for more.
+
 - `rbd <args>` : Call a 'rbd' CLI command with arbitrary args
 
 - `mons` : Print mon endpoints
@@ -105,6 +107,7 @@ Visit docs below for complete details about each command and their flags uses.
 1. [Disaster Recovery](docs/dr-health.md)
 1. [Restore deleted CRs](docs/crd.md)
 1. [Destroy cluster](docs/destroy-cluster.md)
+2. [Running rados commands](docs/rados.md)
 
 ## Examples
 
