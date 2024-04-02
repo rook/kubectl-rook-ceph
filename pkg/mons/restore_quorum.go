@@ -192,7 +192,6 @@ func updateMonMap(ctx context.Context, clientsets *k8sutil.Clientsets, clusterNa
 		"--foreground",
 		fmt.Sprintf("--public-addr=%s", goodMonPublicIp),
 		fmt.Sprintf("--setuser-match-path=/var/lib/ceph/mon/ceph-%s/store.db", goodMon),
-		"--public-bind-addr=",
 	}
 
 	extractMonMap := []string{fmt.Sprintf("--extract-monmap=%s", monmapPath)}
