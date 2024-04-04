@@ -41,5 +41,6 @@ func addcommands() {
 		command.RestoreCmd,
 		command.DestroyClusterCmd,
 		command.SubvolumeCmd,
+		command.RadosCmd,
 	)
 }
