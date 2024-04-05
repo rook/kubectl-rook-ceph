@@ -167,6 +167,8 @@ func updatingFinalizers(ctx context.Context, clientsets k8sutil.ClientsetsInterf
 		if err != nil {
 			return err
 		}
+		logging.Info("Added cleanup policy to the cephcluster CR %q", resource)
+		return nil
 	}
 
 	jsonPatchData, _ := json.Marshal(DefaultResourceRemoveFinalizers)

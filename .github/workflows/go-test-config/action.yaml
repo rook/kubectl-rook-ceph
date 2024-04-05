@@ -197,4 +197,4 @@ runs:
         set -ex
         kubectl rook-ceph ${NS_OPT} destroy-cluster
         sleep 1
-        kubectl get deployments --no-headers| wc -l | (read n && [ $n -le 1 ] || { echo "the crs could not be deleted"; exit 1;})
+        kubectl get deployments --no-headers| wc -l | (read n && [ $n -le 3 ] || { echo "the crs could not be deleted"; exit 1;})
