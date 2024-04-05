@@ -22,10 +22,12 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 	corev1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/types"
@@ -201,7 +203,11 @@ func ensureClusterIsEmpty(ctx context.Context, k8sClientSet kubernetes.Interface
 				appLabel := getPodLabel(ctx, pod, "app")
 				err := pruneDeployments(ctx, k8sClientSet, clusterNamespace, appLabel)
 				if err != nil {
-					logging.Fatal(err)
+					logging.Warning("failed to prune deployments. %v", err)
+				}
+				err = pruneJobs(ctx, k8sClientSet, clusterNamespace, appLabel)
+				if err != nil {
+					logging.Warning("failed to prune jobs. %v", err)
 				}
 			}
 
@@ -237,6 +243,32 @@ func pruneDeployments(ctx context.Context, k8sClientSet kubernetes.Interface, cl
 	for _, deployment := range deployments.Items {
 		logging.Info("deployment %s exists removing....", deployment.Name)
 		k8sutil.DeleteDeployment(ctx, k8sClientSet, clusterNamespace, deployment.Name)
+	}
+	return nil
+}
+
+func pruneJobs(ctx context.Context, k8sClientSet kubernetes.Interface, clusterNamespace, labelApp string) error {
+	selector := "rook_cluster=" + clusterNamespace + ",app=" + labelApp
+	jobs, err := k8sClientSet.BatchV1().Jobs(clusterNamespace).List(ctx, v1.ListOptions{
+		LabelSelector: selector,
+	})
+	if err != nil {
+		if !k8sErrors.IsNotFound(err) {
+			return err
+		}
+		return nil
+	}
+
+	for _, job := range jobs.Items {
+		logging.Info("job %s exists removing....", job.Name)
+		var gracePeriod int64
+		propagation := metav1.DeletePropagationForeground
+		options := &metav1.DeleteOptions{GracePeriodSeconds: &gracePeriod, PropagationPolicy: &propagation}
+		if err := k8sClientSet.BatchV1().Jobs(clusterNamespace).Delete(ctx, job.Name, *options); err != nil {
+			if !k8sErrors.IsNotFound(err) {
+				return errors.Wrapf(err, "failed to delete job %q", job.Name)
+			}
+		}
 	}
 	return nil
 }
