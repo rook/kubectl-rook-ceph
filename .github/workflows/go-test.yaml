@@ -52,11 +52,16 @@ jobs:
           set -ex
           kubectl rook-ceph ceph status
 
+      - name: Ceph daemon
+        run: |
+          set -ex
+          kubectl rook-ceph ceph daemon mon.a dump_historic_ops
+
       - name: Ceph status using context
         run: |
           set -ex
           kubectl rook-ceph --context=$(kubectl config current-context) ceph status
-      
+
       - name: Rados df using context
         run: |
           set -ex
@@ -214,6 +219,11 @@ jobs:
         run: |
           set -ex
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster ceph status
+
+      - name: Ceph daemon
+        run: |
+          set -ex
+          kubectl rook-ceph --operator-namespace test-operator -n test-cluster ceph daemon osd.0 dump_historic_ops
 
       - name: Rados df
         run: |

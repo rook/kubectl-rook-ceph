@@ -126,8 +126,12 @@ func execCmdInPod(ctx context.Context, clientsets *k8sutil.Clientsets,
 
 	if containerName == "rook-ceph-tools" {
 		cmd = append(cmd, "--connect-timeout=10")
-	} else if cmd[0] == "ceph" && args[0] != "daemon" {
-		cmd = append(cmd, "--connect-timeout=10", fmt.Sprintf("--conf=/var/lib/rook/%s/%s.config", clusterNamespace, clusterNamespace))
+	} else if cmd[0] == "ceph" {
+		if len(cmd) > 1 && cmd[1] == "daemon" {
+			cmd = append(cmd, "--connect-timeout=10")
+		} else {
+			cmd = append(cmd, "--connect-timeout=10", fmt.Sprintf("--conf=/var/lib/rook/%s/%s.config", clusterNamespace, clusterNamespace))
+		}
 	} else if cmd[0] == "rbd" {
 		cmd = append(cmd, fmt.Sprintf("--conf=/var/lib/rook/%s/%s.config", clusterNamespace, clusterNamespace))
 	} else if cmd[0] == "rados" {
