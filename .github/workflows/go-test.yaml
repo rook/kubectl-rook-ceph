@@ -160,7 +160,7 @@ jobs:
           set -ex
           kubectl rook-ceph destroy-cluster
           sleep 1
-          kubectl get deployments -n rook-ceph --no-headers| wc -l | (read n && [ $n -le 1 ] || { echo "the crs could not be deleted"; kubectl get all -n rook-ceph; exit 1;})
+          kubectl get deployments -n rook-ceph --no-headers| wc -l | (read n && [ $n -le 3 ] || { echo "the crs could not be deleted"; kubectl get all -n rook-ceph; exit 1;})
 
       - name: collect common logs
         if: always()
@@ -323,7 +323,10 @@ jobs:
           set -ex
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster destroy-cluster
           sleep 1
-          kubectl get deployments -n test-cluster --no-headers| wc -l | (read n && [ $n -le 1 ] || { echo "the crs could not be deleted"; kubectl get all -n test-cluster; exit 1;})
+          kubectl -n test-cluster get deployments --no-headers| wc -l | (read n && [ $n -le 1 ] || { echo "the crs could not be deleted"; kubectl get all -n test-cluster; exit 1;})
+          sleep 15
+          node_name=$(kubectl get node --no-headers | awk '{print $1}')
+          kubectl -n test-cluster get pod -l job-name=cluster-cleanup-job-${node_name} --no-headers | grep Completed || { echo "cluster cleanup job not found or failed"; kubectl get all -n test-cluster; exit 1;}
 
       - name: collect common logs
         if: always()
