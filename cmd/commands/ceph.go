@@ -17,6 +17,9 @@ limitations under the License.
 package command
 
 import (
+	"fmt"
+	"strings"
+
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 	"github.com/spf13/cobra"
@@ -33,9 +36,29 @@ var CephCmd = &cobra.Command{
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		logging.Info("running 'ceph' command with args: %v", args)
-		_, err := exec.RunCommandInOperatorPod(cmd.Context(), clientSets, cmd.Use, args, operatorNamespace, cephClusterNamespace, false)
-		if err != nil {
-			logging.Fatal(err)
+		if args[0] == "daemon" {
+			if len(args) < 2 {
+				logging.Fatal(fmt.Errorf("too few arguments to run the 'ceph daemon' command"))
+			}
+			cephDaemonNameAndID := splitCephDaemonNameAndID(args[1])
+			_, err := exec.RunCommandInLabeledPod(cmd.Context(), clientSets, fmt.Sprintf("%s=%s", cephDaemonNameAndID[0], cephDaemonNameAndID[1]), cephDaemonNameAndID[0], cmd.Use, args, cephClusterNamespace, false)
+			if err != nil {
+				logging.Fatal(err)
+			}
+
+		} else {
+			_, err := exec.RunCommandInOperatorPod(cmd.Context(), clientSets, cmd.Use, args, operatorNamespace, cephClusterNamespace, false)
+			if err != nil {
+				logging.Fatal(err)
+			}
 		}
 	},
+}
+
+// splitCephDaemonNameAndID splits the arg based on '.' so that we use it with label, example osd.0 to osd and 0
+func splitCephDaemonNameAndID(args string) []string {
+	if !strings.Contains(args, ".") {
+		logging.Fatal(fmt.Errorf("Invalid argument to 'ceph daemon' command: %v. The arg should be in the format of '<daemon.id>'", args))
+	}
+	return strings.Split(args, ".")
 }

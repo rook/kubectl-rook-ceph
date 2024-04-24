@@ -96,3 +96,18 @@ kubectl rook-ceph ceph status --format json-pretty
 #     "progress_events": {}
 # }
 ```
+
+## Daemon
+
+Run the Ceph daemon command by connecting to its admin socket.
+
+```bash
+kubectl rook-ceph ceph daemon osd.0 dump_historic_ops
+
+Info: running 'ceph' command with args: [daemon osd.0 dump_historic_ops]
+{
+    "size": 20,
+    "duration": 600,
+    "ops": []
+}
+```

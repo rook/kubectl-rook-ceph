@@ -50,10 +50,11 @@ These are args currently supported:
     kubectl rook-ceph --context=$(kubectl config current-context) mons
     ```
 
-
 ### Commands
 
 - `ceph <args>` : Run a Ceph CLI command. Supports any arguments the `ceph` command supports. See [Ceph docs](https://docs.ceph.com/en/pacific/start/intro/) for more.
+
+- `ceph daemon <daemon.id> <args>`: Run a Ceph daemon command by connecting to its admin socket.
 
 - `rados <args>` : Run a Rados CLI command. Supports any arguments the `rados` command supports. See [Rados docs](https://docs.ceph.com/en/latest/man/8/rados/) for more.
 
@@ -92,6 +93,7 @@ These are args currently supported:
 Visit docs below for complete details about each command and their flags uses.
 
 1. [Running ceph commands](docs/ceph.md)
+1. [Running ceph daemon commands](docs/ceph.md#Daemon)
 1. [Running rbd commands](docs/rbd.md)
 1. [Get mon endpoints](docs/mons.md#print-mon-endpoints)
 1. [Get cluster health status](docs/health.md)
@@ -107,7 +109,7 @@ Visit docs below for complete details about each command and their flags uses.
 1. [Disaster Recovery](docs/dr-health.md)
 1. [Restore deleted CRs](docs/crd.md)
 1. [Destroy cluster](docs/destroy-cluster.md)
-2. [Running rados commands](docs/rados.md)
+1. [Running rados commands](docs/rados.md)
 
 ## Examples
 
