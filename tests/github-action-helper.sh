@@ -100,8 +100,8 @@ create_stale_subvolume() {
   sed -i "s|storageClassName: rook-cephfs|storageClassName: rook-cephfs-retain|g" pvc.yaml
   kubectl create -f pvc.yaml
   kubectl get pvc cephfs-pvc-retain
-  : "${PVNAME:=$(kubectl get pvc cephfs-pvc-retain -o=jsonpath='{.spec.volumeName}')}"
   wait_for_pvc_to_be_bound_state_default
+  : "${PVNAME:=$(kubectl get pvc cephfs-pvc-retain -o=jsonpath='{.spec.volumeName}')}"
   kubectl get pvc cephfs-pvc-retain
   kubectl delete pvc cephfs-pvc-retain
   kubectl delete pv "$PVNAME"
