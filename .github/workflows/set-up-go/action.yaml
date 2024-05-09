@@ -1,5 +1,5 @@
 name: Set up Golang
-description:  Set up go for CI
+description: Set up go for CI
 
 runs:
   using: "composite"
@@ -7,4 +7,4 @@ runs:
     - name: setup golang
       uses: actions/setup-go@v5
       with:
-        go-version: "1.21"
+        go-version-file: "go.mod"
