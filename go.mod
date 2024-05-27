@@ -3,10 +3,10 @@ module github.com/rook/kubectl-rook-ceph
 go 1.21
 
 require (
-	github.com/fatih/color v1.16.0
+	github.com/fatih/color v1.17.0
 	github.com/golang/mock v1.6.0
 	github.com/pkg/errors v0.9.1
-	github.com/rook/rook v1.14.3
+	github.com/rook/rook v1.14.4
 	github.com/rook/rook/pkg/apis v0.0.0-20231204200402-5287527732f7
 	github.com/spf13/cobra v1.8.0
 	github.com/stretchr/testify v1.9.0
