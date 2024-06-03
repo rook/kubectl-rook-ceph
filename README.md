@@ -58,6 +58,8 @@ These are args currently supported:
 
 - `rados <args>` : Run a Rados CLI command. Supports any arguments the `rados` command supports. See [Rados docs](https://docs.ceph.com/en/latest/man/8/rados/) for more.
 
+- `radosgw-admin <args>` : Run an RGW CLI command. Supports any arguments the `radosgw-admin` command supports. See the [radosgw-admin docs](https://docs.ceph.com/en/latest/man/8/radosgw-admin/) for more.
+
 - `rbd <args>` : Call a 'rbd' CLI command with arbitrary args
 
 - `mons` : Print mon endpoints

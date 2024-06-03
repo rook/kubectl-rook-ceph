@@ -67,6 +67,11 @@ jobs:
           set -ex
           kubectl rook-ceph --context=$(kubectl config current-context) rados df
 
+      - name: radosgw-admin create user
+        run: |
+            set -ex
+            kubectl rook-ceph radosgw-admin user create --display-name="johnny rotten" --uid=johnny
+
       - name: Mon restore
         run: |
           set -ex
@@ -237,6 +242,11 @@ jobs:
         run: |
           set -ex
           kubectl rook-ceph --operator-namespace test-operator -n test-cluster rados df
+
+      - name: radosgw-admin create user
+        run: |
+          set -ex
+          kubectl rook-ceph --operator-namespace test-operator -n test-cluster radosgw-admin user create --display-name="johnny rotten" --uid=johnny
 
       - name: Ceph status using context
         run: |
