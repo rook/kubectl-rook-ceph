@@ -43,5 +43,6 @@ func addcommands() {
 		command.SubvolumeCmd,
 		command.RadosCmd,
 		command.FlattenRBDPVCCmd,
+		command.RadosgwCmd,
 	)
 }
