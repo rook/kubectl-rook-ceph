@@ -31,10 +31,10 @@ runs:
 
     - name: deploy rook cluster
       shell: bash --noprofile --norc -eo pipefail -x {0}
-      if: inputs.op-ns == '' || inputs.cluster-ns == ''
+      if: inputs.op-ns == 'rook-ceph' || inputs.cluster-ns == 'rook-ceph'
       run: tests/github-action-helper.sh deploy_rook
 
     - name: deploy rook cluster in custom namespace
       shell: bash --noprofile --norc -eo pipefail -x {0}
-      if: inputs.op-ns != '' || inputs.cluster-ns != ''
+      if: inputs.op-ns != 'rook-ceph' || inputs.cluster-ns != 'rook-ceph'
       run: tests/github-action-helper.sh deploy_rook_in_custom_namespace ${{ inputs.op-ns }} ${{ inputs.cluster-ns }}
