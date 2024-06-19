@@ -1,0 +1,200 @@
+name: go-test
+description: "test kubectl-rook-ceph commands"
+inputs:
+  op-ns:
+    description: operator namespace where rook operator will deploy
+    required: true
+  cluster-ns:
+    description: cluster namespace where ceph cluster will deploy
+    required: true
+  github-token:
+    description: GITHUB_TOKEN from the calling workflow
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: set environment variables
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        OP_NS_OPT=""
+        CLUSTER_NS_OPT=""
+        test ${{ inputs.op-ns }} != rook-ceph && OP_NS_OPT="--operator-namespace ${{ inputs.op-ns }}"
+        test ${{ inputs.cluster-ns }} != rook-ceph && CLUSTER_NS_OPT="-n ${{ inputs.cluster-ns }}"
+
+        echo "NS_OPT=${OP_NS_OPT} ${CLUSTER_NS_OPT}" >> $GITHUB_ENV
+
+    - name: setup golang
+      uses: ./.github/workflows/set-up-go
+
+    - name: setup cluster
+      uses: ./.github/workflows/cluster-setup
+      with:
+        github-token: ${{ inputs.github-token }}
+        op-ns: ${{ inputs.op-ns }}
+        cluster-ns: ${{ inputs.cluster-ns }}
+
+    - name: build the binary and run unit tests
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        make build
+        sudo cp bin/kubectl-rook-ceph /usr/local/bin/kubectl-rook_ceph
+        make test
+
+    - name: Cluster Health
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        set -e
+        kubectl rook-ceph ${NS_OPT} health
+
+    - name: Ceph status
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        set -ex
+        kubectl rook-ceph ${NS_OPT} ceph status
+
+    - name: Ceph daemon
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        set -ex
+        kubectl rook-ceph ${NS_OPT} ceph daemon mon.a dump_historic_ops
+
+    - name: Ceph status using context
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        set -ex
+        kubectl rook-ceph ${NS_OPT} --context=$(kubectl config current-context) ceph status
+
+    - name: Rados df using context
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        set -ex
+        kubectl rook-ceph ${NS_OPT} --context=$(kubectl config current-context) rados df
+
+    - name: radosgw-admin create user
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        set -ex
+        kubectl rook-ceph ${NS_OPT} radosgw-admin user create --display-name="johnny rotten" --uid=johnny
+
+    - name: Mon restore
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        set -ex
+        # test the mon restore to restore to mon a, delete mons b and c, then add d and e
+        kubectl rook-ceph ${NS_OPT} mons restore-quorum a
+        kubectl -n ${{ inputs.cluster-ns }} wait pod -l app=rook-ceph-mon-b --for=delete --timeout=90s
+        kubectl -n ${{ inputs.cluster-ns }} wait pod -l app=rook-ceph-mon-c --for=delete --timeout=90s
+        tests/github-action-helper.sh wait_for_three_mons ${{ inputs.cluster-ns }}
+        kubectl -n ${{ inputs.cluster-ns }} wait deployment rook-ceph-mon-d --for condition=Available=True --timeout=90s
+        kubectl -n ${{ inputs.cluster-ns }} wait deployment rook-ceph-mon-e --for condition=Available=True --timeout=90s
+
+    - name: Rbd command
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        set -ex
+        kubectl rook-ceph ${NS_OPT} rbd ls replicapool
+
+    - name: Flatten a PVC clone
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        set -ex
+        tests/github-action-helper.sh install_external_snapshotter
+        tests/github-action-helper.sh wait_for_rbd_pvc_clone_to_be_bound
+
+        kubectl rook-ceph ${NS_OPT} flatten-rbd-pvc rbd-pvc-clone
+
+    - name: Subvolume command
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        set -ex
+        kubectl rook-ceph ${NS_OPT} ceph fs subvolume create myfs test-subvol group-a
+        kubectl rook-ceph ${NS_OPT} subvolume ls
+        kubectl rook-ceph ${NS_OPT} subvolume ls --stale
+        kubectl rook-ceph ${NS_OPT} subvolume delete myfs test-subvol group-a
+        tests/github-action-helper.sh create_sc_with_retain_policy ${{ inputs.op-ns }} ${{ inputs.cluster-ns }}
+        tests/github-action-helper.sh create_stale_subvolume
+        subVol=$(kubectl rook-ceph ${NS_OPT} subvolume ls --stale | awk '{print $2}' | grep csi-vol)
+        kubectl rook_ceph ${NS_OPT} subvolume delete myfs $subVol
+
+    - name: Get mon endpoints
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        set -ex
+        kubectl rook-ceph ${NS_OPT} mons
+
+    - name: Update operator configmap
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        set -ex
+        kubectl rook-ceph ${NS_OPT} operator set ROOK_LOG_LEVEL DEBUG
+
+    - name: Print cr status
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        set -ex
+        kubectl rook-ceph ${NS_OPT} rook version
+        kubectl rook-ceph ${NS_OPT} rook status
+        kubectl rook-ceph ${NS_OPT} rook status all
+        kubectl rook-ceph ${NS_OPT} rook status cephobjectstores
+
+    - name: Restart operator pod
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        set -ex
+        kubectl rook-ceph ${NS_OPT} operator restart
+        # let's wait for operator pod to be restart
+        POD=$(kubectl -n ${{ inputs.op-ns }} get pod -l app=rook-ceph-operator -o jsonpath="{.items[0].metadata.name}")
+        kubectl -n ${{ inputs.op-ns }} wait --for=delete pod/$POD --timeout=100s
+        tests/github-action-helper.sh wait_for_operator_pod_to_be_ready_state ${{ inputs.op-ns }}
+
+    - name: Maintenance Mode
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        set -ex
+        kubectl rook_ceph ${NS_OPT} maintenance start rook-ceph-osd-0
+        tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-osd-0-maintenance ${{ inputs.cluster-ns }}
+
+        kubectl rook_ceph ${NS_OPT} maintenance stop rook-ceph-osd-0
+        tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-osd-0 ${{ inputs.cluster-ns }}
+
+    - name: Purge Osd
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        set -ex
+        kubectl -n ${{ inputs.cluster-ns }} scale deployment rook-ceph-osd-0 --replicas 0
+        kubectl rook-ceph ${NS_OPT} rook purge-osd 0 --force
+
+    - name: Restore CRD without CRName
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        # First let's delete the cephCluster
+        kubectl -n ${{ inputs.cluster-ns }} delete cephcluster my-cluster --timeout 3s --wait=false
+
+        kubectl rook-ceph ${NS_OPT} restore-deleted cephclusters
+        tests/github-action-helper.sh wait_for_crd_to_be_ready ${{ inputs.cluster-ns }}
+
+    - name: Restore CRD with CRName
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        # First let's delete the cephCluster
+        kubectl -n ${{ inputs.cluster-ns }} delete cephcluster my-cluster --timeout 3s --wait=false
+
+        kubectl rook-ceph ${NS_OPT} restore-deleted cephclusters my-cluster
+        tests/github-action-helper.sh wait_for_crd_to_be_ready ${{ inputs.cluster-ns }}
+
+    - name: Show Cluster State
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        set -ex
+        kubectl -n ${{ inputs.cluster-ns }} get all
+
+    - name: Destroy Cluster (removing CRs)
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      env:
+        ROOK_PLUGIN_SKIP_PROMPTS: true
+      run: |
+        set -ex
+        kubectl rook-ceph ${NS_OPT} destroy-cluster
+        sleep 1
+        kubectl get deployments --no-headers| wc -l | (read n && [ $n -le 1 ] || { echo "the crs could not be deleted"; exit 1;})

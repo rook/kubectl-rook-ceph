@@ -23,162 +23,17 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: setup golang
-        uses: ./.github/workflows/set-up-go
-
       - name: consider debugging
         uses: ./.github/workflows/tmate_debug
         with:
           use-tmate: ${{ secrets.USE_TMATE }}
 
-      - name: setup cluster
-        uses: ./.github/workflows/cluster-setup
+      - name: plugin test
+        uses: ./.github/workflows/go-test-config
         with:
+          op-ns: rook-ceph
+          cluster-ns: rook-ceph
           github-token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: build the binary and run unit tests
-        run: |
-          make build
-          sudo cp bin/kubectl-rook-ceph /usr/local/bin/kubectl-rook_ceph
-          make test
-
-      - name: Cluster Health
-        run: |
-          set -e
-          kubectl rook-ceph health
-
-      - name: Ceph status
-        run: |
-          set -ex
-          kubectl rook-ceph ceph status
-
-      - name: Ceph daemon
-        run: |
-          set -ex
-          kubectl rook-ceph ceph daemon mon.a dump_historic_ops
-
-      - name: Ceph status using context
-        run: |
-          set -ex
-          kubectl rook-ceph --context=$(kubectl config current-context) ceph status
-
-      - name: Rados df using context
-        run: |
-          set -ex
-          kubectl rook-ceph --context=$(kubectl config current-context) rados df
-
-      - name: radosgw-admin create user
-        run: |
-            set -ex
-            kubectl rook-ceph radosgw-admin user create --display-name="johnny rotten" --uid=johnny
-
-      - name: Mon restore
-        run: |
-          set -ex
-          # test the mon restore to restore to mon a, delete mons b and c, then add d and e
-          kubectl rook-ceph  mons restore-quorum a
-          kubectl  -n rook-ceph wait pod -l app=rook-ceph-mon-b --for=delete --timeout=90s
-          kubectl -n rook-ceph wait pod -l app=rook-ceph-mon-c --for=delete --timeout=90s
-          tests/github-action-helper.sh wait_for_three_mons rook-ceph
-          kubectl -n rook-ceph wait deployment rook-ceph-mon-d --for condition=Available=True --timeout=90s
-          kubectl -n rook-ceph wait deployment rook-ceph-mon-e --for condition=Available=True --timeout=90s
-
-      - name: RBD command
-        run: |
-          set -ex
-          kubectl rook-ceph rbd ls replicapool
-
-      - name: Flatten a PVC clone
-        run: |
-          set -ex
-          tests/github-action-helper.sh install_external_snapshotter
-          tests/github-action-helper.sh wait_for_rbd_pvc_clone_to_be_bound
-
-          kubectl rook-ceph flatten-rbd-pvc rbd-pvc-clone
-
-      - name: Subvolume command
-        run: |
-          set -ex
-          kubectl rook-ceph ceph fs subvolume create myfs test-subvol group-a
-          kubectl rook-ceph subvolume ls
-          kubectl rook-ceph subvolume ls --stale
-          kubectl rook-ceph subvolume delete myfs test-subvol group-a
-          tests/github-action-helper.sh create_sc_with_retain_policy
-          tests/github-action-helper.sh create_stale_subvolume
-          subVol=$(kubectl rook-ceph subvolume ls --stale | awk '{print $2}' | grep csi-vol)
-          kubectl rook_ceph subvolume delete myfs $subVol
-
-      - name: Get mon endpoints
-        run: |
-          set -ex
-          kubectl rook-ceph mons
-
-      - name: Update operator configmap
-        run: |
-          set -ex
-          kubectl rook-ceph operator set ROOK_LOG_LEVEL DEBUG
-
-      - name: Print cr status
-        run: |
-          set -ex
-          kubectl rook-ceph rook version
-          kubectl rook-ceph rook status
-          kubectl rook-ceph rook status all
-          kubectl rook-ceph rook status cephobjectstores
-
-      - name: Restart operator pod
-        run: |
-          set -ex
-          kubectl rook-ceph operator restart
-          # let's wait for operator pod to be restart
-          POD=$(kubectl -n rook-ceph get pod -l app=rook-ceph-operator -o jsonpath="{.items[0].metadata.name}")
-          kubectl -n rook-ceph wait --for=delete pod/$POD --timeout=100s
-          tests/github-action-helper.sh wait_for_operator_pod_to_be_ready_state_default
-
-      - name: Maintenance Mode
-        run: |
-          set -ex
-          kubectl rook_ceph maintenance start rook-ceph-osd-0
-          tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-osd-0-maintenance rook-ceph
-
-          kubectl rook_ceph maintenance stop rook-ceph-osd-0
-          tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-osd-0 rook-ceph
-
-      - name: Purge Osd
-        run: |
-          set -ex
-          kubectl -n rook-ceph scale deployment rook-ceph-osd-0 --replicas 0
-          kubectl rook-ceph rook purge-osd 0 --force
-
-      - name: Restore CRD without CRName
-        run: |
-          # First let's delete the cephCluster
-          kubectl -n rook-ceph delete cephcluster my-cluster --timeout 3s --wait=false
-
-          kubectl rook-ceph -n rook-ceph restore-deleted cephclusters
-          tests/github-action-helper.sh wait_for_crd_to_be_ready_default
-
-      - name: Restore CRD with CRName
-        run: |
-          # First let's delete the cephCluster
-          kubectl -n rook-ceph delete cephcluster my-cluster --timeout 3s --wait=false
-
-          kubectl rook-ceph -n rook-ceph restore-deleted cephclusters my-cluster
-          tests/github-action-helper.sh wait_for_crd_to_be_ready_default
-
-      - name: Show Cluster State
-        run: |
-          set -ex
-          kubectl -n rook-ceph get all
-
-      - name: Destroy Cluster (removing CRs)
-        env:
-          ROOK_PLUGIN_SKIP_PROMPTS: true
-        run: |
-          set -ex
-          kubectl rook-ceph destroy-cluster
-          sleep 1
-          kubectl get deployments -n rook-ceph --no-headers| wc -l | (read n && [ $n -le 1 ] || { echo "the crs could not be deleted"; kubectl get all -n rook-ceph; exit 1;})
 
       - name: collect common logs
         if: always()
@@ -192,6 +47,7 @@ jobs:
         with:
           limit-access-to-actor: false
 
+
   custom-namespace:
     runs-on: ubuntu-20.04
     env:
@@ -202,164 +58,18 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: setup golang
-        uses: ./.github/workflows/set-up-go
-
       - name: consider debugging
-        uses: ./.github/workflows/tmate_debug
+        if: failure()
+        uses: mxschmitt/action-tmate@v3
         with:
           use-tmate: ${{ secrets.USE_TMATE }}
 
-      - name: setup cluster
-        uses: ./.github/workflows/cluster-setup
+      - name: plugin test
+        uses: ./.github/workflows/go-test-config
         with:
+          op-ns: test-operator
+          cluster-ns: test-cluster
           github-token: ${{ secrets.GITHUB_TOKEN }}
-          op-ns: "test-operator"
-          cluster-ns: "test-cluster"
-
-      - name: build the binary and run unit tests
-        run: |
-          make build
-          sudo cp bin/kubectl-rook-ceph /usr/local/bin/kubectl-rook_ceph
-          make test
-
-      - name: Cluster Health
-        run: |
-          set -e
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster health
-
-      - name: Ceph status
-        run: |
-          set -ex
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster ceph status
-
-      - name: Ceph daemon
-        run: |
-          set -ex
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster ceph daemon osd.0 dump_historic_ops
-
-      - name: Rados df
-        run: |
-          set -ex
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster rados df
-
-      - name: radosgw-admin create user
-        run: |
-          set -ex
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster radosgw-admin user create --display-name="johnny rotten" --uid=johnny
-
-      - name: Ceph status using context
-        run: |
-          set -ex
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster --context=$(kubectl config current-context) ceph status
-
-      - name: Mon restore
-        run: |
-          set -ex
-          # test the mon restore to restore to mon a, delete mons b and c, then add d and e
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster  mons restore-quorum a
-          kubectl -n test-cluster wait pod -l app=rook-ceph-mon-b --for=delete --timeout=90s
-          kubectl -n test-cluster wait pod -l app=rook-ceph-mon-c --for=delete --timeout=90s
-          tests/github-action-helper.sh wait_for_three_mons test-cluster
-          kubectl -n test-cluster wait deployment rook-ceph-mon-d --for condition=Available=True --timeout=90s
-          kubectl -n test-cluster wait deployment rook-ceph-mon-e --for condition=Available=True --timeout=90s
-
-      - name: RBD command
-        run: |
-          set -ex
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster rbd ls replicapool
-
-      - name: Flatten a PVC clone
-        run: |
-          set -ex
-          tests/github-action-helper.sh install_external_snapshotter
-          tests/github-action-helper.sh wait_for_rbd_pvc_clone_to_be_bound
-
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster flatten-rbd-pvc rbd-pvc-clone
-
-      - name: Subvolume command
-        run: |
-          set -ex
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster ceph fs subvolume create myfs test-subvol group-a
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster subvolume ls
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster subvolume ls --stale
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster subvolume delete myfs test-subvol group-a
-          tests/github-action-helper.sh create_sc_with_retain_policy_custom_ns test-operator test-cluster
-          tests/github-action-helper.sh create_stale_subvolume
-          subVol=$(kubectl rook-ceph --operator-namespace test-operator -n test-cluster subvolume ls --stale | awk '{print $2}' | grep csi-vol)
-          kubectl rook_ceph --operator-namespace test-operator -n test-cluster subvolume delete myfs $subVol
-
-      - name: Get mon endpoints
-        run: |
-          set -ex
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster mons
-
-      - name: Update operator configmap
-        run: |
-          set -ex
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster operator set ROOK_LOG_LEVEL DEBUG
-
-      - name: Print cr status
-        run: |
-          set -ex
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster rook version
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster rook status
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster rook status all
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster rook status cephobjectstores
-
-      - name: Restart operator pod
-        run: |
-          set -ex
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster operator restart
-          # let's wait for operator pod to be restart
-          POD=$(kubectl -n test-operator get pod -l app=rook-ceph-operator -o jsonpath="{.items[0].metadata.name}")
-          kubectl -n test-operator wait --for=delete pod/$POD --timeout=100s
-          tests/github-action-helper.sh wait_for_operator_pod_to_be_ready_state_custom
-
-      - name: Maintenance Mode
-        run: |
-          set -ex
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster maintenance start rook-ceph-osd-0
-          tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-osd-0-maintenance test-cluster
-
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster maintenance stop rook-ceph-osd-0
-          tests/github-action-helper.sh wait_for_deployment_to_be_running rook-ceph-osd-0 test-cluster
-
-      - name: Purge Osd
-        run: |
-          set -ex
-          kubectl -n test-cluster scale deployment rook-ceph-osd-0 --replicas 0
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster rook purge-osd 0 --force
-
-      - name: Restore CRD without CRName
-        run: |
-          # First let's delete the cephCluster
-          kubectl -n test-cluster delete cephcluster my-cluster --timeout 3s --wait=false
-
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster restore-deleted cephclusters
-          tests/github-action-helper.sh wait_for_crd_to_be_ready_custom
-
-      - name: Restore CRD with CRName
-        run: |
-          # First let's delete the cephCluster
-          kubectl -n test-cluster delete cephcluster my-cluster --timeout 3s --wait=false
-
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster restore-deleted cephclusters my-cluster
-          tests/github-action-helper.sh wait_for_crd_to_be_ready_custom
-
-      - name: Show Cluster State
-        run: |
-          set -ex
-          kubectl -n test-cluster get all
-
-      - name: Destroy Cluster (removing CRs)
-        env:
-          ROOK_PLUGIN_SKIP_PROMPTS: true
-        run: |
-          set -ex
-          kubectl rook-ceph --operator-namespace test-operator -n test-cluster destroy-cluster
-          sleep 1
-          kubectl get deployments -n test-cluster --no-headers| wc -l | (read n && [ $n -le 1 ] || { echo "the crs could not be deleted"; kubectl get all -n test-cluster; exit 1;})
 
       - name: collect common logs
         if: always()

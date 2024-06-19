@@ -44,7 +44,7 @@ deploy_rook() {
   sed -i "s|#deviceFilter:|deviceFilter: ${BLOCK/\/dev\//}|g" cluster-test.yaml
   sed -i '0,/count: 1/ s/count: 1/count: 3/' cluster-test.yaml
   kubectl create -f cluster-test.yaml
-  wait_for_pod_to_be_ready_state_default
+  wait_for_pod_to_be_ready_state rook-ceph
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/toolbox.yaml
 
   deploy_csi_driver_default_ns
@@ -58,39 +58,32 @@ deploy_rook_in_custom_namespace() {
 
   kubectl create namespace test-operator # creating namespace manually because rook common.yaml create one namespace and here we need 2
   curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/common.yaml -o common.yaml
-  deploy_with_custom_ns "$1" "$2" common.yaml
+  deploy_with_custom_ns "$OPERATOR_NS" "$CLUSTER_NS" common.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/crds.yaml
 
   curl -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/operator.yaml -o operator.yaml
-  deploy_with_custom_ns "$1" "$2" operator.yaml
+  deploy_with_custom_ns "$OPERATOR_NS" "$CLUSTER_NS" operator.yaml
 
   curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/cluster-test.yaml -o cluster-test.yaml
   sed -i "s|#deviceFilter:|deviceFilter: ${BLOCK/\/dev\//}|g" cluster-test.yaml
   sed -i '0,/count: 1/ s/count: 1/count: 3/' cluster-test.yaml
-  deploy_with_custom_ns "$1" "$2" cluster-test.yaml
-  wait_for_pod_to_be_ready_state_custom
+  deploy_with_custom_ns "$OPERATOR_NS" "$CLUSTER_NS" cluster-test.yaml
+  wait_for_pod_to_be_ready_state $CLUSTER_NS
 
   curl -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/toolbox.yaml -o toolbox.yaml
-  deploy_with_custom_ns "$1" "$2" toolbox.yaml
+  deploy_with_custom_ns "$OPERATOR_NS" "$CLUSTER_NS" toolbox.yaml
 
-  deploy_csi_driver_custom_ns "$1" "$2"
+  deploy_csi_driver_custom_ns "$OPERATOR_NS" "$CLUSTER_NS"
 }
 
 create_sc_with_retain_policy(){
-  curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/storageclass.yaml -o storageclass.yaml
-  sed -i "s|name: rook-cephfs|name: rook-cephfs-retain|g" storageclass.yaml
-  sed -i "s|reclaimPolicy: Delete|reclaimPolicy: Retain|g" storageclass.yaml
-  kubectl create -f storageclass.yaml 
-}
-
-create_sc_with_retain_policy_custom_ns(){
   export OPERATOR_NS=$1
   export CLUSTER_NS=$2
 
   curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/storageclass.yaml -o storageclass.yaml
   sed -i "s|name: rook-cephfs|name: rook-cephfs-retain|g" storageclass.yaml
   sed -i "s|reclaimPolicy: Delete|reclaimPolicy: Retain|g" storageclass.yaml
-  sed -i "s|provisioner: rook-ceph.cephfs.csi.ceph.com |provisioner: test-operator.cephfs.csi.ceph.com |g" storageclass.yaml
+  sed -i "s|provisioner: rook-ceph.cephfs.csi.ceph.com |provisioner: ${OPERATOR_NS}.cephfs.csi.ceph.com |g" storageclass.yaml
   deploy_with_custom_ns $OPERATOR_NS $CLUSTER_NS storageclass.yaml
 }
 
@@ -100,7 +93,7 @@ create_stale_subvolume() {
   sed -i "s|storageClassName: rook-cephfs|storageClassName: rook-cephfs-retain|g" pvc.yaml
   kubectl create -f pvc.yaml
   kubectl get pvc cephfs-pvc-retain
-  wait_for_pvc_to_be_bound_state_default
+  wait_for_pvc_to_be_bound_state
   : "${PVNAME:=$(kubectl get pvc cephfs-pvc-retain -o=jsonpath='{.spec.volumeName}')}"
   kubectl get pvc cephfs-pvc-retain
   kubectl delete pvc cephfs-pvc-retain
@@ -108,9 +101,12 @@ create_stale_subvolume() {
 }
 
 deploy_with_custom_ns() {
-  sed -i "s|rook-ceph # namespace:operator|$1 # namespace:operator|g" "$3"
-  sed -i "s|rook-ceph # namespace:cluster|$2 # namespace:cluster|g" "$3"
-  kubectl create -f "$3"
+  export OPERATOR_NS=$1
+  export CLUSTER_NS=$2
+  export MANIFEST=$3
+  sed -i "s|rook-ceph # namespace:operator|${OPERATOR_NS} # namespace:operator|g" "${MANIFEST}"
+  sed -i "s|rook-ceph # namespace:cluster|${CLUSTER_NS} # namespace:cluster|g" "${MANIFEST}"
+  kubectl create -f "${MANIFEST}"
 }
 
 deploy_csi_driver_default_ns() {
@@ -140,8 +136,9 @@ deploy_csi_driver_custom_ns() {
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/pvc.yaml
 }
 
-wait_for_pvc_to_be_bound_state_default() {
+wait_for_pvc_to_be_bound_state() {
   timeout 100 bash <<-'EOF'
+    set -x
     until [ $(kubectl get pvc cephfs-pvc-retain -o jsonpath='{.status.phase}') == "Bound" ]; do
       echo "waiting for the pvc to be in bound state"
       sleep 1
@@ -150,9 +147,11 @@ EOF
   timeout_command_exit_code
 }
 
-wait_for_pod_to_be_ready_state_default() {
+wait_for_pod_to_be_ready_state() {
+  export cluster_ns=$1
   timeout 200 bash <<-'EOF'
-    until [ $(kubectl get pod -l app=rook-ceph-osd -n rook-ceph -o jsonpath='{.items[*].metadata.name}' -o custom-columns=READY:status.containerStatuses[*].ready | grep -c true) -eq 1 ]; do
+    set -x
+    until [ $(kubectl get pod -l app=rook-ceph-osd -n "${cluster_ns}" -o jsonpath='{.items[*].metadata.name}' -o custom-columns=READY:status.containerStatuses[*].ready | grep -c true) -eq 1 ]; do
       echo "waiting for the pods to be in ready state"
       sleep 1
     done
@@ -160,29 +159,11 @@ EOF
   timeout_command_exit_code
 }
 
-wait_for_pod_to_be_ready_state_custom() {
-  timeout 200 bash <<-'EOF'
-    until [ $(kubectl get pod -l app=rook-ceph-osd -n test-cluster -o jsonpath='{.items[*].metadata.name}' -o custom-columns=READY:status.containerStatuses[*].ready | grep -c true) -eq 1 ]; do
-      echo "waiting for the pods to be in ready state"
-      sleep 1
-    done
-EOF
-  timeout_command_exit_code
-}
-
-wait_for_operator_pod_to_be_ready_state_default() {
+wait_for_operator_pod_to_be_ready_state() {
+  export operator_ns=$1
   timeout 100 bash <<-'EOF'
-    until [ $(kubectl get pod -l app=rook-ceph-operator -n rook-ceph -o jsonpath='{.items[*].metadata.name}' -o custom-columns=READY:status.containerStatuses[*].ready | grep -c true) -eq 1 ]; do
-      echo "waiting for the operator to be in ready state"
-      sleep 1
-    done
-EOF
-  timeout_command_exit_code
-}
-
-wait_for_operator_pod_to_be_ready_state_custom() {
-  timeout 100 bash <<-'EOF'
-    until [ $(kubectl get pod -l app=rook-ceph-operator -n test-operator -o jsonpath='{.items[*].metadata.name}' -o custom-columns=READY:status.containerStatuses[*].ready | grep -c true) -eq 1 ]; do
+    set -x
+    until [ $(kubectl get pod -l app=rook-ceph-operator -n "${operator_ns}" -o jsonpath='{.items[*].metadata.name}' -o custom-columns=READY:status.containerStatuses[*].ready | grep -c true) -eq 1 ]; do
       echo "waiting for the operator to be in ready state"
       sleep 1
     done
@@ -193,6 +174,7 @@ EOF
 wait_for_three_mons() {
   export namespace=$1
   timeout 150 bash <<-'EOF'
+    set -x
     until [ $(kubectl -n $namespace get deploy -l app=rook-ceph-mon,mon_canary!=true | grep rook-ceph-mon | wc -l | awk '{print $1}' ) -eq 3 ]; do
       echo "$(date) waiting for three mon deployments to exist"
       sleep 2
@@ -208,19 +190,10 @@ wait_for_deployment_to_be_running() {
   kubectl -n "$namespace" wait deployment "$deployment" --for condition=Available=True --timeout=90s
 }
 
-wait_for_crd_to_be_ready_default() {
+wait_for_crd_to_be_ready() {
+  export cluster_ns=$1
   timeout 150 bash <<-'EOF'
-    until [ $(kubectl -n rook-ceph get cephcluster my-cluster -o=jsonpath='{.status.phase}') == "Ready" ]; do
-      echo "Waiting for the CephCluster my-cluster to be in the Ready state..."
-      sleep 2
-    done
-EOF
-  timeout_command_exit_code
-}
-
-wait_for_crd_to_be_ready_custom() {
-  timeout 150 bash <<-'EOF'
-    until [ $(kubectl -n test-cluster get cephcluster my-cluster -o=jsonpath='{.status.phase}') == "Ready" ]; do
+    until [ $(kubectl -n "${cluster_ns}" get cephcluster my-cluster -o=jsonpath='{.status.phase}') == "Ready" ]; do
       echo "Waiting for the CephCluster my-cluster to be in the Ready state..."
       sleep 2
     done
