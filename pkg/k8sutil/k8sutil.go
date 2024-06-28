@@ -44,7 +44,7 @@ func RestartDeployment(ctx context.Context, k8sclientset kubernetes.Interface, n
 }
 
 func WaitForPodToRun(ctx context.Context, k8sclientset kubernetes.Interface, namespace, labelSelector string) (corev1.Pod, error) {
-	opts := v1.ListOptions{LabelSelector: labelSelector}
+	opts := v1.ListOptions{LabelSelector: labelSelector, FieldSelector: "status.phase=Running"}
 	for i := 0; i < 60; i++ {
 		pod, err := k8sclientset.CoreV1().Pods(namespace).List(ctx, opts)
 		if err != nil {
