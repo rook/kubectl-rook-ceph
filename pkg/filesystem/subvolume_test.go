@@ -21,34 +21,40 @@ import "testing"
 func TestGetOmapVal(t *testing.T) {
 
 	tests := []struct {
-		name string
-		want string
+		name     string
+		val      string
+		subvolid string
 	}{
 		{
-			name: "csi-vol-427774b4-340b-11ed-8d66-0242ac110005",
-			want: "csi.volume.427774b4-340b-11ed-8d66-0242ac110005",
+			name:     "csi-vol-427774b4-340b-11ed-8d66-0242ac110005",
+			val:      "csi.volume.427774b4-340b-11ed-8d66-0242ac110005",
+			subvolid: "427774b4-340b-11ed-8d66-0242ac110005",
 		},
 		{
-			name: "nfs-export-427774b4-340b-11ed-8d66-0242ac110005",
-			want: "csi.volume.427774b4-340b-11ed-8d66-0242ac110005",
+			name:     "nfs-export-427774b4-340b-11ed-8d66-0242ac110005",
+			val:      "csi.volume.427774b4-340b-11ed-8d66-0242ac110005",
+			subvolid: "427774b4-340b-11ed-8d66-0242ac110005",
 		},
 		{
-			name: "",
-			want: "",
+			name:     "",
+			val:      "",
+			subvolid: "",
 		},
 		{
-			name: "csi-427774b4-340b-11ed-8d66-0242ac11000",
-			want: "csi.volume.340b-11ed-8d66-0242ac11000",
+			name:     "csi-427774b4-340b-11ed-8d66-0242ac11000",
+			val:      "csi.volume.340b-11ed-8d66-0242ac11000",
+			subvolid: "340b-11ed-8d66-0242ac11000",
 		},
 		{
-			name: "csi-427774b440b11ed8d660242ac11000",
-			want: "",
+			name:     "csi-427774b440b11ed8d660242ac11000",
+			val:      "",
+			subvolid: "",
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := getOmapVal(tt.name); got != tt.want {
-				t.Errorf("getOmapVal() = %v, want %v", got, tt.want)
+			if val, subvolid := getOmapVal(tt.name); val != tt.val && subvolid != tt.subvolid {
+				t.Errorf("getOmapVal()= got val %v, want val %v,got subvolid %v want subvolid %v", val, tt.val, subvolid, tt.subvolid)
 			}
 		})
 	}
