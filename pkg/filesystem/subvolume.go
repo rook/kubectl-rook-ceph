@@ -333,14 +333,14 @@ func getMetadataPoolName(ctx context.Context, clientsets *k8sutil.Clientsets, Op
 func deleteOmapForSubvolume(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, subVol, fs string) {
 	logging.Info("Deleting the omap object and key for subvolume %q", subVol)
 	omapkey := getOmapKey(ctx, clientsets, OperatorNamespace, CephClusterNamespace, subVol, fs)
-	omapval := getOmapVal(subVol)
+	omapval, subvolid := getOmapVal(subVol)
 	poolName, err := getMetadataPoolName(ctx, clientsets, OperatorNamespace, CephClusterNamespace, fs)
 	if err != nil || poolName == "" {
 		logging.Fatal(fmt.Errorf("pool name not found: %q", err))
 	}
 	nfsClusterName := getNfsClusterName(ctx, clientsets, OperatorNamespace, CephClusterNamespace, subVol, fs)
 	if nfsClusterName != "" {
-		exportPath := getNfsExportPath(ctx, clientsets, OperatorNamespace, CephClusterNamespace, nfsClusterName)
+		exportPath := getNfsExportPath(ctx, clientsets, OperatorNamespace, CephClusterNamespace, nfsClusterName, subvolid)
 		if exportPath == "" {
 			logging.Info("export path not found for subvol %q: %q", subVol, nfsClusterName)
 		} else {
@@ -391,7 +391,7 @@ func getOmapKey(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNam
 	if err != nil || poolName == "" {
 		logging.Fatal(fmt.Errorf("pool name not found: %q", err))
 	}
-	omapval := getOmapVal(subVol)
+	omapval, _ := getOmapVal(subVol)
 
 	args := []string{"getomapval", omapval, "csi.volname", "-p", poolName, "--namespace", "csi", "/dev/stdout"}
 	cmd := "rados"
@@ -419,7 +419,7 @@ func getNfsClusterName(ctx context.Context, clientsets *k8sutil.Clientsets, Oper
 	if err != nil || poolName == "" {
 		logging.Fatal(fmt.Errorf("pool name not found %q: %q", poolName, err))
 	}
-	omapval := getOmapVal(subVol)
+	omapval, _ := getOmapVal(subVol)
 
 	args := []string{"getomapval", omapval, "csi.nfs.cluster", "-p", poolName, "--namespace", "csi", "/dev/stdout"}
 	cmd := "rados"
@@ -432,7 +432,7 @@ func getNfsClusterName(ctx context.Context, clientsets *k8sutil.Clientsets, Oper
 	return nfscluster
 }
 
-func getNfsExportPath(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, clusterName string) string {
+func getNfsExportPath(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, clusterName, subvolid string) string {
 
 	args := []string{"nfs", "export", "ls", clusterName}
 	cmd := "ceph"
@@ -453,7 +453,12 @@ func getNfsExportPath(ctx context.Context, clientsets *k8sutil.Clientsets, Opera
 
 	// Extract the value from the unmarshalexportpath
 	if len(unmarshalexportpath) > 0 {
-		exportPath = unmarshalexportpath[0]
+		// get the export which matches the subvolume id
+		for _, uxp := range unmarshalexportpath {
+			if strings.Contains(uxp, subvolid) {
+				exportPath = uxp
+			}
+		}
 	}
 
 	return exportPath
@@ -463,14 +468,15 @@ func getNfsExportPath(ctx context.Context, clientsets *k8sutil.Clientsets, Opera
 // omapval is of format csi.volume.427774b4-340b-11ed-8d66-0242ac110005
 // which is similar to volume name csi-vol-427774b4-340b-11ed-8d66-0242ac110005
 // hence, replacing 'csi-vol-' to 'csi.volume.' to get the omapval
-func getOmapVal(subVol string) string {
+// it also returns the subvolume id
+func getOmapVal(subVol string) (string, string) {
 
 	splitSubvol := strings.SplitAfterN(subVol, "-", 3)
 	if len(splitSubvol) < 3 {
-		return ""
+		return "", ""
 	}
 	subvol_id := splitSubvol[len(splitSubvol)-1]
 	omapval := "csi.volume." + subvol_id
 
-	return omapval
+	return omapval, subvol_id
 }
