@@ -19,8 +19,10 @@ package subvolume
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
+	"syscall"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
@@ -175,8 +177,19 @@ func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, o
 			}
 			// append the subvolume which doesn't have any snapshot attached to it.
 			for _, sv := range subvol {
-				state := getSubvolumeState(ctx, clientsets, operatorNamespace, clusterNamespace, fs.Name, sv.Name, svg.Name)
+				state, err := getSubvolumeState(ctx, clientsets, operatorNamespace, clusterNamespace, fs.Name, sv.Name, svg.Name)
+				// subvolume info returns error in case of pending clone or if it is not ready
+				// it is suggested to delete the pvc before deleting the subvolume.
+				if err != nil {
+					if errors.Is(err, syscall.EAGAIN) {
+						logging.Warning("Found pending clone: %q", sv.Name)
+						logging.Warning("Please delete the pending pv if any before deleting the subvolume %s", sv.Name)
+						logging.Warning("To avoid stale resources, please scale down the cephfs deployment before deleting the subvolume.")
+						continue
+					}
+					logging.Fatal(fmt.Errorf("failed to get subvolume state: %q %q", sv.Name, err))
 
+				}
 				// Assume the volume is stale unless proven otherwise
 				stalevol := true
 				// lookup for subvolume in list of the PV references
@@ -195,7 +208,6 @@ func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, o
 					// check the state of the stale subvolume
 					// if it is snapshot-retained then skip listing it.
 					if state == "snapshot-retained" {
-						status = state
 						continue
 					}
 					// check if the stale subvolume has snapshots.
@@ -212,14 +224,14 @@ func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, o
 }
 
 // getSubvolumeState returns the state of the subvolume
-func getSubvolumeState(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, fsName, SubVol, SubvolumeGroup string) string {
+func getSubvolumeState(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, fsName, SubVol, SubvolumeGroup string) (string, error) {
 	cmd := "ceph"
 	args := []string{"fs", "subvolume", "info", fsName, SubVol, SubvolumeGroup, "--format", "json"}
 
 	subVolumeInfo, errvol := runCommand(ctx, clientsets, operatorNamespace, clusterNamespace, cmd, args)
 	if errvol != nil {
-		logging.Error(errvol, "failed to get filesystems")
-		return ""
+		logging.Error(errvol, "failed to get subvolume info")
+		return "", errvol
 	}
 	var info map[string]interface{}
 	err := json.Unmarshal([]byte(subVolumeInfo), &info)
@@ -230,7 +242,7 @@ func getSubvolumeState(ctx context.Context, clientsets *k8sutil.Clientsets, oper
 	if !ok {
 		logging.Fatal(fmt.Errorf("failed to get the state of subvolume: %q", SubVol))
 	}
-	return state
+	return state, nil
 }
 
 // gets list of filesystem
