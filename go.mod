@@ -1,6 +1,7 @@
 module github.com/rook/kubectl-rook-ceph
 
 go 1.21
+toolchain go1.22.5
 
 require (
 	github.com/fatih/color v1.17.0
@@ -11,9 +12,9 @@ require (
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.9.0
 	gopkg.in/yaml.v3 v3.0.1
-	k8s.io/api v0.29.3
-	k8s.io/apimachinery v0.29.3
-	k8s.io/client-go v0.29.3
+	k8s.io/api v0.30.2
+	k8s.io/apimachinery v0.30.2
+	k8s.io/client-go v0.30.2
 )
 
 require (
