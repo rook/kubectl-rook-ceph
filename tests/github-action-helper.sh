@@ -241,7 +241,7 @@ install_minikube_with_none_driver() {
 }
 
 install_external_snapshotter() {
-  EXTERNAL_SNAPSHOTTER_VERSION=7.0.2
+  EXTERNAL_SNAPSHOTTER_VERSION=8.0.1
   curl -L "https://github.com/kubernetes-csi/external-snapshotter/archive/refs/tags/v${EXTERNAL_SNAPSHOTTER_VERSION}.zip" -o external-snapshotter.zip
   unzip -d /tmp external-snapshotter.zip
   cd "/tmp/external-snapshotter-${EXTERNAL_SNAPSHOTTER_VERSION}"

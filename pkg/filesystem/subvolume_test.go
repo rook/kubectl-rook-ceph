@@ -101,3 +101,72 @@ func TestGetSubvolumeNameFromPath(t *testing.T) {
 		})
 	}
 }
+
+func TestGetSnapOmapVal(t *testing.T) {
+
+	tests := []struct {
+		name   string
+		val    string
+		snapid string
+	}{
+		{
+			name:   "csi-snap-427774b4-340b-11ed-8d66-0242ac110005",
+			val:    "csi.snap.427774b4-340b-11ed-8d66-0242ac110005",
+			snapid: "427774b4-340b-11ed-8d66-0242ac110005",
+		},
+		{
+			name:   "",
+			val:    "",
+			snapid: "",
+		},
+		{
+			name:   "csi-427774b4-340b-11ed-8d66-0242ac11000",
+			val:    "csi.snap.340b-11ed-8d66-0242ac11000",
+			snapid: "340b-11ed-8d66-0242ac11000",
+		},
+		{
+			name:   "csi-427774b440b11ed8d660242ac11000",
+			val:    "",
+			snapid: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if val, snapid := getSnapOmapVal(tt.name); val != tt.val && snapid != tt.snapid {
+				t.Errorf("getSnapOmapVal()= got val %v, want val %v,got snapid %v want snapid %v", val, tt.val, snapid, tt.snapid)
+			}
+		})
+	}
+}
+
+func TestGetSnapshotHandleId(t *testing.T) {
+
+	tests := []struct {
+		name string
+		val  string
+	}{
+		{
+			name: "0001-0009-rook-ceph-0000000000000001-17b95621-58e8-4676-bc6a-39e928f19d23",
+			val:  "17b95621-58e8-4676-bc6a-39e928f19d23",
+		},
+		{
+			name: "",
+			val:  "",
+		},
+		{
+			name: "0001-0009-rook-0000000000000001-17b95621-58e8-4676-bc6a-39e928f19d23",
+			val:  "58e8-4676-bc6a-39e928f19d23",
+		},
+		{
+			name: "rook-427774b440b11ed8d660242ac11000",
+			val:  "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if val := getSnapshotHandleId(tt.name); val != tt.val {
+				assert.Equal(t, val, tt.val)
+			}
+		})
+	}
+}

@@ -24,6 +24,7 @@ import (
 	"strings"
 	"syscall"
 
+	snapclient "github.com/kubernetes-csi/external-snapshotter/client/v8/clientset/versioned/typed/volumesnapshot/v1"
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
@@ -42,6 +43,11 @@ type subVolumeInfo struct {
 	state string
 }
 
+type snapshotInfo struct {
+	volumeHandle   string
+	snapshotHandle string
+}
+
 type monitor struct {
 	ClusterID string
 	Monitors  []string
@@ -51,12 +57,14 @@ const (
 	inUse             = "in-use"
 	stale             = "stale"
 	staleWithSnapshot = "stale-with-snapshot"
+	snapshotRetained  = "snapshot-retained"
 )
 
 func List(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string, includeStaleOnly bool) {
 
 	subvolumeNames := getK8sRefSubvolume(ctx, clientsets)
-	listCephFSSubvolumes(ctx, clientsets, operatorNamespace, clusterNamespace, includeStaleOnly, subvolumeNames)
+	snapshotHandles := getK8sRefSnapshotHandle(ctx, clientsets)
+	listCephFSSubvolumes(ctx, clientsets, operatorNamespace, clusterNamespace, includeStaleOnly, subvolumeNames, snapshotHandles)
 }
 
 // checkForExternalStorage checks if the external mode is enabled.
@@ -152,6 +160,48 @@ func getSubvolumeNameFromPath(path string) (string, error) {
 	return name, nil
 }
 
+// getk8sRefSnapshotHandle returns the snapshothandle for k8s ref of the volume snapshots
+func getK8sRefSnapshotHandle(ctx context.Context, clientsets *k8sutil.Clientsets) map[string]snapshotInfo {
+
+	snapConfig, err := snapclient.NewForConfig(clientsets.KubeConfig)
+	if err != nil {
+		logging.Fatal(err)
+	}
+	snapList, err := snapConfig.VolumeSnapshotContents().List(ctx, v1.ListOptions{})
+	if err != nil {
+		logging.Fatal(fmt.Errorf("Error fetching volumesnapshotcontents: %v\n", err))
+	}
+
+	snapshotHandles := make(map[string]snapshotInfo)
+	for _, snap := range snapList.Items {
+		driverName := snap.Spec.Driver
+		if snap.Status != nil && snap.Status.SnapshotHandle != nil && strings.Contains(driverName, "cephfs.csi.ceph.com") {
+
+			snapshotHandleId := getSnapshotHandleId(*snap.Status.SnapshotHandle)
+			// map the snapshotHandle id to later lookup for the subvol id and
+			// match the subvolume snapshot.
+			snapshotHandles[snapshotHandleId] = snapshotInfo{}
+		}
+	}
+
+	return snapshotHandles
+}
+
+// getSnapshotHandleId gets the id from snapshothandle
+// SnapshotHandle: 0001-0009-rook-ceph-0000000000000001-17b95621-
+// 58e8-4676-bc6a-39e928f19d23
+// SnapshotHandleId: 17b95621-58e8-4676-bc6a-39e928f19d23
+func getSnapshotHandleId(snapshotHandle string) string {
+	// get the snaps id from snapshot handle
+	splitSnapshotHandle := strings.SplitAfterN(snapshotHandle, "-", 6)
+	if len(splitSnapshotHandle) < 6 {
+		return ""
+	}
+	snapshotHandleId := splitSnapshotHandle[len(splitSnapshotHandle)-1]
+
+	return snapshotHandleId
+}
+
 // runCommand checks for the presence of externalcluster and runs the command accordingly.
 func runCommand(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, cmd string, args []string) (string, error) {
 	if checkForExternalStorage(ctx, clientsets, clusterNamespace) {
@@ -164,7 +214,7 @@ func runCommand(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNam
 }
 
 // listCephFSSubvolumes list all the subvolumes
-func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string, includeStaleOnly bool, subvolumeNames map[string]subVolumeInfo) {
+func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string, includeStaleOnly bool, subvolumeNames map[string]subVolumeInfo, snapshotHandles map[string]snapshotInfo) {
 
 	// getFilesystem gets the filesystem
 	fsstruct, err := getFileSystem(ctx, clientsets, operatorNamespace, clusterNamespace)
@@ -226,11 +276,12 @@ func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, o
 				} else {
 					// check the state of the stale subvolume
 					// if it is snapshot-retained then skip listing it.
-					if state == "snapshot-retained" {
+					if state == snapshotRetained {
+						status = snapshotRetained
 						continue
 					}
 					// check if the stale subvolume has snapshots.
-					if checkSnapshot(ctx, clientsets, operatorNamespace, clusterNamespace, fs.Name, sv.Name, svg.Name) {
+					if checkSnapshot(ctx, clientsets, operatorNamespace, clusterNamespace, fs.Name, sv.Name, svg.Name, snapshotHandles) {
 						status = staleWithSnapshot
 					}
 
@@ -283,7 +334,8 @@ func getFileSystem(ctx context.Context, clientsets *k8sutil.Clientsets, operator
 }
 
 // checkSnapshot checks if there are any snapshots in the subvolume
-func checkSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, fs, sv, svg string) bool {
+// it also check for the stale snapshot and if found, deletes the snapshot.
+func checkSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, fs, sv, svg string, snapshotHandles map[string]snapshotInfo) bool {
 
 	cmd := "ceph"
 	args := []string{"fs", "subvolume", "snapshot", "ls", fs, sv, svg, "--format", "json"}
@@ -294,6 +346,19 @@ func checkSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, operator
 		return false
 	}
 	snap := unMarshaljson(snapList)
+	// check for stale subvolume snapshot
+	// we have the list of snapshothandleid's from the
+	// volumesnapshotcontent. Looking up for snapid in it
+	// will confirm if we have stale snapshot or not.
+	for _, s := range snap {
+		_, snapId := getSnapOmapVal(s.Name)
+		// lookup for the snapid in the k8s snapshot handle list
+		_, ok := snapshotHandles[snapId]
+		if !ok {
+			// delete stale snapshot
+			deleteSnapshot(ctx, clientsets, operatorNamespace, clusterNamespace, fs, sv, svg, s.Name)
+		}
+	}
 	if len(snap) == 0 {
 		return false
 	}
@@ -325,6 +390,19 @@ func unMarshaljson(list string) []fsStruct {
 		logging.Fatal(errg)
 	}
 	return unmarshal
+}
+
+// deleteSnapshot deletes the subvolume snapshot
+func deleteSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, cephClusterNamespace, fs, subvol, svg, snap string) {
+
+	deleteOmapForSnapshot(ctx, clientsets, operatorNamespace, cephClusterNamespace, snap, fs)
+	cmd := "ceph"
+	args := []string{"fs", "subvolume", "snapshot", "rm", fs, subvol, snap, svg}
+
+	_, err := runCommand(ctx, clientsets, operatorNamespace, cephClusterNamespace, cmd, args)
+	if err != nil {
+		logging.Fatal(err, "failed to delete subvolume snapshot of %s/%s/%s/%s", fs, svg, subvol, snap)
+	}
 }
 
 func Delete(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, fs, subvol, svg string) {
@@ -410,6 +488,40 @@ func deleteOmapForSubvolume(ctx context.Context, clientsets *k8sutil.Clientsets,
 	}
 }
 
+// deleteOmapForSnapshot deletes omap object and key for the given snapshot.
+func deleteOmapForSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, snap, fs string) {
+	logging.Info("Deleting the omap object and key for snapshot %q", snap)
+	snapomapkey := getSnapOmapKey(ctx, clientsets, OperatorNamespace, CephClusterNamespace, snap, fs)
+	snapomapval, _ := getSnapOmapVal(snap)
+	poolName, err := getMetadataPoolName(ctx, clientsets, OperatorNamespace, CephClusterNamespace, fs)
+	if err != nil || poolName == "" {
+		logging.Fatal(fmt.Errorf("pool name not found: %q", err))
+	}
+	cmd := "rados"
+	if snapomapval != "" {
+		args := []string{"rm", snapomapval, "-p", poolName, "--namespace", "csi"}
+
+		// remove omap object.
+		_, err := runCommand(ctx, clientsets, OperatorNamespace, CephClusterNamespace, cmd, args)
+		if err != nil {
+			logging.Fatal(err, "failed to remove omap object for snapshot %q", snap)
+		}
+		logging.Info("omap object:%q deleted", snapomapval)
+
+	}
+	if snapomapkey != "" {
+		args := []string{"rmomapkey", "csi.snaps.default", snapomapkey, "-p", poolName, "--namespace", "csi"}
+
+		// remove omap key.
+		_, err := runCommand(ctx, clientsets, OperatorNamespace, CephClusterNamespace, cmd, args)
+		if err != nil {
+			logging.Fatal(err, "failed to remove omap key for snapshot %q", snap)
+		}
+		logging.Info("omap key:%q deleted", snapomapkey)
+
+	}
+}
+
 // getOmapKey gets the omap key and value details for a given subvolume.
 // Deletion of omap object required the subvolumeName which is of format
 // csi.volume.subvolume, where subvolume is the name of subvolume that needs to be
@@ -436,6 +548,36 @@ func getOmapKey(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNam
 	omapkey := "csi.volume." + pvname
 
 	return omapkey
+}
+
+// getSnapOmapKey gets the omap key and value details for a given snapshot.
+// Deletion of omap object required the snapshotName which is of format
+// csi.snap.snapid.
+// similarly to delete of omap key requires csi.snap.ompakey, where
+// omapkey is the snapshotcontent name which is extracted the omap object.
+func getSnapOmapKey(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, cephClusterNamespace, snap, fs string) string {
+
+	poolName, err := getMetadataPoolName(ctx, clientsets, operatorNamespace, cephClusterNamespace, fs)
+	if err != nil || poolName == "" {
+		logging.Fatal(fmt.Errorf("pool name not found: %q", err))
+	}
+	snapomapval, _ := getSnapOmapVal(snap)
+
+	args := []string{"getomapval", snapomapval, "csi.snapname", "-p", poolName, "--namespace", "csi", "/dev/stdout"}
+	cmd := "rados"
+	snapshotcontentname, err := runCommand(ctx, clientsets, operatorNamespace, cephClusterNamespace, cmd, args)
+	if snapshotcontentname == "" && err == nil {
+		logging.Info("No snapshot content found for snapshot")
+		return ""
+	}
+	if err != nil {
+		logging.Fatal(fmt.Errorf("Error getting snapshot content for snapshot %s: %s", snap, err))
+	}
+	// omap key is for format csi.snap.snapshotcontent-fca205e5-8788-4132-979c-e210c0133182
+	// hence, attaching pvname to required prefix.
+	snapomapkey := "csi.snap." + snapshotcontentname
+
+	return snapomapkey
 }
 
 // getNfsClusterName returns the cluster name from the omap.
@@ -510,4 +652,20 @@ func getOmapVal(subVol string) (string, string) {
 	omapval := "csi.volume." + subvolId
 
 	return omapval, subvolId
+}
+
+// func getSnapOmapVal is used to get the omapval from the given snapshot
+// omapval is of format csi.snap.427774b4-340b-11ed-8d66-0242ac110005
+// which is similar to volume name csi-snap-427774b4-340b-11ed-8d66-0242ac110005
+// hence, replacing 'csi-snap-' to 'csi.snap.'
+func getSnapOmapVal(snap string) (string, string) {
+
+	splitSnap := strings.SplitAfterN(snap, "-", 3)
+	if len(splitSnap) < 3 {
+		return "", ""
+	}
+	snapId := splitSnap[len(splitSnap)-1]
+	snapomapval := "csi.snap." + snapId
+
+	return snapomapval, snapId
 }
