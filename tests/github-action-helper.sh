@@ -210,7 +210,7 @@ timeout_command_exit_code() {
 
 install_minikube_with_none_driver() {
   CRICTL_VERSION="v1.28.0"
-  MINIKUBE_VERSION="v1.31.2"
+  MINIKUBE_VERSION="v1.33.1"
 
   sudo apt update
   sudo apt install -y conntrack socat
