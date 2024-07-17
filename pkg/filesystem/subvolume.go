@@ -125,10 +125,29 @@ func getK8sRefSubvolume(ctx context.Context, clientsets *k8sutil.Clientsets) map
 	subvolumeNames := make(map[string]subVolumeInfo)
 	for _, pv := range pvList.Items {
 		if pv.Spec.CSI != nil {
-			subvolumeNames[pv.Spec.CSI.VolumeAttributes["subvolumeName"]] = subVolumeInfo{}
+			subvolumePath := pv.Spec.CSI.VolumeAttributes["subvolumePath"]
+			name, err := getSubvolumeNameFromPath(subvolumePath)
+			if err != nil {
+				logging.Error(err, "failed to get subvolume name")
+				continue
+			}
+			subvolumeNames[name] = subVolumeInfo{}
 		}
 	}
 	return subvolumeNames
+}
+
+// getSubvolumeNameFromPath get the subvolumename from the path.
+// subvolumepath: /volumes/csi/csi-vol-6a99b552-fdcc-441d-b1e6-a522a85a503d/5f4e4caa-f835-41ba-83c1-5bbd57f6aedf
+// subvolumename: csi-vol-6a99b552-fdcc-441d-b1e6-a522a85a503d
+func getSubvolumeNameFromPath(path string) (string, error) {
+	splitSubvol := strings.Split(path, "/")
+	if len(splitSubvol) < 4 {
+		return "", fmt.Errorf("failed to get name from subvolumepath: %s", path)
+	}
+	name := splitSubvol[3]
+
+	return name, nil
 }
 
 // runCommand checks for the presence of externalcluster and runs the command accordingly.

@@ -16,7 +16,12 @@ limitations under the License.
 
 package subvolume
 
-import "testing"
+import (
+	"fmt"
+	"testing"
+
+	"github.com/stretchr/testify/assert"
+)
 
 func TestGetOmapVal(t *testing.T) {
 
@@ -56,6 +61,43 @@ func TestGetOmapVal(t *testing.T) {
 			if val, subvolid := getOmapVal(tt.name); val != tt.val && subvolid != tt.subvolid {
 				t.Errorf("getOmapVal()= got val %v, want val %v,got subvolid %v want subvolid %v", val, tt.val, subvolid, tt.subvolid)
 			}
+		})
+	}
+}
+
+func TestGetSubvolumeNameFromPath(t *testing.T) {
+
+	tests := []struct {
+		path string
+		name string
+		err  error
+	}{
+		{
+			path: "/volumes/csi/csi-vol-6a99b552-fdcc-441d-b1e6-a522a85a503d/5f4e4caa-f835-41ba-83c1-5bbd57f6aedf",
+			name: "csi-vol-6a99b552-fdcc-441d-b1e6-a522a85a503d",
+		},
+		{
+			path: "",
+			err:  fmt.Errorf("failed to get name from subvolumepath: "),
+		},
+		{
+			path: "/volumes/csi-vol-6a99b552-fdcc-441d-b1e6-a522a85a503d/5f4e4caa-f835-41ba-83c1-5bbd57f6aedf",
+			name: "5f4e4caa-f835-41ba-83c1-5bbd57f6aedf",
+		},
+		{
+			path: "csi-vol-6a99b552-fdcc-441d-b1e6-a522a85a503d/5f4e4caa-f835-41ba-83c1-5bbd57f6aedf",
+			err:  fmt.Errorf(`failed to get name from subvolumepath: csi-vol-6a99b552-fdcc-441d-b1e6-a522a85a503d/5f4e4caa-f835-41ba-83c1-5bbd57f6aedf`),
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.path, func(t *testing.T) {
+			name, err := getSubvolumeNameFromPath(tt.path)
+			if err != nil {
+				assert.Error(t, err)
+				assert.Equal(t, tt.err.Error(), err.Error())
+				return
+			}
+			assert.Equal(t, name, tt.name)
 		})
 	}
 }
