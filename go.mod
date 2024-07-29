@@ -9,7 +9,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.0.0
 	github.com/pkg/errors v0.9.1
-	github.com/rook/rook v1.14.8
+	github.com/rook/rook v1.14.9
 	github.com/rook/rook/pkg/apis v0.0.0-20231204200402-5287527732f7
 	github.com/spf13/cobra v1.8.1
 	github.com/stretchr/testify v1.9.0
