@@ -135,13 +135,16 @@ func getK8sRefSubvolume(ctx context.Context, clientsets *k8sutil.Clientsets) map
 	subvolumeNames := make(map[string]subVolumeInfo)
 	for _, pv := range pvList.Items {
 		if pv.Spec.CSI != nil {
-			subvolumePath := pv.Spec.CSI.VolumeAttributes["subvolumePath"]
-			name, err := getSubvolumeNameFromPath(subvolumePath)
-			if err != nil {
-				logging.Error(err, "failed to get subvolume name")
-				continue
+			driverName := pv.Spec.CSI.Driver
+			if strings.Contains(driverName, "cephfs.csi.ceph.com") {
+				subvolumePath := pv.Spec.CSI.VolumeAttributes["subvolumePath"]
+				name, err := getSubvolumeNameFromPath(subvolumePath)
+				if err != nil {
+					logging.Error(err, "failed to get subvolume name")
+					continue
+				}
+				subvolumeNames[name] = subVolumeInfo{}
 			}
-			subvolumeNames[name] = subVolumeInfo{}
 		}
 	}
 	return subvolumeNames
