@@ -327,7 +327,7 @@ func validateMonIsUp(ctx context.Context, clientsets *k8sutil.Clientsets, cluste
 
 	logging.Info("mon %q state is %q", monID, monStatusOut.State)
 
-	if monStatusOut.State == "leader" || monStatusOut.State == "peon" {
+	if monStatusOut.State == "leader" || monStatusOut.State == "peon" || monStatusOut.State == "probing" {
 		return nil
 	}
 
