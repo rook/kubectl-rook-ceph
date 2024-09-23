@@ -76,7 +76,7 @@ deploy_rook_in_custom_namespace() {
   deploy_csi_driver_custom_ns "$OPERATOR_NS" "$CLUSTER_NS"
 }
 
-create_sc_with_retain_policy(){
+create_sc_with_retain_policy() {
   export OPERATOR_NS=$1
   export CLUSTER_NS=$2
 
@@ -209,8 +209,8 @@ timeout_command_exit_code() {
 }
 
 install_minikube_with_none_driver() {
-  CRICTL_VERSION="v1.28.0"
-  MINIKUBE_VERSION="v1.33.1"
+  CRICTL_VERSION="v1.31.1"
+  MINIKUBE_VERSION="v1.34.0"
 
   sudo apt update
   sudo apt install -y conntrack socat
@@ -218,16 +218,16 @@ install_minikube_with_none_driver() {
   sudo dpkg -i minikube_latest_amd64.deb
   rm -f minikube_latest_amd64.deb
 
-  curl -LO https://github.com/Mirantis/cri-dockerd/releases/download/v0.3.4/cri-dockerd_0.3.4.3-0.ubuntu-focal_amd64.deb
-  sudo dpkg -i cri-dockerd_0.3.4.3-0.ubuntu-focal_amd64.deb
-  rm -f cri-dockerd_0.3.4.3-0.ubuntu-focal_amd64.deb
+  curl -LO https://github.com/Mirantis/cri-dockerd/releases/download/v0.3.15/cri-dockerd_0.3.15.3-0.ubuntu-focal_amd64.deb
+  sudo dpkg -i cri-dockerd_0.3.15.3-0.ubuntu-focal_amd64.deb
+  rm -f cri-dockerd_0.3.15.3-0.ubuntu-focal_amd64.deb
 
   wget https://github.com/kubernetes-sigs/cri-tools/releases/download/$CRICTL_VERSION/crictl-$CRICTL_VERSION-linux-amd64.tar.gz
   sudo tar zxvf crictl-$CRICTL_VERSION-linux-amd64.tar.gz -C /usr/local/bin
   rm -f crictl-$CRICTL_VERSION-linux-amd64.tar.gz
   sudo sysctl fs.protected_regular=0
 
-  CNI_PLUGIN_VERSION="v1.3.0"
+  CNI_PLUGIN_VERSION="v1.5.1"
   CNI_PLUGIN_TAR="cni-plugins-linux-amd64-$CNI_PLUGIN_VERSION.tgz" # change arch if not on amd64
   CNI_PLUGIN_INSTALL_DIR="/opt/cni/bin"
 
@@ -237,7 +237,7 @@ install_minikube_with_none_driver() {
   rm "$CNI_PLUGIN_TAR"
 
   export MINIKUBE_HOME=$HOME CHANGE_MINIKUBE_NONE_USER=true KUBECONFIG=$HOME/.kube/config
-  sudo -E minikube start --kubernetes-version="$1" --driver=none --memory 6g --cpus=2 --addons ingress --cni=calico
+  minikube start --kubernetes-version="$1" --driver=none --memory 6g --cpus=2 --addons ingress --cni=calico
 }
 
 install_external_snapshotter() {
