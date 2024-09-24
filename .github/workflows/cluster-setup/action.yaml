@@ -17,17 +17,18 @@ runs:
     - name: Setup Minikube
       shell: bash --noprofile --norc -eo pipefail -x {0}
       run: |
-        tests/github-action-helper.sh install_minikube_with_none_driver v1.30.2
+        tests/github-action-helper.sh install_minikube_with_none_driver v1.31.0
 
     - name: print k8s cluster status
       shell: bash --noprofile --norc -eo pipefail -x {0}
       run: |
-        minikube status
-        kubectl get nodes
+        kubectl cluster-info
+        kubectl get pods -n kube-system
 
     - name: use local disk
       shell: bash --noprofile --norc -eo pipefail -x {0}
       run: tests/github-action-helper.sh use_local_disk
+
 
     - name: deploy rook cluster
       shell: bash --noprofile --norc -eo pipefail -x {0}
