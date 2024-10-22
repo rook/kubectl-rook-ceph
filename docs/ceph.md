@@ -97,6 +97,22 @@ kubectl rook-ceph ceph status --format json-pretty
 # }
 ```
 
+```bash
+kubectl rook-ceph ceph osd lspools
+
+# [
+#     {
+#         "poolnum": 1,
+#         "poolname": ".mgr"
+#     },
+#     {
+#         "poolnum": 2,
+#         "poolname": "replicapool"
+#     }
+# ]
+
+```
+
 ## Daemon
 
 Run the Ceph daemon command by connecting to its admin socket.
