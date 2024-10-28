@@ -27,6 +27,7 @@ import (
 	autoscalingv1 "k8s.io/api/autoscaling/v1"
 	corev1 "k8s.io/api/core/v1"
 	k8sErrors "k8s.io/apimachinery/pkg/api/errors"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/kubernetes"
@@ -112,8 +113,11 @@ func GetDeployment(ctx context.Context, k8sclientset kubernetes.Interface, clust
 
 func DeleteDeployment(ctx context.Context, k8sclientset kubernetes.Interface, clusterNamespace string, deployment string) {
 	logging.Info("removing deployment %s", deployment)
+	var gracePeriod int64
+	propagation := metav1.DeletePropagationForeground
+	options := &metav1.DeleteOptions{GracePeriodSeconds: &gracePeriod, PropagationPolicy: &propagation}
 
-	err := k8sclientset.AppsV1().Deployments(clusterNamespace).Delete(ctx, deployment, v1.DeleteOptions{})
+	err := k8sclientset.AppsV1().Deployments(clusterNamespace).Delete(ctx, deployment, *options)
 	if err != nil {
 		if k8sErrors.IsNotFound(err) {
 			logging.Info("the server could not find the requested deployment: %s", deployment)
