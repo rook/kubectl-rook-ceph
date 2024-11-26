@@ -19,6 +19,7 @@ package command
 import (
 	"fmt"
 	"strconv"
+	"strings"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
@@ -47,8 +48,8 @@ var versionCmd = &cobra.Command{
 
 var purgeCmd = &cobra.Command{
 	Use:     "purge-osd",
-	Short:   "Permanently remove an OSD from the cluster. Multiple OSDs can be removed with a comma-separated list of IDs, for example, purge-osd 0,1",
-	PreRunE: validateOsdID,
+	Short:   "Permanently remove an OSD from the cluster. Multiple OSDs can be removed in a single command with a comma-separated list of IDs, for example, purge-osd 0,1",
+	PreRunE: validateOsdIDs,
 	Args:    cobra.ExactArgs(1),
 	Example: "kubectl rook-ceph rook purge-osd <OSD_ID>",
 	PreRun: func(cmd *cobra.Command, args []string) {
@@ -56,8 +57,8 @@ var purgeCmd = &cobra.Command{
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		forceflagValue := cmd.Flag("force").Value.String()
-		osdID := args[0]
-		rook.PurgeOsd(cmd.Context(), clientSets, operatorNamespace, cephClusterNamespace, osdID, forceflagValue)
+		osdIDs := args[0]
+		rook.PurgeOsds(cmd.Context(), clientSets, operatorNamespace, cephClusterNamespace, osdIDs, forceflagValue)
 	},
 }
 
@@ -76,14 +77,16 @@ func init() {
 	RookCmd.AddCommand(statusCmd)
 	RookCmd.AddCommand(purgeCmd)
 	statusCmd.PersistentFlags().Bool("json", false, "print status in json format")
-	purgeCmd.PersistentFlags().Bool("force", false, "force deletion of an OSD if the OSD still contains data")
+	purgeCmd.PersistentFlags().Bool("force", false, "force deletion of OSD(s) even with the risk they still contain data")
 }
 
-func validateOsdID(cmd *cobra.Command, args []string) error {
-	osdID := args[0]
-	_, err := strconv.Atoi(osdID)
-	if err != nil {
-		return fmt.Errorf("invalid ID %s, the OSD ID must be an integer. %v", osdID, err)
+func validateOsdIDs(cmd *cobra.Command, args []string) error {
+	osdIDs := strings.Split(args[0], ",")
+	for _, osdID := range osdIDs {
+		_, err := strconv.Atoi(osdID)
+		if err != nil {
+			return fmt.Errorf("invalid ID %s, the OSD ID must be an integer. %v", osdID, err)
+		}
 	}
 
 	return nil

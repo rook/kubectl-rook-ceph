@@ -8,9 +8,9 @@ The `rook` command supports the following sub-commands:
 4. `status all`: [status all](#status-all) print the phase and conditions of all CRs
 5. `status <CR>`: [status  cr](#status-cr-name) print the phase and conditions of CRs of a specific type, such as 'cephobjectstore', 'cephfilesystem', etc
 
-## Purge an OSD
+## Purge OSDs
 
-Permanently remove an OSD from the cluster.
+Permanently remove OSD(s) from the cluster.
 
 !!! warning
     Data loss is possible when passing the --force flag if the PGs are not healthy on other OSDs.
