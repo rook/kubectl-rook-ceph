@@ -17,6 +17,8 @@ limitations under the License.
 package command
 
 import (
+	rbd "github.com/rook/kubectl-rook-ceph/pkg/rbd"
+
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 	"github.com/spf13/cobra"
@@ -37,4 +39,17 @@ var RbdCmd = &cobra.Command{
 			logging.Fatal(err)
 		}
 	},
+}
+
+var listCmdRbd = &cobra.Command{
+	Use:   "ls",
+	Short: "Print the list of rbd images.",
+	Run: func(cmd *cobra.Command, args []string) {
+		ctx := cmd.Context()
+		rbd.ListImages(ctx, clientSets, operatorNamespace, cephClusterNamespace)
+	},
+}
+
+func init() {
+	RbdCmd.AddCommand(listCmdRbd)
 }
