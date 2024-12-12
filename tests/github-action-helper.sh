@@ -116,6 +116,39 @@ deploy_csi_driver_default_ns() {
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/pvc.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/storageclass.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/pvc.yaml
+  deploy_csi_driver_rados_namespace
+}
+
+deploy_csi_driver_rados_namespace() {
+  curl https://raw.githubusercontent.com/rook/rook/refs/heads/master/deploy/examples/pool-test.yaml -o pool_rados_ns.yaml
+  sed -i "s|name: replicapool|name: blockpool-rados-ns |g" pool_rados_ns.yaml
+  kubectl create -f pool_rados_ns.yaml
+  wait_for_cephblockpool_ready_state "rook-ceph" "blockpool-rados-ns" 20
+
+  curl https://raw.githubusercontent.com/rook/rook/refs/heads/master/deploy/examples/radosnamespace.yaml -o cephblockpoolradosnamespace_a.yaml
+  sed -i "s|blockPoolName: replicapool|blockPoolName: blockpool-rados-ns |g" cephblockpoolradosnamespace_a.yaml
+  kubectl create -f cephblockpoolradosnamespace_a.yaml
+  wait_for_cephblockpoolradosnamespace_ready_state "rook-ceph" "namespace-a" 20
+
+  curl https://raw.githubusercontent.com/rook/rook/refs/heads/master/deploy/examples/radosnamespace.yaml -o cephblockpoolradosnamespace_b.yaml
+  sed -i "s|blockPoolName: replicapool|blockPoolName: blockpool-rados-ns |g" cephblockpoolradosnamespace_b.yaml
+  sed -i "s|name: namespace-a|name: namespace-b |g" cephblockpoolradosnamespace_b.yaml
+  kubectl create -f cephblockpoolradosnamespace_b.yaml
+  wait_for_cephblockpoolradosnamespace_ready_state "rook-ceph" "namespace-b" 20
+
+  cluster_id=$(kubectl -n rook-ceph get cephblockpoolradosnamespace/namespace-a -o jsonpath='{.status.info.clusterID}')
+  echo "cluster_id=${cluster_id}"
+
+  curl https://raw.githubusercontent.com/rook/rook/refs/heads/master/deploy/examples/csi/rbd/storageclass-test.yaml -o storageclass-rados-namespace.yaml
+  sed -i "s|clusterID: rook-ceph # namespace:cluster|clusterID: ${cluster_id} |g" storageclass-rados-namespace.yaml
+  sed -i "s|name: rook-ceph-block|name: rook-ceph-block-rados-namespace |g" storageclass-rados-namespace.yaml
+  sed -i "s|pool: replicapool|pool: blockpool-rados-ns |g" storageclass-rados-namespace.yaml
+  kubectl apply -f storageclass-rados-namespace.yaml
+
+  curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/pvc.yaml -o pvc-rados-namespace.yaml
+  sed -i "s|name: rbd-pvc|name: rbd-pvc-rados-namespace |g" pvc-rados-namespace.yaml
+  sed -i "s|storageClassName: rook-ceph-block|storageClassName: rook-ceph-block-rados-namespace |g" pvc-rados-namespace.yaml
+  kubectl create -f pvc-rados-namespace.yaml
 }
 
 deploy_csi_driver_custom_ns() {
@@ -134,6 +167,48 @@ deploy_csi_driver_custom_ns() {
   curl -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/subvolumegroup.yaml -o subvolumegroup.yaml
   deploy_with_custom_ns "$1" "$2" subvolumegroup.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/pvc.yaml
+}
+
+wait_for_cephblockpoolradosnamespace_ready_state() {
+  local cluster_ns=$1
+  local namespace_name=$2
+  local timeout_duration=${3:-10} # Default timeout to 10 seconds if not provided
+
+  export cluster_ns namespace_name # Export variables for use in the subshell
+
+  timeout "$timeout_duration" bash <<'EOF'
+    set -x
+    until [ "$(kubectl get CephBlockPoolRadosNamespace "$namespace_name" -n "$cluster_ns" -o jsonpath='{.status.phase}')" == "Ready" ]; do
+      echo "Waiting for CephBlockPoolRadosNamespace '$namespace_name' to be in 'Ready' phase..."
+      sleep 1
+      kubectl get CephBlockPoolRadosNamespace -A
+    done
+    echo "CephBlockPoolRadosNamespace $namespace_name is in Ready phase!"
+EOF
+
+  timeout_command_exit_code
+}
+
+wait_for_cephblockpool_ready_state() {
+  local cluster_ns=$1
+  local blockpool_name=$2
+  local timeout_duration=${3:-10} # Default timeout to 10 seconds if not provided
+
+  export cluster_ns blockpool_name # Export variables for use in the subshell
+
+  timeout "$timeout_duration" bash <<'EOF'
+    set -x
+    until [ "$(kubectl get CephBlockPool "$blockpool_name" -n "$cluster_ns" -o jsonpath='{.status.phase}')" == "Ready" ]; do
+      echo "Waiting for CephBlockPool $blockpool_name to be in Ready phase"
+      sleep 1
+      kubectl get CephBlockPool -A
+      kubectl describe CephBlockPool blockpool-rados-ns -n rook-ceph
+      kubectl get CephBlockPool blockpool-rados-ns -n rook-ceph -o yaml
+    done
+    echo "CephBlockPool $blockpool_name is in Ready phase!"
+EOF
+
+  timeout_command_exit_code
 }
 
 wait_for_pvc_to_be_bound_state() {
