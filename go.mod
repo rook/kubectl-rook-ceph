@@ -7,7 +7,7 @@ toolchain go1.22.7
 require (
 	github.com/fatih/color v1.18.0
 	github.com/golang/mock v1.6.0
-	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.0.0
+	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.2.0
 	github.com/pkg/errors v0.9.1
 	github.com/rook/rook v1.15.6
 	github.com/rook/rook/pkg/apis v0.0.0-20241127113535-ea3947351fe2
