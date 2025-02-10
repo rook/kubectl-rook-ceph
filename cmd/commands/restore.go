@@ -17,6 +17,7 @@ limitations under the License.
 package command
 
 import (
+	"github.com/rook/kubectl-rook-ceph/pkg/crds"
 	"github.com/rook/kubectl-rook-ceph/pkg/restore"
 	"github.com/spf13/cobra"
 )
@@ -31,6 +32,6 @@ var RestoreCmd = &cobra.Command{
 		verifyOperatorPodIsRunning(cmd.Context(), clientSets)
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		restore.RestoreCrd(cmd.Context(), clientSets, operatorNamespace, cephClusterNamespace, args)
+		restore.RestoreCrd(cmd.Context(), clientSets, operatorNamespace, cephClusterNamespace, crds.CephRookIoGroup, crds.CephRookResourcesVersion, args)
 	},
 }
