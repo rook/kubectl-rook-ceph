@@ -34,7 +34,7 @@ func fetchBlockPools(ctx context.Context, clientsets *k8sutil.Clientsets, cluste
 	}
 	blockPoolNames := make(map[string]poolData)
 	for _, blockPool := range blockPoolList.Items {
-		if blockPool.Name == "builtin-mgr" {
+		if strings.Contains(blockPool.Name, "builtin") {
 			continue
 		}
 		blockPoolNames[blockPool.Name] = poolData{
