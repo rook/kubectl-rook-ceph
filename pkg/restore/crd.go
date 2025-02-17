@@ -32,7 +32,8 @@ import (
 	"k8s.io/apimachinery/pkg/types"
 )
 
-func RestoreCrd(ctx context.Context, k8sclientset *k8sutil.Clientsets, operatorNamespace, clusterNamespace string, args []string) {
+func RestoreCrd(ctx context.Context, k8sclientset *k8sutil.Clientsets, operatorNamespace, clusterNamespace,
+	groupName, versionResource string, args []string) {
 	crd := args[0]
 
 	var crName string
@@ -42,7 +43,7 @@ func RestoreCrd(ctx context.Context, k8sclientset *k8sutil.Clientsets, operatorN
 	}
 
 	logging.Info("Detecting which resources to restore for crd %q", crd)
-	crdList, err := k8sclientset.ListResourcesDynamically(ctx, crds.CephRookIoGroup, crds.CephRookResourcesVersion, crd, clusterNamespace)
+	crdList, err := k8sclientset.ListResourcesDynamically(ctx, groupName, versionResource, crd, clusterNamespace)
 	if err != nil {
 		logging.Fatal(fmt.Errorf("Failed to list resources for crd %v", err))
 	}
