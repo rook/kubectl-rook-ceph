@@ -32,6 +32,7 @@ var RestoreCmd = &cobra.Command{
 		verifyOperatorPodIsRunning(cmd.Context(), clientSets)
 	},
 	Run: func(cmd *cobra.Command, args []string) {
-		restore.RestoreCrd(cmd.Context(), clientSets, operatorNamespace, cephClusterNamespace, crds.CephRookIoGroup, crds.CephRookResourcesVersion, args)
+		customResources := []restore.CustomResource{}
+		restore.RestoreCrd(cmd.Context(), clientSets, operatorNamespace, cephClusterNamespace, crds.CephRookIoGroup, crds.CephRookResourcesVersion, "rook-ceph-operator", customResources, args)
 	},
 }
