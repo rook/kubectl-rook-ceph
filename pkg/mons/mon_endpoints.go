@@ -18,6 +18,7 @@ package mons
 import (
 	"context"
 	"fmt"
+	"net"
 	"regexp"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
@@ -27,6 +28,19 @@ import (
 )
 
 const MonConfigMap = "rook-ceph-mon-endpoints"
+
+func ParseMonEndpoint(monEndpoint string) (string, string, error) {
+	host, port, err := net.SplitHostPort(monEndpoint)
+	if err != nil {
+		return "", "", fmt.Errorf("failed to split host and port from endpoint %s: %v", monEndpoint, err)
+	}
+
+	if ip := net.ParseIP(host); ip == nil {
+		return "", "", fmt.Errorf("invalid IP address in endpoint: %s", host)
+	}
+
+	return host, port, nil
+}
 
 func GetMonEndpoint(ctx context.Context, k8sclientset kubernetes.Interface, clusterNamespace string) string {
 	monCm, err := k8sclientset.CoreV1().ConfigMaps(clusterNamespace).Get(ctx, MonConfigMap, v1.GetOptions{})

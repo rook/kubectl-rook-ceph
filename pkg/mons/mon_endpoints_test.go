@@ -28,15 +28,81 @@ import (
 )
 
 func TestParseMonEndpoint(t *testing.T) {
-	ctx := context.TODO()
+	tests := []struct {
+		name         string
+		endpoint     string
+		expectedHost string
+		expectedPort string
+		expectError  bool
+	}{
+		{
+			name:         "Valid IPv4 endpoint",
+			endpoint:     "192.168.1.1:6789",
+			expectedHost: "192.168.1.1",
+			expectedPort: "6789",
+			expectError:  false,
+		},
+		{
+			name:         "Valid IPv6 endpoint",
+			endpoint:     "[2001:db8::1]:6789",
+			expectedHost: "2001:db8::1",
+			expectedPort: "6789",
+			expectError:  false,
+		},
+		{
+			name:         "Invalid endpoint - missing port",
+			endpoint:     "192.168.1.1",
+			expectedHost: "",
+			expectedPort: "",
+			expectError:  true,
+		},
+		{
+			name:         "Invalid endpoint - invalid IPv4 address",
+			endpoint:     "192.168.1.300:6789",
+			expectedHost: "",
+			expectedPort: "",
+			expectError:  true,
+		},
+		{
+			name:         "Invalid endpoint - invalid IPv6 format",
+			endpoint:     "2001:db8::1:6789",
+			expectedHost: "",
+			expectedPort: "",
+			expectError:  true,
+		},
+	}
 
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			host, port, err := ParseMonEndpoint(tt.endpoint)
+
+			if (err != nil) != tt.expectError {
+				t.Errorf("ParseMonEndpoint() error = %v, expectError = %v", err, tt.expectError)
+				return
+			}
+
+			if tt.expectError {
+				return
+			}
+
+			if host != tt.expectedHost {
+				t.Errorf("ParseMonEndpoint() host = %v, expected %v", host, tt.expectedHost)
+			}
+			if port != tt.expectedPort {
+				t.Errorf("ParseMonEndpoint() port = %v, expected %v", port, tt.expectedPort)
+			}
+		})
+	}
+}
+
+func TestGetMonEndpoint(t *testing.T) {
+	ctx := context.TODO()
 	newClient := fake.NewSimpleClientset
 	k8s := newClient()
 	clientsets := k8sutil.Clientsets{
 		Kube: k8s,
 	}
 	ns := "rook-ceph"
-
 	cm := &v1.ConfigMap{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      MonConfigMap,
@@ -48,9 +114,7 @@ func TestParseMonEndpoint(t *testing.T) {
 	}
 	_, err := clientsets.Kube.CoreV1().ConfigMaps(ns).Create(ctx, cm, metav1.CreateOptions{})
 	assert.NoError(t, err)
-
 	monData := GetMonEndpoint(context.TODO(), clientsets.Kube, ns)
 	assert.Equal(t, "10.96.52.53:6789", monData)
 	assert.NotEqual(t, "10.96.52.54:6789", monData)
-
 }
