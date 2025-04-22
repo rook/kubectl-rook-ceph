@@ -14,7 +14,7 @@ concurrency:
 
 jobs:
   default-namespace:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       ROOK_PLUGIN_SKIP_PROMPTS: true
     steps:
@@ -49,7 +49,7 @@ jobs:
 
 
   custom-namespace:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-22.04
     env:
       ROOK_PLUGIN_SKIP_PROMPTS: true
     steps:
