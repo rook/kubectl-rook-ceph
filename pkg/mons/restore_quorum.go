@@ -297,15 +297,19 @@ func getMonDetails(goodMon string, monEndpoints []string) ([]string, string, str
 		if !ok {
 			return []string{}, "", "", fmt.Errorf("failed to fetch mon endpoint")
 		} else if monName == goodMon {
-			goodMonPublicIp, goodMonPort, ok = strings.Cut(monEndpoint, ":")
-			if !ok {
-				return []string{}, "", "", fmt.Errorf("failed to get good mon endpoint and port")
+			host, port, err := ParseMonEndpoint(monEndpoint)
+			if err != nil {
+				return []string{}, "", "", err
 			}
+
+			goodMonPublicIp = host
+			goodMonPort = port
 		} else {
 			badMons = append(badMons, monName)
 		}
 		logging.Info("mon=%s, endpoints=%s\n", monName, monEndpoint)
 	}
+
 	return badMons, goodMonPublicIp, goodMonPort, nil
 }
 
