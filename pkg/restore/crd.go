@@ -29,11 +29,18 @@ import (
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/types"
 )
 
+type CustomResource struct {
+	Group    string
+	Version  string
+	Resource string
+}
+
 func RestoreCrd(ctx context.Context, k8sclientset *k8sutil.Clientsets, operatorNamespace, clusterNamespace,
-	groupName, versionResource string, args []string) {
+	groupName, versionResource, operatorName string, customResources []CustomResource, args []string) {
 	crd := args[0]
 
 	var crName string
@@ -76,9 +83,9 @@ func RestoreCrd(ctx context.Context, k8sclientset *k8sutil.Clientsets, operatorN
 	logging.Info("Proceeding with restoring deleting CR")
 
 	logging.Info("Scaling down the operator")
-	err = k8sutil.SetDeploymentScale(ctx, k8sclientset.Kube, operatorNamespace, "rook-ceph-operator", 0)
+	err = k8sutil.SetDeploymentScale(ctx, k8sclientset.Kube, operatorNamespace, operatorName, 0)
 	if err != nil {
-		deploy, er := k8sutil.GetDeployment(ctx, k8sclientset.Kube, operatorNamespace, "rook-ceph-operator")
+		deploy, er := k8sutil.GetDeployment(ctx, k8sclientset.Kube, operatorNamespace, operatorName)
 		if er != nil && !apierrors.IsNotFound(er) {
 			logging.Fatal(er)
 		}
@@ -94,12 +101,12 @@ func RestoreCrd(ctx context.Context, k8sclientset *k8sutil.Clientsets, operatorN
 		logging.Fatal(fmt.Errorf("failed to delete validating webhook %s. %v", webhookConfigName, err))
 	}
 
-	removeOwnerRefOfUID(ctx, k8sclientset, operatorNamespace, clusterNamespace, string(crdResource.GetUID()))
+	removeOwnerRefOfUID(ctx, k8sclientset, operatorNamespace, clusterNamespace, string(crdResource.GetUID()), customResources)
 
 	logging.Info("Removing finalizers from %s/%s", crd, crName)
 
 	jsonPatchData, _ := json.Marshal(crds.DefaultResourceRemoveFinalizers)
-	err = k8sclientset.PatchResourcesDynamically(ctx, crds.CephRookIoGroup, crds.CephRookResourcesVersion, crd, clusterNamespace, crName, types.MergePatchType, jsonPatchData)
+	err = k8sclientset.PatchResourcesDynamically(ctx, groupName, versionResource, crd, clusterNamespace, crName, types.MergePatchType, jsonPatchData)
 	if err != nil {
 		logging.Fatal(fmt.Errorf("Failed to update resource %q for crd. %v", crName, err))
 	}
@@ -109,13 +116,13 @@ func RestoreCrd(ctx context.Context, k8sclientset *k8sutil.Clientsets, operatorN
 	crdResource.SetSelfLink("")
 	crdResource.SetCreationTimestamp(v1.Time{})
 	logging.Info("Re-creating the CR %s from dynamic resource", crd)
-	_, err = k8sclientset.CreateResourcesDynamically(ctx, crds.CephRookIoGroup, crds.CephRookResourcesVersion, crd, &crdResource, clusterNamespace)
+	_, err = k8sclientset.CreateResourcesDynamically(ctx, groupName, versionResource, crd, &crdResource, clusterNamespace)
 	if err != nil {
 		logging.Fatal((fmt.Errorf("Failed to create updated resource %q for crd. %v", crName, err)))
 	}
 
 	logging.Info("Scaling up the operator")
-	err = k8sutil.SetDeploymentScale(ctx, k8sclientset.Kube, operatorNamespace, "rook-ceph-operator", 1)
+	err = k8sutil.SetDeploymentScale(ctx, k8sclientset.Kube, operatorNamespace, operatorName, 1)
 	if err != nil {
 		logging.Fatal(errors.Wrapf(err, "Operator pod still being scaled up"))
 	}
@@ -123,9 +130,46 @@ func RestoreCrd(ctx context.Context, k8sclientset *k8sutil.Clientsets, operatorN
 	logging.Info("CR is successfully restored. Please watch the operator logs and check the crd")
 }
 
-func removeOwnerRefOfUID(ctx context.Context, k8sclientset *k8sutil.Clientsets, operatorNamespace, clusterNamespace, targetUID string) {
+func removeOwnerRefOfUID(ctx context.Context, k8sclientset *k8sutil.Clientsets, operatorNamespace, clusterNamespace, targetUID string, customResources []CustomResource) {
 	logging.Info("Removing ownerreferences from resources with matching uid %s", targetUID)
 
+	for _, crd := range customResources {
+		gvr := schema.GroupVersionResource{
+			Group:    crd.Group,
+			Version:  crd.Version,
+			Resource: crd.Resource,
+		}
+
+		crList, err := k8sclientset.ListResourcesDynamically(ctx, crd.Group, crd.Version, crd.Resource, clusterNamespace)
+		if err != nil {
+			logging.Warning("Failed to list %s: %v", crd.Resource, err)
+			continue
+		}
+
+		for _, cr := range crList {
+			updated := false
+			owners := cr.GetOwnerReferences()
+			newOwners := []v1.OwnerReference{}
+
+			for _, owner := range owners {
+				if string(owner.UID) != targetUID {
+					newOwners = append(newOwners, owner)
+				} else {
+					updated = true
+				}
+			}
+
+			if updated {
+				logging.Info("Removing ownerReference for %s/%s", crd.Resource, cr.GetName())
+				cr.SetOwnerReferences(newOwners)
+
+				_, err := k8sclientset.Dynamic.Resource(gvr).Namespace(clusterNamespace).Update(ctx, &cr, v1.UpdateOptions{})
+				if err != nil {
+					logging.Fatal(fmt.Errorf("Failed to update ownerReferences for %s/%s: %v", crd.Resource, cr.GetName(), err))
+				}
+			}
+		}
+	}
 	secrets, err := k8sclientset.Kube.CoreV1().Secrets(clusterNamespace).List(ctx, v1.ListOptions{})
 	if err != nil {
 		logging.Fatal(errors.Wrapf(err, "Failed to list secrets"))
