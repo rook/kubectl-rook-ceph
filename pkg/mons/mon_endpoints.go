@@ -19,7 +19,7 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"regexp"
+	"strings"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 
@@ -49,9 +49,23 @@ func GetMonEndpoint(ctx context.Context, k8sclientset kubernetes.Interface, clus
 	}
 
 	monData := monCm.Data["data"]
-	reg, err := regexp.Compile("[^0-9,.:]+")
-	if err != nil {
-		logging.Fatal(err)
+
+	if !strings.Contains(monData, "=") {
+		return monData
 	}
-	return reg.ReplaceAllLiteralString(monData, "")
+
+	monEndpoints := strings.Split(monData, ",")
+	var endpoints []string
+
+	for _, monEndpoint := range monEndpoints {
+		monEndpoint = strings.TrimSpace(monEndpoint)
+		if idx := strings.Index(monEndpoint, "="); idx != -1 {
+			endpoint := monEndpoint[idx+1:]
+			endpoints = append(endpoints, endpoint)
+		} else {
+			endpoints = append(endpoints, monEndpoint)
+		}
+	}
+
+	return strings.Join(endpoints, ",")
 }
