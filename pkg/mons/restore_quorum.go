@@ -20,6 +20,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"strings"
 	"time"
@@ -132,7 +133,7 @@ func restoreQuorum(ctx context.Context, clientsets *k8sutil.Clientsets, operator
 	updateMonMap(ctx, clientsets, clusterNamespace, labelSelector, cephFsid, goodMon, goodMonPublicIp, badMons)
 
 	logging.Info("Restoring the mons in the rook-ceph-mon-endpoints configmap to the good mon")
-	monCm.Data["data"] = fmt.Sprintf("%s=%s:%s", goodMon, goodMonPublicIp, goodMonPort)
+	monCm.Data["data"] = fmt.Sprintf("%s=%s", goodMon, net.JoinHostPort(goodMonPublicIp, goodMonPort))
 
 	_, err = clientsets.Kube.CoreV1().ConfigMaps(clusterNamespace).Update(ctx, monCm, v1.UpdateOptions{})
 	if err != nil {

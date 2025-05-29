@@ -17,6 +17,8 @@ package mons
 
 import (
 	"context"
+	"fmt"
+	"net"
 	"testing"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
@@ -97,24 +99,111 @@ func TestParseMonEndpoint(t *testing.T) {
 
 func TestGetMonEndpoint(t *testing.T) {
 	ctx := context.TODO()
-	newClient := fake.NewSimpleClientset
-	k8s := newClient()
-	clientsets := k8sutil.Clientsets{
-		Kube: k8s,
-	}
-	ns := "rook-ceph"
-	cm := &v1.ConfigMap{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      MonConfigMap,
-			Namespace: ns,
+
+	tests := []struct {
+		name     string
+		data     string
+		expected string
+	}{
+		{
+			name:     "Legacy format IPv4",
+			data:     "10.96.52.53:6789",
+			expected: "10.96.52.53:6789",
 		},
-		Data: map[string]string{
-			"data": "10.96.52.53:6789",
+		{
+			name:     "Single IPv4 monitor with name",
+			data:     "mon-a=192.168.1.100:6789",
+			expected: "192.168.1.100:6789",
+		},
+		{
+			name:     "Single IPv6 monitor with name",
+			data:     "i=[2a02:5501:31:c0a::4]:6789",
+			expected: "[2a02:5501:31:c0a::4]:6789",
+		},
+		{
+			name:     "Multiple IPv6 monitors",
+			data:     "j=[2a02:5501:31:c0a::3]:6789,i=[2a02:5501:31:c0a::4]:6789",
+			expected: "[2a02:5501:31:c0a::3]:6789,[2a02:5501:31:c0a::4]:6789",
+		},
+		{
+			name:     "Mixed IPv4 and IPv6 monitors",
+			data:     "mon-a=192.168.1.100:6789,i=[2a02:5501:31:c0a::4]:6789",
+			expected: "192.168.1.100:6789,[2a02:5501:31:c0a::4]:6789",
 		},
 	}
-	_, err := clientsets.Kube.CoreV1().ConfigMaps(ns).Create(ctx, cm, metav1.CreateOptions{})
-	assert.NoError(t, err)
-	monData := GetMonEndpoint(context.TODO(), clientsets.Kube, ns)
-	assert.Equal(t, "10.96.52.53:6789", monData)
-	assert.NotEqual(t, "10.96.52.54:6789", monData)
+
+	for i, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+
+			newClient := fake.NewSimpleClientset
+			k8s := newClient()
+			clientsets := k8sutil.Clientsets{
+				Kube: k8s,
+			}
+
+			ns := fmt.Sprintf("rook-ceph-test-%d", i)
+
+			cm := &v1.ConfigMap{
+				ObjectMeta: metav1.ObjectMeta{
+					Name:      MonConfigMap,
+					Namespace: ns,
+				},
+				Data: map[string]string{
+					"data": tt.data,
+				},
+			}
+
+			_, err := clientsets.Kube.CoreV1().ConfigMaps(ns).Create(ctx, cm, metav1.CreateOptions{})
+			assert.NoError(t, err)
+
+			monData := GetMonEndpoint(ctx, clientsets.Kube, ns)
+			assert.Equal(t, tt.expected, monData)
+		})
+	}
+}
+
+func TestMonEndpointFormatting(t *testing.T) {
+	tests := []struct {
+		name         string
+		goodMon      string
+		ip           string
+		port         string
+		expectedData string
+	}{
+		{
+			name:         "IPv4 address formatting",
+			goodMon:      "mon-a",
+			ip:           "192.168.1.100",
+			port:         "6789",
+			expectedData: "mon-a=192.168.1.100:6789",
+		},
+		{
+			name:         "IPv6 address formatting",
+			goodMon:      "i",
+			ip:           "2a02:5501:31:c0a::4",
+			port:         "6789",
+			expectedData: "i=[2a02:5501:31:c0a::4]:6789",
+		},
+		{
+			name:         "IPv6 localhost formatting",
+			goodMon:      "mon-local",
+			ip:           "::1",
+			port:         "6789",
+			expectedData: "mon-local=[::1]:6789",
+		},
+		{
+			name:         "IPv4 localhost formatting",
+			goodMon:      "mon-local",
+			ip:           "127.0.0.1",
+			port:         "6789",
+			expectedData: "mon-local=127.0.0.1:6789",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := fmt.Sprintf("%s=%s", tt.goodMon, net.JoinHostPort(tt.ip, tt.port))
+			assert.Equal(t, tt.expectedData, result)
+		})
+	}
 }
