@@ -61,7 +61,7 @@ func printStatus(ctx context.Context, k8sclientset *k8sutil.Clientsets, clusterN
 		if err != nil {
 			logging.Fatal(err)
 		}
-		logging.Info(fmt.Sprint(resource, " ", crResource.GetName()))
+		logging.Info("%s %s", resource, crResource.GetName())
 		fmt.Println(string(statusYamlData))
 	}
 }
