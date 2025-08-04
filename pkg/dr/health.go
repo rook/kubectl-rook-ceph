@@ -69,7 +69,7 @@ func Health(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespa
 		logging.Warning("failed to get ceph status from peer cluster, please check for network issues between the clusters")
 		return
 	}
-	logging.Info(cephStatus)
+	logging.Info("%s", cephStatus)
 
 	logging.Info("running mirroring daemon health")
 

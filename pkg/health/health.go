@@ -108,11 +108,11 @@ func checkPodsOnNodes(ctx context.Context, k8sclientset kubernetes.Interface, cl
 func checkMonQuorum(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string) {
 	cephHealthDetails, _ := unMarshalCephStatus(ctx, clientsets, operatorNamespace, clusterNamespace)
 	if cephHealthDetails == "HEALTH_OK" {
-		logging.Info(cephHealthDetails)
+		logging.Info("%s", cephHealthDetails)
 	} else if cephHealthDetails == "HEALTH_WARN" {
-		logging.Warning(cephHealthDetails)
+		logging.Warning("%s", cephHealthDetails)
 	} else if cephHealthDetails == "HEALTH_ERR" {
-		logging.Error(fmt.Errorf(cephHealthDetails))
+		logging.Error(fmt.Errorf("%s", cephHealthDetails))
 	}
 }
 

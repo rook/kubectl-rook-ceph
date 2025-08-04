@@ -19,7 +19,6 @@ package crds
 import (
 	"context"
 	"encoding/json"
-	"fmt"
 	"time"
 
 	"github.com/pkg/errors"
@@ -111,11 +110,11 @@ func deleteCustomResources(ctx context.Context, clientsets k8sutil.ClientsetsInt
 		}
 
 		for _, item := range items {
-			logging.Info(fmt.Sprintf("removing resource %s: %s", resource, item.GetName()))
+			logging.Info("removing resource %s: %s", resource, item.GetName())
 			err = clientsets.DeleteResourcesDynamically(ctx, CephRookIoGroup, CephRookResourcesVersion, resource, clusterNamespace, item.GetName())
 			if err != nil {
 				if k8sErrors.IsNotFound(err) {
-					logging.Info(err.Error())
+					logging.Info("%v", err)
 					continue
 				}
 				return err
@@ -129,11 +128,11 @@ func deleteCustomResources(ctx context.Context, clientsets k8sutil.ClientsetsInt
 			}
 
 			if itemResource != nil {
-				logging.Info(fmt.Sprintf("resource %q is not yet deleted, applying patch to remove finalizer...", itemResource.GetName()))
+				logging.Info("resource %q is not yet deleted, applying patch to remove finalizer...", itemResource.GetName())
 				err = updatingFinalizers(ctx, clientsets, itemResource, resource, clusterNamespace)
 				if err != nil {
 					if k8sErrors.IsNotFound(err) {
-						logging.Info(err.Error())
+						logging.Info("%v", err)
 						continue
 					}
 					return err
