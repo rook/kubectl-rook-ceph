@@ -18,28 +18,57 @@ function find_extra_block_dev() {
   boot_dev="$(sudo lsblk --noheading --list --output MOUNTPOINT,PKNAME | grep boot | awk '{print $2}')"
   echo "  == find_extra_block_dev(): boot_dev='$boot_dev'" >/dev/stderr # debug in case of future errors
   # --nodeps ignores partitions
-  extra_dev="$(sudo lsblk --noheading --list --nodeps --output KNAME | grep -v loop | grep -v "$boot_dev" | head -1)"
+  extra_dev="$(sudo lsblk --noheading --list --nodeps --output KNAME | egrep -v "($boot_dev|loop|nbd)" | head -1)"
   echo "  == find_extra_block_dev(): extra_dev='$extra_dev'" >/dev/stderr # debug in case of future errors
   echo "$extra_dev"                                                       # output of function
 }
 
 : "${BLOCK:=$(find_extra_block_dev)}"
+function block_dev() {
+  declare -g DEFAULT_BLOCK_DEV
+  : "${DEFAULT_BLOCK_DEV:=/dev/$(block_dev_basename)}"
+
+  echo "$DEFAULT_BLOCK_DEV"
+}
+
+function block_dev_basename() {
+  declare -g DEFAULT_BLOCK_DEV_BASENAME
+  : "${DEFAULT_BLOCK_DEV_BASENAME:=$(find_extra_block_dev)}"
+
+  echo "$DEFAULT_BLOCK_DEV_BASENAME"
+}
+
 
 # source https://github.com/rook/rook
-use_local_disk() {
-  BLOCK_DATA_PART="/dev/${BLOCK}1"
+function use_local_disk() {
+  BLOCK_DATA_PART="$(block_dev)1"
   sudo apt purge snapd -y
   sudo dmsetup version || true
   sudo swapoff --all --verbose
-  sudo umount /mnt
-  # search for the device since it keeps changing between sda and sdb
-  sudo wipefs --all --force "$BLOCK_DATA_PART"
+  if mountpoint -q /mnt; then
+    sudo umount /mnt
+    # search for the device since it keeps changing between sda and sdb
+    sudo wipefs --all --force "$BLOCK_DATA_PART"
+  else
+    # it's the hosted runner!
+    sudo sgdisk --zap-all -- "$(block_dev)"
+    sudo dd if=/dev/zero of="$(block_dev)" bs=1M count=10 oflag=direct,dsync
+    sudo parted -s "$(block_dev)" mklabel gpt
+  fi
+  sudo lsblk
+}
+
+function create_partitions_for_osds() {
+  tests/create-bluestore-partitions.sh --disk "$(block_dev)" --osd-count 3
+  sudo lsblk
 }
 
 deploy_rook() {
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/common.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/crds.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/operator.yaml
+
+  wait_for_operator_pod_to_be_ready_state rook-ceph
   curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/cluster-test.yaml -o cluster-test.yaml
   sed -i "s|#deviceFilter:|deviceFilter: ${BLOCK/\/dev\//}|g" cluster-test.yaml
   sed -i '0,/count: 1/ s/count: 1/count: 3/' cluster-test.yaml
@@ -224,12 +253,14 @@ EOF
 
 wait_for_pod_to_be_ready_state() {
   export cluster_ns=$1
-  timeout 200 bash <<-'EOF'
+  timeout 600 bash <<-'EOF'
     set -x
-    until [ $(kubectl get pod -l app=rook-ceph-osd -n "${cluster_ns}" -o jsonpath='{.items[*].metadata.name}' -o custom-columns=READY:status.containerStatuses[*].ready | grep -c true) -eq 1 ]; do
+
+     until [ $(kubectl get pod -l app=rook-ceph-osd -n "${cluster_ns}" -o jsonpath='{.items[*].metadata.name}' -o custom-columns=READY:status.containerStatuses[*].ready | grep -c true) -eq 3 ]; do
       echo "waiting for the pods to be in ready state"
       sleep 1
     done
+    echo "All 3 OSD pods are ready!"
 EOF
   timeout_command_exit_code
 }
@@ -283,9 +314,9 @@ timeout_command_exit_code() {
   fi
 }
 
-install_minikube_with_none_driver() {
-  CRICTL_VERSION="v1.31.1"
-  MINIKUBE_VERSION="v1.34.0"
+function install_minikube_with_none_driver() {
+  CRICTL_VERSION="v1.33.0"
+  MINIKUBE_VERSION="v1.36.0"
 
   sudo apt update
   sudo apt install -y conntrack socat
@@ -293,16 +324,16 @@ install_minikube_with_none_driver() {
   sudo dpkg -i minikube_latest_amd64.deb
   rm -f minikube_latest_amd64.deb
 
-  curl -LO https://github.com/Mirantis/cri-dockerd/releases/download/v0.3.15/cri-dockerd_0.3.15.3-0.ubuntu-focal_amd64.deb
-  sudo dpkg -i cri-dockerd_0.3.15.3-0.ubuntu-focal_amd64.deb
-  rm -f cri-dockerd_0.3.15.3-0.ubuntu-focal_amd64.deb
+  curl -LO https://github.com/Mirantis/cri-dockerd/releases/download/v0.4.0/cri-dockerd_0.4.0.3-0.ubuntu-focal_amd64.deb
+  sudo dpkg -i cri-dockerd_0.4.0.3-0.ubuntu-focal_amd64.deb
+  rm -f cri-dockerd_0.4.0.3-0.ubuntu-focal_amd64.deb
 
   wget https://github.com/kubernetes-sigs/cri-tools/releases/download/$CRICTL_VERSION/crictl-$CRICTL_VERSION-linux-amd64.tar.gz
   sudo tar zxvf crictl-$CRICTL_VERSION-linux-amd64.tar.gz -C /usr/local/bin
   rm -f crictl-$CRICTL_VERSION-linux-amd64.tar.gz
   sudo sysctl fs.protected_regular=0
 
-  CNI_PLUGIN_VERSION="v1.5.1"
+  CNI_PLUGIN_VERSION="v1.7.1"
   CNI_PLUGIN_TAR="cni-plugins-linux-amd64-$CNI_PLUGIN_VERSION.tgz" # change arch if not on amd64
   CNI_PLUGIN_INSTALL_DIR="/opt/cni/bin"
 
