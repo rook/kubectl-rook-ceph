@@ -28,6 +28,7 @@ import (
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
@@ -172,7 +173,12 @@ func getK8sRefSnapshotHandle(ctx context.Context, clientsets *k8sutil.Clientsets
 	}
 	snapList, err := snapConfig.VolumeSnapshotContents().List(ctx, v1.ListOptions{})
 	if err != nil {
-		logging.Fatal(fmt.Errorf("Error fetching volumesnapshotcontents: %v\n", err))
+		// ignore only NotFound
+		if apierrors.ReasonForError(err) == v1.StatusReasonNotFound {
+			logging.Info("volumesnapshotcontents resource not found, skipping snapshot checks")
+			return make(map[string]snapshotInfo)
+		}
+		logging.Fatal(fmt.Errorf("error fetching volumesnapshotcontents: %v", err))
 	}
 
 	snapshotHandles := make(map[string]snapshotInfo)
