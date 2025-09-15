@@ -40,6 +40,9 @@ deploy_rook() {
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/common.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/crds.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/operator.yaml
+  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi-operator.yaml
+
+  wait_for_operator_pod_to_be_ready_state rook-ceph
   curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/cluster-test.yaml -o cluster-test.yaml
   sed -i "s|#deviceFilter:|deviceFilter: ${BLOCK/\/dev\//}|g" cluster-test.yaml
   sed -i '0,/count: 1/ s/count: 1/count: 3/' cluster-test.yaml
@@ -63,6 +66,10 @@ deploy_rook_in_custom_namespace() {
 
   curl -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/operator.yaml -o operator.yaml
   deploy_with_custom_ns "$OPERATOR_NS" "$CLUSTER_NS" operator.yaml
+
+  curl -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi-operator.yaml -o csi-operator.yaml
+  sed -i "s|namespace: rook-ceph|namespace: ${OPERATOR_NS}|g" csi-operator.yaml
+  kubectl create -f csi-operator.yaml
 
   curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/cluster-test.yaml -o cluster-test.yaml
   sed -i "s|#deviceFilter:|deviceFilter: ${BLOCK/\/dev\//}|g" cluster-test.yaml
