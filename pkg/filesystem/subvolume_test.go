@@ -65,33 +65,40 @@ func TestGetOmapVal(t *testing.T) {
 	}
 }
 
-func TestGetSubvolumeNameFromPath(t *testing.T) {
+func TestGenerateSubvolumeNameFromVolumeHandle(t *testing.T) {
 
 	tests := []struct {
-		path string
-		name string
-		err  error
+		prefix       string
+		volumeHandle string
+		name         string
+		err          error
 	}{
 		{
-			path: "/volumes/csi/csi-vol-6a99b552-fdcc-441d-b1e6-a522a85a503d/5f4e4caa-f835-41ba-83c1-5bbd57f6aedf",
-			name: "csi-vol-6a99b552-fdcc-441d-b1e6-a522a85a503d",
+			prefix:       "myvol-",
+			volumeHandle: "0001-0011-openshift-storage-0000000000000001-aac40941-9b54-432f-8a63-3b1614a4e024",
+			name:         "myvol-aac40941-9b54-432f-8a63-3b1614a4e024",
 		},
 		{
-			path: "",
-			err:  fmt.Errorf("failed to get name from subvolumepath: "),
+			volumeHandle: "0001-0011-openshift-storage-0000000000000001-aac40941-9b54-432f-8a63-3b1614a4e024",
+			name:         "csi-vol-aac40941-9b54-432f-8a63-3b1614a4e024",
 		},
 		{
-			path: "/volumes/csi-vol-6a99b552-fdcc-441d-b1e6-a522a85a503d/5f4e4caa-f835-41ba-83c1-5bbd57f6aedf",
-			name: "5f4e4caa-f835-41ba-83c1-5bbd57f6aedf",
+			volumeHandle: "0001-0009-rook-ceph-0000000000000001-aac40941-9b54-432f-8a63-3b1614a4e024",
+			name:         "csi-vol-aac40941-9b54-432f-8a63-3b1614a4e024",
 		},
 		{
-			path: "csi-vol-6a99b552-fdcc-441d-b1e6-a522a85a503d/5f4e4caa-f835-41ba-83c1-5bbd57f6aedf",
-			err:  fmt.Errorf(`failed to get name from subvolumepath: csi-vol-6a99b552-fdcc-441d-b1e6-a522a85a503d/5f4e4caa-f835-41ba-83c1-5bbd57f6aedf`),
+			prefix:       "",
+			volumeHandle: "0002-0009-rook-ceph-0000000000000001-aac40941-9b54-432f-8a63-3b1614a4e024",
+			err:          fmt.Errorf("failed to extract prefix: volume handle \"0002-0009-rook-ceph-0000000000000001-aac40941-9b54-432f-8a63-3b1614a4e024\" uses an unsupported version format"),
+		},
+		{
+			volumeHandle: "ac40941-9b54-432f-8a63-3b1614a4e024",
+			err:          fmt.Errorf("volume handle too short to extract subvolume name: ac40941-9b54-432f-8a63-3b1614a4e024"),
 		},
 	}
 	for _, tt := range tests {
-		t.Run(tt.path, func(t *testing.T) {
-			name, err := getSubvolumeNameFromPath(tt.path)
+		t.Run(tt.volumeHandle, func(t *testing.T) {
+			name, err := generateSubvolumeNameFromVolumeHandle(tt.prefix, tt.volumeHandle)
 			if err != nil {
 				assert.Error(t, err)
 				assert.Equal(t, tt.err.Error(), err.Error())
