@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	osexec "os/exec"
 	"strings"
 	"syscall"
 
@@ -233,6 +234,9 @@ func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, o
 	}
 	fmt.Println("Filesystem  Subvolume  SubvolumeGroup  State")
 
+	// collect subvolumes that are not ready (EAGAIN) to show a summary at the end
+	var notReadyErrors []string
+
 	// this iterates over the filesystems and subvolumegroup to get the list of subvolumes that exist
 	for _, fs := range fsstruct {
 		// gets the subvolumegroup in the filesystem
@@ -259,10 +263,9 @@ func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, o
 				// subvolume info returns error in case of pending clone or if it is not ready
 				// it is suggested to delete the pvc before deleting the subvolume.
 				if err != nil {
-					if errors.Is(err, syscall.EAGAIN) {
-						logging.Warning("Found pending clone: %q", sv.Name)
-						logging.Warning("Please delete the pending pv if any before deleting the subvolume %s", sv.Name)
-						logging.Warning("To avoid stale resources, please scale down the cephfs deployment before deleting the subvolume.")
+					if isSubvolumeNotReady(err) {
+						// Skip listing this subvolume but remember to report it later
+						notReadyErrors = append(notReadyErrors, fmt.Sprintf("%s/%s/%s: %v", fs.Name, svg.Name, sv.Name, err))
 						continue
 					}
 					logging.Fatal(fmt.Errorf("failed to get subvolume state: %q %q", sv.Name, err))
@@ -300,6 +303,15 @@ func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, o
 			}
 		}
 	}
+
+	// After listing, show a concise summary of skipped subvolumes due to not-ready state
+	if len(notReadyErrors) > 0 {
+		logging.Warning("Some subvolumes were not ready and were skipped (pending clone or in-progress):")
+		for _, m := range notReadyErrors {
+			logging.Warning("  %s", m)
+		}
+		logging.Warning("To avoid stale resources, you may scale down the cephfs deployment before deleting such subvolumes.")
+	}
 }
 
 // getSubvolumeState returns the state of the subvolume
@@ -309,7 +321,8 @@ func getSubvolumeState(ctx context.Context, clientsets *k8sutil.Clientsets, oper
 
 	subVolumeInfo, errvol := runCommand(ctx, clientsets, operatorNamespace, clusterNamespace, cmd, args)
 	if errvol != nil {
-		logging.Error(errvol, "failed to get subvolume info")
+		// Avoid fmt EXTRA artifacts by formatting the error ourselves
+		logging.Error(fmt.Errorf("failed to get subvolume info for %s/%s/%s: %v", fsName, SubvolumeGroup, SubVol, errvol))
 		return "", errvol
 	}
 	var info map[string]interface{}
@@ -322,6 +335,59 @@ func getSubvolumeState(ctx context.Context, clientsets *k8sutil.Clientsets, oper
 		logging.Fatal(fmt.Errorf("failed to get the state of subvolume: %q", SubVol))
 	}
 	return state, nil
+}
+
+// exitCodeFromError extracts exit code from wrapped errors if possible.
+func exitCodeFromError(err error) (int, bool) {
+	// errno-style errors
+	var errno syscall.Errno
+	if errors.As(err, &errno) {
+		return int(errno), true
+	}
+	// errors with ExitStatus()
+	type exitStatuser interface{ ExitStatus() int }
+	var es exitStatuser
+	if errors.As(err, &es) {
+		return es.ExitStatus(), true
+	}
+	// os/exec errors
+	var ee *osexec.ExitError
+	if errors.As(err, &ee) {
+		if status, ok := ee.Sys().(syscall.WaitStatus); ok {
+			return status.ExitStatus(), true
+		}
+	}
+	return 0, false
+}
+
+// isSubvolumeNotReady detects Ceph EAGAIN "not ready" conditions
+func isSubvolumeNotReady(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Best check: proper error type match
+	if errors.Is(err, syscall.EAGAIN) {
+		return true
+	}
+
+	// Next best: exit codes 11 or -11 (common Ceph EAGAIN)
+	if code, ok := exitCodeFromError(err); ok {
+		if code == 11 || code == -11 {
+			return true
+		}
+	}
+
+	// Fallback: minimal string detection
+	msg := err.Error()
+	if strings.Contains(msg, "EAGAIN") {
+		return true
+	}
+	if strings.Contains(msg, "exit code 11") || strings.Contains(msg, "exit status 11") || strings.Contains(msg, "exit status -11") {
+		return true
+	}
+
+	return false
 }
 
 // gets list of filesystem
