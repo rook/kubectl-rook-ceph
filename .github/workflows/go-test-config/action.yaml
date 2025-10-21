@@ -116,7 +116,7 @@ runs:
         tests/github-action-helper.sh create_stale_subvolume
         subVol=$(kubectl rook-ceph ${NS_OPT} subvolume ls --stale | awk '{print $2}' | grep csi-vol)
         kubectl rook_ceph ${NS_OPT} subvolume delete myfs $subVol
-      
+
     - name: Get rbd list
       shell: bash --noprofile --norc -eo pipefail -x {0}
       run: |

@@ -274,11 +274,16 @@ wait_for_deployment_to_be_running() {
 
 wait_for_crd_to_be_ready() {
   export cluster_ns=$1
-  timeout 150 bash <<-'EOF'
+  timeout 300 bash <<-'EOF'
+    set -x
     until [ $(kubectl -n "${cluster_ns}" get cephcluster my-cluster -o=jsonpath='{.status.phase}') == "Ready" ]; do
       echo "Waiting for the CephCluster my-cluster to be in the Ready state..."
+      current_phase=$(kubectl -n "${cluster_ns}" get cephcluster my-cluster -o=jsonpath='{.status.phase}' 2>/dev/null || echo "not found")
+      echo "Current CephCluster phase: $current_phase"
+      kubectl get cephcluster -n "${cluster_ns}" -o wide 2>/dev/null || echo "CephCluster not accessible"
       sleep 2
     done
+    echo "CephCluster my-cluster is now in Ready state!"
 EOF
 }
 
