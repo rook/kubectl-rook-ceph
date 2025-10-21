@@ -39,7 +39,9 @@ use_local_disk() {
 deploy_rook() {
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/common.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/crds.yaml
-  kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/operator.yaml
+  curl https://raw.githubusercontent.com/rook/rook/master/deploy/examples/operator.yaml -o operator.yaml
+  sed -i 's|image: docker.io/rook/ceph:master|image: subham03/rook:race|g' operator.yaml
+  kubectl create -f operator.yaml
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi-operator.yaml
 
   wait_for_operator_pod_to_be_ready_state rook-ceph
@@ -65,6 +67,7 @@ deploy_rook_in_custom_namespace() {
   kubectl create -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/crds.yaml
 
   curl -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/operator.yaml -o operator.yaml
+  sed -i 's|image: docker.io/rook/ceph:master|image: subham03/rook:race|g' operator.yaml
   deploy_with_custom_ns "$OPERATOR_NS" "$CLUSTER_NS" operator.yaml
 
   curl -f https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi-operator.yaml -o csi-operator.yaml
@@ -139,15 +142,15 @@ deploy_csi_driver_rados_namespace() {
   kubectl create -f cephblockpoolradosnamespace_a.yaml
   wait_for_cephblockpoolradosnamespace_ready_state "rook-ceph" "namespace-a" 60
 
-  # Restart the rook-ceph-operator pod to ensure it picks up new resources
-  operator_pod=$(kubectl -n rook-ceph get pods -l app=rook-ceph-operator -o jsonpath='{.items[0].metadata.name}')
-  if [ -n "$operator_pod" ]; then
-    kubectl -n rook-ceph delete pod "$operator_pod"
-    echo "rook-ceph-operator pod $operator_pod deleted. Waiting for it to restart..."
-  else
-    echo "rook-ceph-operator pod not found, skipping restart."
-  fi
-  wait_for_operator_pod_to_be_ready_state rook-ceph
+  # # Restart the rook-ceph-operator pod to ensure it picks up new resources
+  # operator_pod=$(kubectl -n rook-ceph get pods -l app=rook-ceph-operator -o jsonpath='{.items[0].metadata.name}')
+  # if [ -n "$operator_pod" ]; then
+  #   kubectl -n rook-ceph delete pod "$operator_pod"
+  #   echo "rook-ceph-operator pod $operator_pod deleted. Waiting for it to restart..."
+  # else
+  #   echo "rook-ceph-operator pod not found, skipping restart."
+  # fi
+  # wait_for_operator_pod_to_be_ready_state rook-ceph
 
   curl https://raw.githubusercontent.com/rook/rook/refs/heads/master/deploy/examples/radosnamespace.yaml -o cephblockpoolradosnamespace_b.yaml
   sed -i "s|blockPoolName: replicapool|blockPoolName: blockpool-rados-ns |g" cephblockpoolradosnamespace_b.yaml
@@ -297,6 +300,7 @@ wait_for_ceph_cluster_to_be_ready() {
     done
     echo "CephCluster my-cluster is now in Ready state!"
 EOF
+  timeout_command_exit_code
 }
 
 timeout_command_exit_code() {
