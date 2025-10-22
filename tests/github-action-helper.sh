@@ -127,21 +127,23 @@ deploy_csi_driver_default_ns() {
 }
 
 deploy_csi_driver_rados_namespace() {
+  wait_for_cephblockpool_ready_state "rook-ceph" "replicapool" 60
+
   curl https://raw.githubusercontent.com/rook/rook/refs/heads/master/deploy/examples/pool-test.yaml -o pool_rados_ns.yaml
   sed -i "s|name: replicapool|name: blockpool-rados-ns |g" pool_rados_ns.yaml
   kubectl create -f pool_rados_ns.yaml
-  wait_for_cephblockpool_ready_state "rook-ceph" "blockpool-rados-ns" 30
+  wait_for_cephblockpool_ready_state "rook-ceph" "blockpool-rados-ns" 60
 
   curl https://raw.githubusercontent.com/rook/rook/refs/heads/master/deploy/examples/radosnamespace.yaml -o cephblockpoolradosnamespace_a.yaml
   sed -i "s|blockPoolName: replicapool|blockPoolName: blockpool-rados-ns |g" cephblockpoolradosnamespace_a.yaml
   kubectl create -f cephblockpoolradosnamespace_a.yaml
-  wait_for_cephblockpoolradosnamespace_ready_state "rook-ceph" "namespace-a" 30
+  wait_for_cephblockpoolradosnamespace_ready_state "rook-ceph" "namespace-a" 60
 
   curl https://raw.githubusercontent.com/rook/rook/refs/heads/master/deploy/examples/radosnamespace.yaml -o cephblockpoolradosnamespace_b.yaml
   sed -i "s|blockPoolName: replicapool|blockPoolName: blockpool-rados-ns |g" cephblockpoolradosnamespace_b.yaml
   sed -i "s|name: namespace-a|name: namespace-b |g" cephblockpoolradosnamespace_b.yaml
   kubectl create -f cephblockpoolradosnamespace_b.yaml
-  wait_for_cephblockpoolradosnamespace_ready_state "rook-ceph" "namespace-b" 30
+  wait_for_cephblockpoolradosnamespace_ready_state "rook-ceph" "namespace-b" 60
 
   cluster_id=$(kubectl -n rook-ceph get cephblockpoolradosnamespace/namespace-a -o jsonpath='{.status.info.clusterID}')
   echo "cluster_id=${cluster_id}"
@@ -274,11 +276,16 @@ wait_for_deployment_to_be_running() {
 
 wait_for_crd_to_be_ready() {
   export cluster_ns=$1
-  timeout 150 bash <<-'EOF'
+  timeout 300 bash <<-'EOF'
+    set -x
     until [ $(kubectl -n "${cluster_ns}" get cephcluster my-cluster -o=jsonpath='{.status.phase}') == "Ready" ]; do
       echo "Waiting for the CephCluster my-cluster to be in the Ready state..."
+      current_phase=$(kubectl -n "${cluster_ns}" get cephcluster my-cluster -o=jsonpath='{.status.phase}' 2>/dev/null || echo "not found")
+      echo "Current CephCluster phase: $current_phase"
+      kubectl get cephcluster -n "${cluster_ns}" -o wide 2>/dev/null || echo "CephCluster not accessible"
       sleep 2
     done
+    echo "CephCluster my-cluster is now in Ready state!"
 EOF
 }
 
