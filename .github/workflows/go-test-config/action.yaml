@@ -178,7 +178,7 @@ runs:
         kubectl -n ${{ inputs.cluster-ns }} delete cephcluster my-cluster --timeout 3s --wait=false
 
         kubectl rook-ceph ${NS_OPT} restore-deleted cephclusters
-        tests/github-action-helper.sh wait_for_crd_to_be_ready ${{ inputs.cluster-ns }}
+        tests/github-action-helper.sh wait_for_ceph_cluster_to_be_ready ${{ inputs.cluster-ns }}
 
     - name: Restore CRD with CRName
       shell: bash --noprofile --norc -eo pipefail -x {0}
@@ -187,7 +187,7 @@ runs:
         kubectl -n ${{ inputs.cluster-ns }} delete cephcluster my-cluster --timeout 3s --wait=false
 
         kubectl rook-ceph ${NS_OPT} restore-deleted cephclusters my-cluster
-        tests/github-action-helper.sh wait_for_crd_to_be_ready ${{ inputs.cluster-ns }}
+        tests/github-action-helper.sh wait_for_ceph_cluster_to_be_ready ${{ inputs.cluster-ns }}
 
     - name: Show Cluster State
       shell: bash --noprofile --norc -eo pipefail -x {0}
