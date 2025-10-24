@@ -139,6 +139,16 @@ deploy_csi_driver_rados_namespace() {
   kubectl create -f cephblockpoolradosnamespace_a.yaml
   wait_for_cephblockpoolradosnamespace_ready_state "rook-ceph" "namespace-a" 60
 
+  # Restart the rook-ceph-operator pod to ensure it picks up new resources
+  operator_pod=$(kubectl -n rook-ceph get pods -l app=rook-ceph-operator -o jsonpath='{.items[0].metadata.name}')
+  if [ -n "$operator_pod" ]; then
+    kubectl -n rook-ceph delete pod "$operator_pod"
+    echo "rook-ceph-operator pod $operator_pod deleted. Waiting for it to restart..."
+  else
+    echo "rook-ceph-operator pod not found, skipping restart."
+  fi
+  wait_for_operator_pod_to_be_ready_state rook-ceph
+
   curl https://raw.githubusercontent.com/rook/rook/refs/heads/master/deploy/examples/radosnamespace.yaml -o cephblockpoolradosnamespace_b.yaml
   sed -i "s|blockPoolName: replicapool|blockPoolName: blockpool-rados-ns |g" cephblockpoolradosnamespace_b.yaml
   sed -i "s|name: namespace-a|name: namespace-b |g" cephblockpoolradosnamespace_b.yaml
@@ -251,8 +261,8 @@ wait_for_operator_pod_to_be_ready_state() {
       echo "waiting for the operator to be in ready state"
       sleep 1
     done
+    echo "rook-ceph-operator pod is in ready state!"
 EOF
-  timeout_command_exit_code
 }
 
 wait_for_three_mons() {
