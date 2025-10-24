@@ -21,6 +21,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strconv"
 	"strings"
 	"syscall"
 
@@ -138,8 +139,9 @@ func getK8sRefSubvolume(ctx context.Context, clientsets *k8sutil.Clientsets) map
 		if pv.Spec.CSI != nil {
 			driverName := pv.Spec.CSI.Driver
 			if strings.Contains(driverName, "cephfs.csi.ceph.com") {
-				subvolumePath := pv.Spec.CSI.VolumeAttributes["subvolumePath"]
-				name, err := getSubvolumeNameFromPath(subvolumePath)
+				volumeHandle := pv.Spec.CSI.VolumeHandle
+				prefix := pv.Spec.CSI.VolumeAttributes["volumeNamePrefix"]
+				name, err := generateSubvolumeNameFromVolumeHandle(prefix, volumeHandle)
 				if err != nil {
 					logging.Error(err, "failed to get subvolume name")
 					continue
@@ -151,16 +153,31 @@ func getK8sRefSubvolume(ctx context.Context, clientsets *k8sutil.Clientsets) map
 	return subvolumeNames
 }
 
-// getSubvolumeNameFromPath get the subvolumename from the path.
-// subvolumepath: /volumes/csi/csi-vol-6a99b552-fdcc-441d-b1e6-a522a85a503d/5f4e4caa-f835-41ba-83c1-5bbd57f6aedf
-// subvolumename: csi-vol-6a99b552-fdcc-441d-b1e6-a522a85a503d
-func getSubvolumeNameFromPath(path string) (string, error) {
-	splitSubvol := strings.Split(path, "/")
-	if len(splitSubvol) < 4 {
-		return "", fmt.Errorf("failed to get name from subvolumepath: %s", path)
+// generateSubvolumeNameFromVolumeHandle constructs a subvolume name using the given prefix and volume handle.
+// If the prefix is empty, the function extracts the version from the volume handle.
+// When the version is `1`, the prefix is set to `csi-vol-`.
+// Ref: https://github.com/ceph/ceph-csi/blob/72c09d3d8758d058575d34b2da4b09eb0a591f8f/internal/util/volid.go#L65-L77
+// Example:
+// volumeHandle: 0001-0011-openshift-storage-0000000000000001-aac40941-9b54-432f-8a63-3b1614a4e024
+// prefix: ""
+// subvolumeName: csi-vol-aac40941-9b54-432f-8a63-3b1614a4e024
+func generateSubvolumeNameFromVolumeHandle(prefix string, volumeHandle string) (string, error) {
+	if len(volumeHandle) < 36 {
+		return "", fmt.Errorf("volume handle too short to extract subvolume name: %s", volumeHandle)
 	}
-	name := splitSubvol[3]
+	if prefix == "" {
+		version, err := strconv.ParseInt(volumeHandle[:4], 16, 0)
+		if err != nil {
+			return "", err
+		}
+		if version != 1 {
+			return "", fmt.Errorf("failed to extract prefix: volume handle %q uses an unsupported version format", volumeHandle)
+		}
+		prefix = "csi-vol-"
+	}
+	uuid := volumeHandle[len(volumeHandle)-36:]
 
+	name := fmt.Sprintf("%s%s", prefix, uuid)
 	return name, nil
 }
 
