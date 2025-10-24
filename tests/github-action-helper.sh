@@ -284,7 +284,7 @@ wait_for_deployment_to_be_running() {
   kubectl -n "$namespace" wait deployment "$deployment" --for condition=Available=True --timeout=90s
 }
 
-wait_for_crd_to_be_ready() {
+wait_for_ceph_cluster_to_be_ready() {
   export cluster_ns=$1
   timeout 300 bash <<-'EOF'
     set -x
