@@ -39,6 +39,8 @@ var (
 	operatorNamespace    string
 	cephClusterNamespace string
 	kubeContext          string
+	impersonateUser      string
+	impersonateGroups    []string
 	clientSets           *k8sutil.Clientsets
 )
 
@@ -63,6 +65,8 @@ func init() {
 	RootCmd.PersistentFlags().StringVar(&operatorNamespace, "operator-namespace", "", "Kubernetes namespace where rook operator is running")
 	RootCmd.PersistentFlags().StringVarP(&cephClusterNamespace, "namespace", "n", "rook-ceph", "Kubernetes namespace where CephCluster is created")
 	RootCmd.PersistentFlags().StringVar(&kubeContext, "context", "", "Kubernetes context to use")
+	RootCmd.PersistentFlags().StringVar(&impersonateUser, "as", "", "Username to impersonate for the operation")
+	RootCmd.PersistentFlags().StringSliceVar(&impersonateGroups, "as-group", []string{}, "Group to impersonate for the operation, this flag can be repeated to specify multiple groups")
 }
 
 func getClientsets(ctx context.Context) *k8sutil.Clientsets {
@@ -84,6 +88,14 @@ func getClientsets(ctx context.Context) *k8sutil.Clientsets {
 	clientsets.KubeConfig, err = kubeconfig.ClientConfig()
 	if err != nil {
 		logging.Fatal(err)
+	}
+
+	// Apply impersonation settings if specified
+	if impersonateUser != "" {
+		clientsets.KubeConfig.Impersonate.UserName = impersonateUser
+		if len(impersonateGroups) > 0 {
+			clientsets.KubeConfig.Impersonate.Groups = impersonateGroups
+		}
 	}
 
 	clientsets.Rook, err = rookclient.NewForConfig(clientsets.KubeConfig)
