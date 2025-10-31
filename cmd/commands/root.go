@@ -26,20 +26,22 @@ import (
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 	rookclient "github.com/rook/rook/pkg/client/clientset/versioned"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	v1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/dynamic"
 	k8s "k8s.io/client-go/kubernetes"
 	_ "k8s.io/client-go/plugin/pkg/client/auth"
+	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
+	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
 var (
-	kubeConfig           string
 	operatorNamespace    string
 	cephClusterNamespace string
-	kubeContext          string
 	clientSets           *k8sutil.Clientsets
+	clientConfig         clientcmd.ClientConfig
 )
 
 // rookCmd represents the rook command
@@ -49,6 +51,13 @@ var RootCmd = &cobra.Command{
 	Args:             cobra.MinimumNArgs(1),
 	TraverseChildren: true,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
+		// Get the effective namespace from client config
+		effectiveNamespace, _, err := clientConfig.Namespace()
+		if err != nil {
+			logging.Fatal(err)
+		}
+		cephClusterNamespace = effectiveNamespace
+
 		if cephClusterNamespace != "" && operatorNamespace == "" {
 			operatorNamespace = cephClusterNamespace
 		}
@@ -58,11 +67,67 @@ var RootCmd = &cobra.Command{
 }
 
 func init() {
-	// Define your flags and configuration settings.
-	RootCmd.PersistentFlags().StringVar(&kubeConfig, "kubeconfig", "", "kubernetes config path")
+	// Initialize client configuration with all standard kubectl flags first
+	clientConfig = defaultClientConfig(RootCmd.PersistentFlags())
 	RootCmd.PersistentFlags().StringVar(&operatorNamespace, "operator-namespace", "", "Kubernetes namespace where rook operator is running")
-	RootCmd.PersistentFlags().StringVarP(&cephClusterNamespace, "namespace", "n", "rook-ceph", "Kubernetes namespace where CephCluster is created")
-	RootCmd.PersistentFlags().StringVar(&kubeContext, "context", "", "Kubernetes context to use")
+
+	// Set default ceph cluster namespace
+	cephClusterNamespace = "rook-ceph"
+}
+
+// defaultClientConfig creates a client configuration with all standard kubectl flags
+func defaultClientConfig(flags *pflag.FlagSet) clientcmd.ClientConfig {
+	loadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+
+	// Create config overrides and bind standard kubectl flags
+	overrides := &clientcmd.ConfigOverrides{}
+	clientcmd.BindOverrideFlags(overrides, flags, clientcmd.RecommendedConfigOverrideFlags(""))
+
+	// Bind kubeconfig-related flags manually
+	flags.StringVar(&loadingRules.ExplicitPath, "kubeconfig", "", "Path to the kubeconfig file to use for CLI requests")
+
+	// Customize the namespace flag description to indicate our default
+	if namespaceFlag := flags.Lookup("namespace"); namespaceFlag != nil {
+		namespaceFlag.Usage = "If present, the namespace scope for this CLI request (defaults to 'rook-ceph')"
+	}
+
+	// Create the client config
+	baseConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		loadingRules,
+		overrides,
+	)
+
+	// Return a wrapper that can override namespace when needed
+	return &namespacedClientConfig{
+		base: baseConfig,
+	}
+}
+
+// namespacedClientConfig wraps a client config and can override the namespace
+type namespacedClientConfig struct {
+	base clientcmd.ClientConfig
+}
+
+func (c *namespacedClientConfig) RawConfig() (clientcmdapi.Config, error) {
+	return c.base.RawConfig()
+}
+
+func (c *namespacedClientConfig) ClientConfig() (*rest.Config, error) {
+	return c.base.ClientConfig()
+}
+
+func (c *namespacedClientConfig) Namespace() (string, bool, error) {
+	// Check if namespace was explicitly set via flag
+	if baseNs, overridden, err := c.base.Namespace(); err == nil && overridden {
+		// Namespace was explicitly set via flags, use it
+		return baseNs, true, nil
+	}
+	// Use our default namespace (rook-ceph)
+	return cephClusterNamespace, false, nil
+}
+
+func (c *namespacedClientConfig) ConfigAccess() clientcmd.ConfigAccess {
+	return c.base.ConfigAccess()
 }
 
 func getClientsets(ctx context.Context) *k8sutil.Clientsets {
@@ -70,18 +135,8 @@ func getClientsets(ctx context.Context) *k8sutil.Clientsets {
 
 	clientsets := &k8sutil.Clientsets{}
 
-	congfigOverride := &clientcmd.ConfigOverrides{}
-	if kubeContext != "" {
-		congfigOverride = &clientcmd.ConfigOverrides{CurrentContext: kubeContext}
-	}
-
-	// 1. Create Kubernetes Client
-	kubeconfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-		clientcmd.NewDefaultClientConfigLoadingRules(),
-		congfigOverride,
-	)
-
-	clientsets.KubeConfig, err = kubeconfig.ClientConfig()
+	// Use the client configuration that includes all standard kubectl flags
+	clientsets.KubeConfig, err = clientConfig.ClientConfig()
 	if err != nil {
 		logging.Fatal(err)
 	}
