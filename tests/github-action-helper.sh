@@ -121,6 +121,8 @@ deploy_rook() {
 
     echo "Deploying Rook operator..."
     download_and_modify_yaml "https://raw.githubusercontent.com/rook/rook/master/deploy/examples/operator.yaml" "operator.yaml" "$operator_ns" "$cluster_ns"
+    sed -i "s/ROOK_LOG_LEVEL: \"INFO\"/ROOK_LOG_LEVEL: \"DEBUG\"/g" operator.yaml
+    sed -i "s|image: docker.io/rook/ceph:master|image: subham03/rook:rnsn|g" operator.yaml
     apply_yaml "operator.yaml"
 
     echo "Deploying CSI operator..."
@@ -200,13 +202,13 @@ deploy_rados_namespace() {
     sed -i "s|blockPoolName: replicapool|blockPoolName: blockpool-rados-ns|g" "cephblockpoolradosnamespace-namespace-a.yaml"
     sed -i "s|name: namespace-a|name: namespace-a|g" "cephblockpoolradosnamespace-namespace-a.yaml"
     apply_yaml "cephblockpoolradosnamespace-namespace-a.yaml"
-    sleep 10 # wait for the rns to be created
+    # sleep 10 # wait for the rns to be created
 
-    echo "Deleting rook operator pods to restart for namespace-a..."
-    kubectl delete pods -l app=rook-ceph-operator -n "$operator_ns" --force --grace-period=0 || true
+    # echo "Deleting rook operator pods to restart for namespace-a..."
+    # kubectl delete pods -l app=rook-ceph-operator -n "$operator_ns" --force --grace-period=0 || true
 
-    echo "Waiting for Rook operator to be ready after restart..."
-    wait_for_operator_pod_to_be_ready_state "$operator_ns"
+    # echo "Waiting for Rook operator to be ready after restart..."
+    # wait_for_operator_pod_to_be_ready_state "$operator_ns"
     wait_for_cephblockpoolradosnamespace_ready_state "$cluster_ns" "namespace-a" "$DEFAULT_TIMEOUT" "$operator_ns"
 
     # Create second RADOS namespace (namespace-b)
@@ -214,12 +216,12 @@ deploy_rados_namespace() {
     sed -i "s|blockPoolName: replicapool|blockPoolName: blockpool-rados-ns|g" "cephblockpoolradosnamespace-namespace-b.yaml"
     sed -i "s|name: namespace-a|name: namespace-b|g" "cephblockpoolradosnamespace-namespace-b.yaml"
     apply_yaml "cephblockpoolradosnamespace-namespace-b.yaml"
-    sleep 10 # wait for the rns to be created
-    echo "Deleting rook operator pods to restart for namespace-b..."
-    kubectl delete pods -l app=rook-ceph-operator -n "$operator_ns" --force --grace-period=0 || true
+    # sleep 10 # wait for the rns to be created
+    # echo "Deleting rook operator pods to restart for namespace-b..."
+    # kubectl delete pods -l app=rook-ceph-operator -n "$operator_ns" --force --grace-period=0 || true
 
-    echo "Waiting for Rook operator to be ready after restart..."
-    wait_for_operator_pod_to_be_ready_state "$operator_ns"
+    # echo "Waiting for Rook operator to be ready after restart..."
+    # wait_for_operator_pod_to_be_ready_state "$operator_ns"
     wait_for_cephblockpoolradosnamespace_ready_state "$cluster_ns" "namespace-b" "$DEFAULT_TIMEOUT" "$operator_ns"
 
 
