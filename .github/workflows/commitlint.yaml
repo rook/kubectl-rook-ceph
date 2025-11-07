@@ -22,8 +22,8 @@ permissions:
 jobs:
   lint:
     permissions:
-      contents: read  # for actions/checkout to fetch code
-      pull-requests: read  # for wagoid/commitlint-github-action to get commits in PR
+      contents: read # for actions/checkout to fetch code
+      pull-requests: read # for wagoid/commitlint-github-action to get commits in PR
     runs-on: ubuntu-22.04
     env:
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -31,7 +31,7 @@ jobs:
       - uses: actions/checkout@v5
         with:
           fetch-depth: 0
-      - uses: wagoid/commitlint-github-action@v6.2.1
+      - uses: wagoid/commitlint-github-action@v6
         with:
           configFile: "./.commitlintrc.json"
           helpURL: https://rook.io/docs/rook/latest/Contributing/development-flow/#commit-structure
