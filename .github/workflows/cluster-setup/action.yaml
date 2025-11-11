@@ -17,7 +17,7 @@ runs:
     - name: Setup Minikube
       shell: bash --noprofile --norc -eo pipefail -x {0}
       run: |
-        tests/github-action-helper.sh install_minikube_with_none_driver v1.31.0
+        tests/github-action-helper.sh install_minikube_with_none_driver v1.31.3
 
     - name: print k8s cluster status
       shell: bash --noprofile --norc -eo pipefail -x {0}
@@ -29,7 +29,6 @@ runs:
       shell: bash --noprofile --norc -eo pipefail -x {0}
       run: tests/github-action-helper.sh use_local_disk
 
-
     - name: deploy rook cluster
       shell: bash --noprofile --norc -eo pipefail -x {0}
       if: inputs.op-ns == 'rook-ceph' || inputs.cluster-ns == 'rook-ceph'
@@ -38,4 +37,4 @@ runs:
     - name: deploy rook cluster in custom namespace
       shell: bash --noprofile --norc -eo pipefail -x {0}
       if: inputs.op-ns != 'rook-ceph' || inputs.cluster-ns != 'rook-ceph'
-      run: tests/github-action-helper.sh deploy_rook_in_custom_namespace ${{ inputs.op-ns }} ${{ inputs.cluster-ns }}
+      run: tests/github-action-helper.sh deploy_rook ${{ inputs.op-ns }} ${{ inputs.cluster-ns }}

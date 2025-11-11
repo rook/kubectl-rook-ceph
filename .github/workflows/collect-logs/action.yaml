@@ -5,12 +5,23 @@ inputs:
   name:
     description: Name to use for the workflow
     required: true
+  operator-namespace:
+    description: Operator namespace where rook operator is deployed
+    required: false
+    default: rook-ceph
+  cluster-namespace:
+    description: Cluster namespace where ceph cluster is deployed
+    required: false
+    default: rook-ceph
 
 runs:
   using: "composite"
   steps:
     - name: collect common logs
       shell: bash --noprofile --norc -eo pipefail -x {0}
+      env:
+        OPERATOR_NAMESPACE: ${{ inputs.operator-namespace }}
+        CLUSTER_NAMESPACE: ${{ inputs.cluster-namespace }}
       run: |
         tests/collect-logs.sh
 
