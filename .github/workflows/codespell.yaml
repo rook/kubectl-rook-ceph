@@ -22,7 +22,7 @@ jobs:
         with:
           fetch-depth: 0
       - name: codespell
-        uses: codespell-project/actions-codespell@v2.1
+        uses: codespell-project/actions-codespell@v2.2
         with:
           skip: logo.svg,*.sum
           check_filenames: true
