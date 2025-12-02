@@ -10,7 +10,7 @@ The subvolume command will require the following sub commands:
 
 * `ls` : [ls](#ls) lists all the subvolumes
   * `--stale`: lists only stale subvolumes
-  * `--svg <subvolumegroupname`: lists subvolumes in a particular subvolume(default is "csi")
+  * `--svg <subvolumegroupname>`: lists subvolumes in a particular subvolume(default is "csi")
 * `delete <filesystem> <subvolume> [subvolumegroup]`:
     [delete](#delete) a stale subvolume.
   * subvolume: subvolume name.
