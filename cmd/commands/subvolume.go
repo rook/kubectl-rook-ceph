@@ -30,12 +30,14 @@ var SubvolumeCmd = &cobra.Command{
 }
 
 var listCmd = &cobra.Command{
-	Use:   "ls",
-	Short: "Print the list of subvolumes.",
+	Use:     "ls",
+	Short:   "Print the list of subvolumes.",
+	Example: "kubectl rook-ceph subvolume ls",
 	Run: func(cmd *cobra.Command, args []string) {
 		ctx := cmd.Context()
 		staleSubvol, _ := cmd.Flags().GetBool("stale")
-		subvolume.List(ctx, clientSets, operatorNamespace, cephClusterNamespace, staleSubvol)
+		svgName, _ := cmd.Flags().GetString("svg")
+		subvolume.List(ctx, clientSets, operatorNamespace, cephClusterNamespace, svgName, staleSubvol)
 	},
 }
 
@@ -60,5 +62,6 @@ var deleteCmd = &cobra.Command{
 func init() {
 	SubvolumeCmd.AddCommand(listCmd)
 	SubvolumeCmd.PersistentFlags().Bool("stale", false, "List only stale subvolumes")
+	SubvolumeCmd.PersistentFlags().String("svg", "csi", "The name of the subvolume group")
 	SubvolumeCmd.AddCommand(deleteCmd)
 }

@@ -7,13 +7,16 @@ This would consider all the cases where we can have stale subvolume
 and delete them without impacting other resources and attached volumes.
 
 The subvolume command will require the following sub commands:
+
 * `ls` : [ls](#ls) lists all the subvolumes
-    * `--stale`: lists only stale subvolumes
+  * `--stale`: lists only stale subvolumes
+  * `--svg <subvolumegroupname`: lists subvolumes in a particular subvolume(default is "csi")
 * `delete <filesystem> <subvolume> [subvolumegroup]`:
     [delete](#delete) a stale subvolume.
-    * subvolume: subvolume name.
-    * filesystem: filesystem name to which the subvolume belongs.
-    * subvolumegroup: subvolumegroup name to which the subvolume belong(default is "csi")
+  * subvolume: subvolume name.
+  * filesystem: filesystem name to which the subvolume belongs.
+  * subvolumegroup: subvolumegroup name to which the subvolume belong(default is "csi")
+
 ## ls
 
 ```bash
@@ -32,6 +35,12 @@ $ kubectl rook-ceph subvolume ls --stale
 Filesystem  Subvolume  SubvolumeGroup state
 myfs csi-vol-427774b4-340b-11ed-8d66-0242ac110004 csi stale
 myfs csi-vol-427774b4-340b-11ed-8d66-0242ac110005 csi stale-with-snapshot
+```
+
+```bash
+$ kubectl rook-ceph subvolume ls --svg svg01
+myfs csi-vol-427774b4-340b-11ed-8d66-0242ac110005 svg01 in-use
+myfs csi-vol-427774b4-340b-11ed-8d66-0242ac110007 svg01 stale
 ```
 
 ## delete

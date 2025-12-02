@@ -63,11 +63,11 @@ const (
 	snapshotRetained  = "snapshot-retained"
 )
 
-func List(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string, includeStaleOnly bool) {
+func List(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, subvolg string, includeStaleOnly bool) {
 
 	subvolumeNames := getK8sRefSubvolume(ctx, clientsets)
 	snapshotHandles := getK8sRefSnapshotHandle(ctx, clientsets)
-	listCephFSSubvolumes(ctx, clientsets, operatorNamespace, clusterNamespace, includeStaleOnly, subvolumeNames, snapshotHandles)
+	listCephFSSubvolumes(ctx, clientsets, operatorNamespace, clusterNamespace, subvolg, includeStaleOnly, subvolumeNames, snapshotHandles)
 }
 
 // checkForExternalStorage checks if the external mode is enabled.
@@ -241,7 +241,7 @@ func runCommand(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNam
 }
 
 // listCephFSSubvolumes list all the subvolumes
-func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string, includeStaleOnly bool, subvolumeNames map[string]subVolumeInfo, snapshotHandles map[string]snapshotInfo) {
+func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, subvolgName string, includeStaleOnly bool, subvolumeNames map[string]subVolumeInfo, snapshotHandles map[string]snapshotInfo) {
 
 	// getFilesystem gets the filesystem
 	fsstruct, err := getFileSystem(ctx, clientsets, operatorNamespace, clusterNamespace)
@@ -263,6 +263,9 @@ func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, o
 			continue
 		}
 		for _, svg := range subvolg {
+			if subvolgName != "" && svg.Name != subvolgName {
+				continue
+			}
 			cmd := "ceph"
 			args := []string{"fs", "subvolume", "ls", fs.Name, svg.Name, "--format", "json"}
 			svList, err := runCommand(ctx, clientsets, operatorNamespace, clusterNamespace, cmd, args)
