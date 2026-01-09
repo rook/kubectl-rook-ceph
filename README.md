@@ -88,6 +88,11 @@ These are args currently supported:
 
 - `restore-deleted <CRD> [CRName]`: Restore the ceph resources which are stuck in deleting state due to underlying resources being present in the cluster
 
+- `multus validation` : Validate whether the current Multus and system configurations will support Rook with Multus. See [Validating Multus configuration](https://rook.github.io/docs/rook/latest/CRDs/Cluster/network-providers/?h=valid#validating-multus-configuration) for more details.
+  - `run` : Run Multus validation tests to verify network connectivity
+  - `config` : Generate a sample validation test config file
+  - `cleanup` : Clean up Multus validation test resources
+
 - `help` : Output help text
 
 ## Documentation
@@ -112,6 +117,7 @@ Visit docs below for complete details about each command and their flags uses.
 1. [Restore deleted CRs](docs/crd.md)
 1. [Destroy cluster](docs/destroy-cluster.md)
 1. [Running rados commands](docs/rados.md)
+1. [Multus validation](docs/multus.md)
 
 ## Examples
 

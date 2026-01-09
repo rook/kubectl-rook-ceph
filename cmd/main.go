@@ -44,5 +44,6 @@ func addcommands() {
 		command.RadosCmd,
 		command.FlattenRBDPVCCmd,
 		command.RadosgwCmd,
+		command.MultusCmd,
 	)
 }
