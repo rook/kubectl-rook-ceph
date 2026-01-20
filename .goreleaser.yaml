@@ -3,8 +3,9 @@ before:
     - go mod tidy
 builds:
   - id: kubectl-rook-ceph
+    ldflags: -s -w
     main: ./cmd
-    binary: kubectl-rook-ceph
+    binary: kubectl-rook_ceph
     env:
       - CGO_ENABLED=0
     goos:
