@@ -2,22 +2,40 @@
 
 set -xeEo pipefail
 
+
+create_extra_disk() {
+  sudo apt install -y targetcli-fb open-iscsi
+  truncate -s 75G ~/iscsi-disk.img
+  sudo targetcli /backstores/fileio create disk1 ~/iscsi-disk.img 75G
+  local target_iqn=iqn.2026-02.target.local:disk1
+  sudo targetcli /iscsi create ${target_iqn}
+  sudo targetcli /iscsi/${target_iqn}/tpg1/luns create /backstores/fileio/disk1
+  local init_iqn=iqn.2026-02.initiator.local
+  echo "InitiatorName=${init_iqn}" | sudo tee /etc/iscsi/initiatorname.iscsi >/dev/null
+  sudo targetcli /iscsi/${target_iqn}/tpg1/acls create ${init_iqn}
+  sudo targetcli /iscsi/${target_iqn}/tpg1/acls/${init_iqn} create tpg_lun_or_backstore=lun0 mapped_lun=0
+  sudo iscsiadm -m discovery -t sendtargets -p 127.0.0.1
+  sudo iscsiadm -m node --login
+}
+
 # Source: https://github.com/rook/rook
 find_extra_block_dev() {
-    # shellcheck disable=SC2005 # redirect doesn't work with sudo, so use echo
-    echo "$(sudo lsblk)" >/dev/stderr # print lsblk output to stderr for debugging
-
-    # Find boot device
-    local boot_dev
-    boot_dev="$(sudo lsblk --noheading --list --output MOUNTPOINT,PKNAME | grep boot | awk '{print $2}')"
-    echo "  == find_extra_block_dev(): boot_dev='$boot_dev'" >/dev/stderr
-
-    # Find extra device (--nodeps ignores partitions)
-    local extra_dev
-    extra_dev="$(sudo lsblk --noheading --list --nodeps --output KNAME | grep -v loop | grep -v "$boot_dev" | head -1)"
-    echo "  == find_extra_block_dev(): extra_dev='$extra_dev'" >/dev/stderr
-
-    echo "$extra_dev"
+  # shellcheck disable=SC2005 # redirect doesn't work with sudo, so use echo
+  echo "$(sudo lsblk)" >/dev/stderr # print lsblk output to stderr for debugging in case of future errors
+  # relevant lsblk --pairs example: (MOUNTPOINT identifies boot partition)(PKNAME is Parent dev ID)
+  # NAME="sda15" SIZE="106M" TYPE="part" MOUNTPOINT="/boot/efi" PKNAME="sda"
+  # NAME="sdb"   SIZE="75G"  TYPE="disk" MOUNTPOINT=""          PKNAME=""
+  # NAME="sdb1"  SIZE="75G"  TYPE="part" MOUNTPOINT="/mnt"      PKNAME="sdb"
+  boot_dev="$(sudo lsblk --noheading --list --output MOUNTPOINT,PKNAME | grep boot | awk '{print $2}')"
+  echo "  == find_extra_block_dev(): boot_dev='$boot_dev'" >/dev/stderr # debug in case of future errors
+  # --nodeps ignores partitions
+  extra_dev="$(sudo lsblk --noheading --list --nodeps --output KNAME | egrep -v "($boot_dev|loop|nbd)" | head -1)"
+  if [ -z "$extra_dev" ]; then
+    create_extra_disk >/dev/stderr
+    extra_dev="$(sudo lsblk --noheading --list --nodeps --output KNAME | egrep -v "($boot_dev|loop|nbd)" | head -1)"
+  fi
+  echo "  == find_extra_block_dev(): extra_dev='$extra_dev'" >/dev/stderr # debug in case of future errors
+  echo "$extra_dev"                                                       # output of function
 }
 
 #############
@@ -80,15 +98,22 @@ apply_yaml_from_url() {
 
 # Source: https://github.com/rook/rook
 use_local_disk() {
-    local block_data_part="/dev/${BLOCK}1"
-
-    sudo apt purge snapd -y
-    sudo dmsetup version || true
-    sudo swapoff --all --verbose
+  BLOCK_DATA_PART="$(block_dev)1"
+  sudo apt purge snapd -y
+  sudo dmsetup version || true
+  sudo swapoff --all --verbose
+  if mountpoint -q /mnt; then
     sudo umount /mnt
-    sudo wipefs --all --force "$block_data_part"
+    # search for the device since it keeps changing between sda and sdb
+    sudo wipefs --all --force "$BLOCK_DATA_PART"
+  else
+    # it's the hosted runner!
+    sudo sgdisk --zap-all -- "$(block_dev)"
+    sudo dd if=/dev/zero of="$(block_dev)" bs=1M count=10 oflag=direct,dsync
+    sudo parted -s "$(block_dev)" mklabel gpt
+  fi
+  sudo lsblk
 }
-
 # Deploy Rook-Ceph with support for both default and custom namespaces
 # This is the main deployment function that handles the entire process
 # Arguments:
