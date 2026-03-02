@@ -7,7 +7,7 @@ require (
 	github.com/golang/mock v1.6.0
 	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.4.0
 	github.com/pkg/errors v0.9.1
-	github.com/rook/rook v1.19.1
+	github.com/rook/rook v1.19.2
 	github.com/rook/rook/pkg/apis v0.0.0-20260210155143-d82f6dee9790
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
@@ -118,7 +118,7 @@ require (
 	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912 // indirect
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4 // indirect
-	sigs.k8s.io/controller-runtime v0.22.4 // indirect
+	sigs.k8s.io/controller-runtime v0.23.0 // indirect
 	sigs.k8s.io/json v0.0.0-20250730193827-2d320260d730 // indirect
 	sigs.k8s.io/kustomize/api v0.20.1 // indirect
 	sigs.k8s.io/kustomize/kyaml v0.20.1 // indirect
