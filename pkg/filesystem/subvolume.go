@@ -21,10 +21,12 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	osexec "os/exec"
 	"strconv"
 	"strings"
 	"syscall"
+	"text/tabwriter"
 
 	snapclient "github.com/kubernetes-csi/external-snapshotter/client/v8/clientset/versioned/typed/volumesnapshot/v1"
 	"github.com/rook/kubectl-rook-ceph/pkg/exec"
@@ -249,7 +251,8 @@ func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, o
 		logging.Error(err, "failed to get filesystem")
 		return
 	}
-	fmt.Println("Filesystem  Subvolume  SubvolumeGroup  State")
+	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
+	fmt.Fprintln(w, "Filesystem\tSubvolume\tSubvolumeGroup\tState")
 
 	// collect subvolumes that are not ready (EAGAIN) to show a summary at the end
 	var notReadyErrors []string
@@ -319,10 +322,11 @@ func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, o
 
 				}
 				subvolumeNames[sv.Name] = subVolumeInfo{fs.Name, svg.Name, state}
-				fmt.Println(fs.Name, sv.Name, svg.Name, status)
+				fmt.Fprintf(w, "%s\t%s\t%s\t%s\n", fs.Name, sv.Name, svg.Name, status)
 			}
 		}
 	}
+	w.Flush()
 
 	// After listing, show a concise summary of skipped subvolumes due to not-ready state
 	if len(notReadyErrors) > 0 {
