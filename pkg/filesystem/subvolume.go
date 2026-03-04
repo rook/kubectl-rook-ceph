@@ -490,7 +490,6 @@ func unMarshaljson(list string) []fsStruct {
 // deleteSnapshot deletes the subvolume snapshot
 func deleteSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, cephClusterNamespace, fs, subvol, svg, snap string) {
 
-	deleteOmapForSnapshot(ctx, clientsets, operatorNamespace, cephClusterNamespace, snap, fs)
 	cmd := "ceph"
 	args := []string{"fs", "subvolume", "snapshot", "rm", fs, subvol, snap, svg}
 
@@ -498,13 +497,13 @@ func deleteSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, operato
 	if err != nil {
 		logging.Fatal(err, "failed to delete subvolume snapshot of %s/%s/%s/%s", fs, svg, subvol, snap)
 	}
+	deleteOmapForSnapshot(ctx, clientsets, operatorNamespace, cephClusterNamespace, snap, fs)
 }
 
 func Delete(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, fs, subvol, svg string) {
 	k8sSubvolume := getK8sRefSubvolume(ctx, clientsets)
 	_, check := k8sSubvolume[subvol]
 	if !check {
-		deleteOmapForSubvolume(ctx, clientsets, OperatorNamespace, CephClusterNamespace, subvol, fs)
 		cmd := "ceph"
 		args := []string{"fs", "subvolume", "rm", fs, subvol, svg, "--retain-snapshots"}
 
@@ -512,6 +511,7 @@ func Delete(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespa
 		if err != nil {
 			logging.Fatal(err, "failed to delete subvolume of %s/%s/%s", fs, svg, subvol)
 		}
+		deleteOmapForSubvolume(ctx, clientsets, OperatorNamespace, CephClusterNamespace, subvol, fs)
 		logging.Info("subvolume %s/%s/%s deleted", fs, svg, subvol)
 
 	} else {
