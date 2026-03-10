@@ -302,6 +302,49 @@ create_stale_subvolume() {
     kubectl delete pv "$pv_name"
 }
 
+# Create a VolumeSnapshotClass with retain policy and take a CephFS snapshot.
+create_cephfs_snapshot() {
+    local operator_ns="${1:-$DEFAULT_OPERATOR_NS}"
+    local cluster_ns="${2:-$DEFAULT_CLUSTER_NS}"
+
+    download_and_modify_yaml "https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/snapshotclass.yaml" "snapshotclass-retain.yaml" "$operator_ns" "$cluster_ns"
+    sed -i "s|name: csi-cephfsplugin-snapclass|name: csi-cephfsplugin-snapclass-retain|g" snapshotclass-retain.yaml
+    sed -i "s|deletionPolicy: Delete|deletionPolicy: Retain|g" snapshotclass-retain.yaml
+    if [[ "$operator_ns" != "$DEFAULT_OPERATOR_NS" ]]; then
+        sed -i "s|driver: rook-ceph.cephfs.csi.ceph.com|driver: ${operator_ns}.cephfs.csi.ceph.com|g" snapshotclass-retain.yaml
+    fi
+    apply_yaml "snapshotclass-retain.yaml"
+
+    if ! curl -fL "https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/pvc.yaml" -o pvc-snap.yaml; then
+        echo "Failed to download PVC template" >&2
+        return 1
+    fi
+    sed -i "s|name: cephfs-pvc|name: cephfs-pvc-snap|g" pvc-snap.yaml
+    apply_yaml "pvc-snap.yaml"
+
+    wait_for_pvc_to_be_bound_state "cephfs-pvc-snap" "default"
+
+    if ! curl -fL "https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/snapshot.yaml" -o snapshot-retain.yaml; then
+        echo "Failed to download snapshot template" >&2
+        return 1
+    fi
+    sed -i "s|name: cephfs-pvc-snapshot|name: cephfs-pvc-snapshot-retain|g" snapshot-retain.yaml
+    sed -i "s|persistentVolumeClaimName: cephfs-pvc|persistentVolumeClaimName: cephfs-pvc-snap|g" snapshot-retain.yaml
+    sed -i "s|volumeSnapshotClassName: csi-cephfsplugin-snapclass|volumeSnapshotClassName: csi-cephfsplugin-snapclass-retain|g" snapshot-retain.yaml
+    apply_yaml "snapshot-retain.yaml"
+
+    kubectl wait --for=jsonpath='{.status.readyToUse}'=true volumesnapshot/cephfs-pvc-snapshot-retain --timeout=120s
+}
+
+# Delete the K8s VolumeSnapshot, VolumeSnapshotContent, and PVC, leaving the underlying Ceph snapshot orphaned.
+delete_cephfs_snapshot_k8s_resources() {
+    local vsc_name
+    vsc_name="$(kubectl get volumesnapshot cephfs-pvc-snapshot-retain -o=jsonpath='{.status.boundVolumeSnapshotContentName}')"
+    kubectl delete volumesnapshot cephfs-pvc-snapshot-retain
+    kubectl delete volumesnapshotcontent "$vsc_name"
+    kubectl delete pvc cephfs-pvc-snap
+}
+
 
 #################
 # WAIT FUNCTIONS

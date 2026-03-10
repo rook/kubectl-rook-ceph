@@ -45,5 +45,6 @@ func addcommands() {
 		command.FlattenRBDPVCCmd,
 		command.RadosgwCmd,
 		command.MultusCmd,
+		command.CephFSSnapshotCmd,
 	)
 }
