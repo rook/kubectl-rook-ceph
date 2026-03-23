@@ -36,4 +36,12 @@ type Clientsets struct {
 
 	// Dynamic is used for manage dynamic resources
 	Dynamic dynamic.Interface
+
+	// ConsumerConfig is the rest config for PV and VolumeSnapshotContent lookups on the
+	// consumer cluster. Defaults to KubeConfig when --consumer-context is not set.
+	ConsumerConfig *rest.Config
+
+	// ConsumerKube is the K8s client for PV and VolumeSnapshotContent lookups on the
+	// consumer cluster. Defaults to Kube when --consumer-context is not set.
+	ConsumerKube kubernetes.Interface
 }

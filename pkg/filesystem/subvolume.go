@@ -133,7 +133,7 @@ func getExternalClusterDetails(ctx context.Context, clientsets *k8sutil.Clientse
 
 // getk8sRefSubvolume returns the k8s ref for the subvolumes
 func getK8sRefSubvolume(ctx context.Context, clientsets *k8sutil.Clientsets) map[string]subVolumeInfo {
-	pvList, err := clientsets.Kube.CoreV1().PersistentVolumes().List(ctx, v1.ListOptions{})
+	pvList, err := clientsets.ConsumerKube.CoreV1().PersistentVolumes().List(ctx, v1.ListOptions{})
 	if err != nil {
 		logging.Fatal(fmt.Errorf("Error fetching PVs: %v\n", err))
 	}
@@ -187,7 +187,7 @@ func generateSubvolumeNameFromVolumeHandle(prefix string, volumeHandle string) (
 // getk8sRefSnapshotHandle returns the snapshothandle for k8s ref of the volume snapshots
 func getK8sRefSnapshotHandle(ctx context.Context, clientsets *k8sutil.Clientsets) map[string]snapshotInfo {
 
-	snapConfig, err := snapclient.NewForConfig(clientsets.KubeConfig)
+	snapConfig, err := snapclient.NewForConfig(clientsets.ConsumerConfig)
 	if err != nil {
 		logging.Fatal(err)
 	}

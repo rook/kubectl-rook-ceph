@@ -40,6 +40,7 @@ import (
 var (
 	operatorNamespace    string
 	cephClusterNamespace string
+	consumerContext      string
 	clientSets           *k8sutil.Clientsets
 	clientConfig         clientcmd.ClientConfig
 )
@@ -70,6 +71,7 @@ func init() {
 	// Initialize client configuration with all standard kubectl flags first
 	clientConfig = defaultClientConfig(RootCmd.PersistentFlags())
 	RootCmd.PersistentFlags().StringVar(&operatorNamespace, "operator-namespace", "", "Kubernetes namespace where rook operator is running")
+	RootCmd.PersistentFlags().StringVar(&consumerContext, "consumer-context", "", "Kubernetes context for PV and VolumeSnapshotContent lookups (defaults to the current context)")
 
 	// Set default ceph cluster namespace
 	cephClusterNamespace = "rook-ceph"
@@ -154,6 +156,24 @@ func getClientsets(ctx context.Context) *k8sutil.Clientsets {
 	clientsets.Dynamic, err = dynamic.NewForConfig(clientsets.KubeConfig)
 	if err != nil {
 		logging.Fatal(err)
+	}
+
+	if consumerContext == "" {
+		clientsets.ConsumerConfig = clientsets.KubeConfig
+		clientsets.ConsumerKube = clientsets.Kube
+	} else {
+		consumerLoadingRules := clientcmd.NewDefaultClientConfigLoadingRules()
+		consumerLoadingRules.ExplicitPath = clientConfig.ConfigAccess().GetExplicitFile()
+		consumerOverrides := &clientcmd.ConfigOverrides{CurrentContext: consumerContext}
+		consumerClientConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(consumerLoadingRules, consumerOverrides)
+		clientsets.ConsumerConfig, err = consumerClientConfig.ClientConfig()
+		if err != nil {
+			logging.Fatal(fmt.Errorf("failed to build config for --consumer-context %q: %v", consumerContext, err))
+		}
+		clientsets.ConsumerKube, err = k8s.NewForConfig(clientsets.ConsumerConfig)
+		if err != nil {
+			logging.Fatal(fmt.Errorf("failed to build kube client for --consumer-context %q: %v", consumerContext, err))
+		}
 	}
 
 	return clientsets
