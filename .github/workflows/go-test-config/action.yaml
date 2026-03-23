@@ -135,6 +135,20 @@ runs:
         kubectl rook-ceph ${NS_OPT} cephfs-snap ls --filesystem myfs --orphaned | grep csi-snap
         kubectl rook-ceph ${NS_OPT} cephfs-snap delete $subVol $snap --filesystem myfs
 
+    - name: Subvolume with consumer-context
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        set -ex
+        tests/github-action-helper.sh create_consumer_context consumer-ctx
+        kubectl rook-ceph ${NS_OPT} subvolume ls --consumer-context=consumer-ctx
+        kubectl rook-ceph ${NS_OPT} subvolume ls --stale --consumer-context=consumer-ctx
+        # verify invalid context fails
+        if kubectl rook-ceph ${NS_OPT} subvolume ls --consumer-context=nonexistent-ctx 2>/dev/null; then
+          echo "ERROR: expected failure with invalid --consumer-context"
+          exit 1
+        fi
+        echo "Invalid consumer-context correctly rejected"
+
     - name: Get rbd list
       shell: bash --noprofile --norc -eo pipefail -x {0}
       run: |

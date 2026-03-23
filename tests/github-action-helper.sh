@@ -544,6 +544,47 @@ wait_for_rbd_pvc_clone_to_be_bound() {
     kubectl wait --for=jsonpath='{.status.phase}'=Bound pvc rbd-pvc-clone --timeout=600s
 }
 
+# Create a consumer kubeconfig context that aliases the current cluster.
+# Used to test --consumer-context flag with a single Minikube cluster.
+create_consumer_context() {
+    local context_name="${1:-consumer-ctx}"
+    local current_ctx
+    current_ctx="$(kubectl config current-context)"
+
+    local cluster server ca_cert
+    cluster="$(kubectl config view -o jsonpath="{.contexts[?(@.name=='${current_ctx}')].context.cluster}")"
+    server="$(kubectl config view -o jsonpath="{.clusters[?(@.name=='${cluster}')].cluster.server}")"
+    ca_cert="$(kubectl config view --raw -o jsonpath="{.clusters[?(@.name=='${cluster}')].cluster.certificate-authority}")"
+    local ca_data
+    ca_data="$(kubectl config view --raw -o jsonpath="{.clusters[?(@.name=='${cluster}')].cluster.certificate-authority-data}")"
+
+    kubectl config set-cluster "${context_name}-cluster" --server="${server}"
+    if [[ -n "$ca_cert" ]]; then
+        kubectl config set-cluster "${context_name}-cluster" --certificate-authority="${ca_cert}"
+    elif [[ -n "$ca_data" ]]; then
+        kubectl config set clusters."${context_name}-cluster".certificate-authority-data "${ca_data}"
+    fi
+
+    local user
+    user="$(kubectl config view -o jsonpath="{.contexts[?(@.name=='${current_ctx}')].context.user}")"
+    local client_cert client_key client_cert_data client_key_data
+    client_cert="$(kubectl config view --raw -o jsonpath="{.users[?(@.name=='${user}')].user.client-certificate}")"
+    client_key="$(kubectl config view --raw -o jsonpath="{.users[?(@.name=='${user}')].user.client-key}")"
+    client_cert_data="$(kubectl config view --raw -o jsonpath="{.users[?(@.name=='${user}')].user.client-certificate-data}")"
+    client_key_data="$(kubectl config view --raw -o jsonpath="{.users[?(@.name=='${user}')].user.client-key-data}")"
+
+    kubectl config set-credentials "${context_name}-user"
+    if [[ -n "$client_cert" ]]; then
+        kubectl config set-credentials "${context_name}-user" --client-certificate="${client_cert}" --client-key="${client_key}"
+    elif [[ -n "$client_cert_data" ]]; then
+        kubectl config set users."${context_name}-user".client-certificate-data "${client_cert_data}"
+        kubectl config set users."${context_name}-user".client-key-data "${client_key_data}"
+    fi
+
+    kubectl config set-context "${context_name}" --cluster="${context_name}-cluster" --user="${context_name}-user"
+    echo "Created consumer context: ${context_name}"
+}
+
 ########
 # MAIN #
 ########
