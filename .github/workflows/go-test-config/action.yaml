@@ -114,7 +114,7 @@ runs:
         kubectl rook-ceph ${NS_OPT} subvolume delete myfs test-subvol group-a
         tests/github-action-helper.sh create_sc_with_retain_policy ${{ inputs.op-ns }} ${{ inputs.cluster-ns }}
         tests/github-action-helper.sh create_stale_subvolume
-        subVol=$(kubectl rook-ceph ${NS_OPT} subvolume ls --stale | awk '{print $2}' | grep csi-vol)
+        subVol=$(kubectl rook-ceph ${NS_OPT} subvolume ls --stale | awk '{print $2}' | grep csi-vol | head -1)
         kubectl rook_ceph ${NS_OPT} subvolume delete myfs $subVol
 
     - name: CephFS Snapshot command
@@ -148,6 +148,33 @@ runs:
           exit 1
         fi
         echo "Invalid consumer-context correctly rejected"
+
+    - name: Subvolume delete with custom SVG and explicit rados-namespace
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      env:
+        OP_NS: ${{ inputs.op-ns }}
+        CLUSTER_NS: ${{ inputs.cluster-ns }}
+      run: |
+        set -ex
+        SVG=test-svg
+        # Creates SVG CR, matching Retain StorageClass with
+        # subvolumeGroup=$SVG, PVC, then deletes PVC/PV so the
+        # subvolume is stale.  CephFS CSI always stores OMAP in
+        # the "csi" rados namespace (cluster-level ConfigMap default).
+        tests/github-action-helper.sh create_stale_subvolume_in_svg \
+          "$SVG" "$OP_NS" "$CLUSTER_NS"
+        subVol=$(kubectl rook-ceph ${NS_OPT} subvolume ls --stale \
+          --svg "$SVG" | awk '{print $2}' | grep csi-vol | head -1)
+        # Pass --rados-namespace=csi explicitly to verify the flag
+        # is wired through the delete path.
+        kubectl rook-ceph ${NS_OPT} subvolume delete myfs \
+          "$subVol" "$SVG" --rados-namespace=csi
+        # verify subvolume is gone
+        remaining=$(kubectl rook-ceph ${NS_OPT} subvolume ls --stale \
+          --svg "$SVG" \
+          | awk '{print $2}' | grep -c "^${subVol}$" || true)
+        [ "$remaining" -eq 0 ] || \
+          { echo "ERROR: subvolume $subVol still listed after delete"; exit 1; }
 
     - name: Get rbd list
       shell: bash --noprofile --norc -eo pipefail -x {0}
