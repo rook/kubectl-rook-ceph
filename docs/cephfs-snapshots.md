@@ -22,6 +22,7 @@ The cephfs-snap command will require the following sub commands:
   * `--svg <subvolumegroupname>`: subvolume group name (default is "csi")
   * `--filesystem <filesystemname>`: lists snapshots in a particular filesystem (default is "myfs")
   * `--consumer-context <context>`: Kubernetes context for PV and VolumeSnapshotContent lookups (default is the current context)
+  * `--rados-namespace <namespace>`: rados namespace used for OMAP lookups (default is "csi")
 
 ## ls
 
@@ -82,6 +83,17 @@ snapshot csi-snap-b2c3d4e5-450e-11ed-8d66-0242ac110005 deleted successfully
 $ kubectl rook-ceph cephfs-snap delete myfs csi-vol-427774b4-340b-11ed-8d66-0242ac110005 csi-snap-a1b2c3d4-450e-11ed-8d66-0242ac110004
 
 Error: snapshot "csi-snap-a1b2c3d4-450e-11ed-8d66-0242ac110004" is bound and cannot be deleted
+```
+
+To delete using a custom rados namespace:
+
+```bash
+$ kubectl rook-ceph cephfs-snap delete csi-vol-427774b4-340b-11ed-8d66-0242ac110005 csi-snap-b2c3d4e5-450e-11ed-8d66-0242ac110005 --rados-namespace=svg01
+
+Info: Deleting the omap object and key for snapshot "csi-snap-b2c3d4e5-450e-11ed-8d66-0242ac110005"
+Info: omap object:"csi.snap.b2c3d4e5-450e-11ed-8d66-0242ac110005" deleted
+Info: omap key:"csi.snap.snapshot-a1b2c3d4-5678-9012-abcd-ef0123456789" deleted
+snapshot "csi-snap-b2c3d4e5-450e-11ed-8d66-0242ac110005" deleted successfully
 ```
 
 To delete an orphaned snapshot when PVs are on a
