@@ -117,6 +117,24 @@ runs:
         subVol=$(kubectl rook-ceph ${NS_OPT} subvolume ls --stale | awk '{print $2}' | grep csi-vol)
         kubectl rook_ceph ${NS_OPT} subvolume delete myfs $subVol
 
+    - name: CephFS Snapshot command
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        set -ex
+        tests/github-action-helper.sh create_cephfs_snapshot ${{ inputs.op-ns }} ${{ inputs.cluster-ns }}
+
+        kubectl rook-ceph ${NS_OPT} cephfs-snap ls --filesystem myfs
+        kubectl rook-ceph ${NS_OPT} cephfs-snap ls --filesystem myfs | grep bound
+
+        snap_line=$(kubectl rook-ceph ${NS_OPT} cephfs-snap ls --filesystem myfs | grep csi-snap)
+        subVol=$(echo "$snap_line" | awk '{print $2}')
+        snap=$(echo "$snap_line" | awk '{print $4}')
+        kubectl rook-ceph ${NS_OPT} cephfs-snap delete $subVol $snap --filesystem myfs 2>&1 | grep "bound and cannot be deleted"
+
+        tests/github-action-helper.sh delete_cephfs_snapshot_k8s_resources
+        kubectl rook-ceph ${NS_OPT} cephfs-snap ls --filesystem myfs --orphaned | grep csi-snap
+        kubectl rook-ceph ${NS_OPT} cephfs-snap delete $subVol $snap --filesystem myfs
+
     - name: Get rbd list
       shell: bash --noprofile --norc -eo pipefail -x {0}
       run: |
