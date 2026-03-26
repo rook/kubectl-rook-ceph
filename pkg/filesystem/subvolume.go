@@ -65,19 +65,41 @@ const (
 	snapshotRetained  = "snapshot-retained"
 )
 
-func List(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, subvolg string, includeStaleOnly bool, radosNamespace string) {
+// CustomExecConfig holds configuration for running commands in a
+// user-specified pod instead of the rook operator pod.
+type CustomExecConfig struct {
+	PodName      string
+	PodNamespace string
+	Container    string
+	MonIP        string
+	UserID       string
+	UserKey      string
+}
 
-	subvolumeNames := getK8sRefSubvolume(ctx, clientsets)
-	snapshotHandles := getK8sRefSnapshotHandle(ctx, clientsets)
-	listCephFSSubvolumes(ctx, clientsets, operatorNamespace, clusterNamespace, subvolg, includeStaleOnly, subvolumeNames, snapshotHandles, radosNamespace)
+// CephFilesystem provides operations on CephFS subvolumes and snapshots.
+type CephFilesystem struct {
+	Ctx               context.Context
+	Clientsets        *k8sutil.Clientsets
+	OperatorNamespace string
+	ClusterNamespace  string
+	RadosNamespace    string
+	CustomExecConfig  *CustomExecConfig
+}
+
+// List lists CephFS subvolumes. When includeStaleOnly is true,
+// filters to subvolumes without matching K8s PVCs.
+func (f *CephFilesystem) List(subvolg string, includeStaleOnly bool) {
+	subvolumeNames := f.getK8sRefSubvolume()
+	snapshotHandles := f.getK8sRefSnapshotHandle()
+	f.listCephFSSubvolumes(subvolg, includeStaleOnly, subvolumeNames, snapshotHandles)
 }
 
 // checkForExternalStorage checks if the external mode is enabled.
-func checkForExternalStorage(ctx context.Context, clientsets *k8sutil.Clientsets, clusterNamespace string) bool {
+func (f *CephFilesystem) checkForExternalStorage() bool {
 	enable := false
-	cephclusters, err := clientsets.Rook.CephV1().CephClusters(clusterNamespace).List(ctx, v1.ListOptions{})
+	cephclusters, err := f.Clientsets.Rook.CephV1().CephClusters(f.ClusterNamespace).List(f.Ctx, v1.ListOptions{})
 	if err != nil {
-		logging.Fatal(fmt.Errorf("failed to list CephClusters in namespace %q: %v", clusterNamespace, err))
+		logging.Fatal(fmt.Errorf("failed to list CephClusters in namespace %q: %v", f.ClusterNamespace, err))
 	}
 	for i := range cephclusters.Items {
 		enable = cephclusters.Items[i].Spec.External.Enable
@@ -90,50 +112,49 @@ func checkForExternalStorage(ctx context.Context, clientsets *k8sutil.Clientsets
 
 // getExternalClusterDetails gets the required mon-ip, id and key to connect to the
 // ceph cluster.
-func getExternalClusterDetails(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string) (string, string, string) {
-	var adminId, adminKey, m string
+func (f *CephFilesystem) getExternalClusterDetails() (string, string, string) {
+	var adminID, adminKey, m string
 
-	scList, err := clientsets.Kube.CoreV1().Secrets(clusterNamespace).List(ctx, v1.ListOptions{})
+	scList, err := f.Clientsets.Kube.CoreV1().Secrets(f.ClusterNamespace).List(f.Ctx, v1.ListOptions{})
 	if err != nil {
-		logging.Fatal(fmt.Errorf("Error fetching secrets in namespace %q: %v", clusterNamespace, err))
+		logging.Fatal(fmt.Errorf("Error fetching secrets in namespace %q: %v", f.ClusterNamespace, err))
 	}
 	for i := range scList.Items {
 		if strings.HasPrefix(scList.Items[i].ObjectMeta.Name, "rook-csi-cephfs-provisioner") {
 			data := scList.Items[i].Data
 			if data == nil {
-				logging.Fatal(fmt.Errorf("Secret data is empty for %s/%s", clusterNamespace, scList.Items[i].ObjectMeta.Name))
+				logging.Fatal(fmt.Errorf("Secret data is empty for %s/%s", f.ClusterNamespace, scList.Items[i].ObjectMeta.Name))
 			}
-			adminId = string(data["adminID"])
+			adminID = string(data["adminID"])
 			adminKey = string(data["adminKey"])
 			break
-
 		}
 	}
 
-	cm, err := clientsets.Kube.CoreV1().ConfigMaps(clusterNamespace).Get(ctx, "rook-ceph-mon-endpoints", v1.GetOptions{})
+	cm, err := f.Clientsets.Kube.CoreV1().ConfigMaps(f.ClusterNamespace).Get(f.Ctx, "rook-ceph-mon-endpoints", v1.GetOptions{})
 	if err != nil {
-		logging.Fatal(fmt.Errorf("Error fetching configmaps %s/rook-ceph-mon-endpoints: %v", clusterNamespace, err))
+		logging.Fatal(fmt.Errorf("Error fetching configmaps %s/rook-ceph-mon-endpoints: %v", f.ClusterNamespace, err))
 	}
 
 	if len(cm.Data) == 0 || cm.Data == nil {
-		logging.Fatal(fmt.Errorf("Configmap data is empty for %s/rook-ceph-mon-endpoints", clusterNamespace))
+		logging.Fatal(fmt.Errorf("Configmap data is empty for %s/rook-ceph-mon-endpoints", f.ClusterNamespace))
 	}
 	monpoint := cm.Data["csi-cluster-config-json"]
 	var monip []monitor
 	json.Unmarshal([]byte(monpoint), &monip)
 	for _, mp := range monip {
 		if len(mp.Monitors) == 0 || mp.Monitors[0] == "" {
-			logging.Fatal(fmt.Errorf("mon ip for %s/rook-ceph-mon-endpoints with clusterID:%q is empty", clusterNamespace, mp.ClusterID))
+			logging.Fatal(fmt.Errorf("mon ip for %s/rook-ceph-mon-endpoints with clusterID:%q is empty", f.ClusterNamespace, mp.ClusterID))
 		}
 		m = mp.Monitors[0]
 	}
 
-	return m, adminId, adminKey
+	return m, adminID, adminKey
 }
 
 // getk8sRefSubvolume returns the k8s ref for the subvolumes
-func getK8sRefSubvolume(ctx context.Context, clientsets *k8sutil.Clientsets) map[string]subVolumeInfo {
-	pvList, err := clientsets.ConsumerKube.CoreV1().PersistentVolumes().List(ctx, v1.ListOptions{})
+func (f *CephFilesystem) getK8sRefSubvolume() map[string]subVolumeInfo {
+	pvList, err := f.Clientsets.ConsumerKube.CoreV1().PersistentVolumes().List(f.Ctx, v1.ListOptions{})
 	if err != nil {
 		logging.Fatal(fmt.Errorf("Error fetching PVs: %v\n", err))
 	}
@@ -185,13 +206,12 @@ func generateSubvolumeNameFromVolumeHandle(prefix string, volumeHandle string) (
 }
 
 // getk8sRefSnapshotHandle returns the snapshothandle for k8s ref of the volume snapshots
-func getK8sRefSnapshotHandle(ctx context.Context, clientsets *k8sutil.Clientsets) map[string]snapshotInfo {
-
-	snapConfig, err := snapclient.NewForConfig(clientsets.ConsumerConfig)
+func (f *CephFilesystem) getK8sRefSnapshotHandle() map[string]snapshotInfo {
+	snapConfig, err := snapclient.NewForConfig(f.Clientsets.ConsumerConfig)
 	if err != nil {
 		logging.Fatal(err)
 	}
-	snapList, err := snapConfig.VolumeSnapshotContents().List(ctx, v1.ListOptions{})
+	snapList, err := snapConfig.VolumeSnapshotContents().List(f.Ctx, v1.ListOptions{})
 	if err != nil {
 		// ignore only NotFound
 		if apierrors.ReasonForError(err) == v1.StatusReasonNotFound {
@@ -205,7 +225,6 @@ func getK8sRefSnapshotHandle(ctx context.Context, clientsets *k8sutil.Clientsets
 	for _, snap := range snapList.Items {
 		driverName := snap.Spec.Driver
 		if snap.Status != nil && snap.Status.SnapshotHandle != nil && strings.Contains(driverName, "cephfs.csi.ceph.com") {
-
 			snapshotHandleId := getSnapshotHandleId(*snap.Status.SnapshotHandle)
 			// map the snapshotHandle id to later lookup for the subvol id and
 			// match the subvolume snapshot.
@@ -232,21 +251,38 @@ func getSnapshotHandleId(snapshotHandle string) string {
 }
 
 // runCommand checks for the presence of externalcluster and runs the command accordingly.
-func runCommand(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, cmd string, args []string) (string, error) {
-	if checkForExternalStorage(ctx, clientsets, clusterNamespace) {
-		m, admin_id, admin_key := getExternalClusterDetails(ctx, clientsets, operatorNamespace, clusterNamespace)
-		args = append(args, "-m", m, "--id", admin_id, "--key", admin_key)
+func (f *CephFilesystem) runCommand(cmd string, args []string) (string, error) {
+	if f.CustomExecConfig != nil {
+		args = append(args,
+			"-m", f.CustomExecConfig.MonIP,
+			"--id", f.CustomExecConfig.UserID,
+			"--key", f.CustomExecConfig.UserKey,
+		)
+		return exec.RunCommandInPod(
+			f.Ctx, f.Clientsets, cmd, args,
+			f.CustomExecConfig.PodName,
+			f.CustomExecConfig.Container,
+			f.CustomExecConfig.PodNamespace, true,
+		)
 	}
-	list, err := exec.RunCommandInOperatorPod(ctx, clientsets, cmd, args, operatorNamespace, clusterNamespace, true)
+
+	if f.checkForExternalStorage() {
+		m, adminID, adminKey := f.getExternalClusterDetails()
+		args = append(args, "-m", m, "--id", adminID, "--key", adminKey)
+	}
+	list, err := exec.RunCommandInOperatorPod(f.Ctx, f.Clientsets, cmd, args, f.OperatorNamespace, f.ClusterNamespace, true)
 
 	return list, err
 }
 
 // listCephFSSubvolumes list all the subvolumes
-func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, subvolgName string, includeStaleOnly bool, subvolumeNames map[string]subVolumeInfo, snapshotHandles map[string]snapshotInfo, radosNamespace string) {
-
-	// getFilesystem gets the filesystem
-	fsstruct, err := getFileSystem(ctx, clientsets, operatorNamespace, clusterNamespace)
+func (f *CephFilesystem) listCephFSSubvolumes(
+	subvolgName string,
+	includeStaleOnly bool,
+	subvolumeNames map[string]subVolumeInfo,
+	snapshotHandles map[string]snapshotInfo,
+) {
+	fsstruct, err := f.getFileSystem()
 	if err != nil {
 		logging.Error(err, "failed to get filesystem")
 		return
@@ -260,7 +296,7 @@ func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, o
 	// this iterates over the filesystems and subvolumegroup to get the list of subvolumes that exist
 	for _, fs := range fsstruct {
 		// gets the subvolumegroup in the filesystem
-		subvolg, err := getSubvolumeGroup(ctx, clientsets, operatorNamespace, clusterNamespace, fs.Name)
+		subvolg, err := f.getSubvolumeGroup(fs.Name)
 		if err != nil {
 			logging.Error(err, "failed to get subvolume groups")
 			continue
@@ -271,7 +307,7 @@ func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, o
 			}
 			cmd := "ceph"
 			args := []string{"fs", "subvolume", "ls", fs.Name, svg.Name, "--format", "json"}
-			svList, err := runCommand(ctx, clientsets, operatorNamespace, clusterNamespace, cmd, args)
+			svList, err := f.runCommand(cmd, args)
 			if err != nil {
 				logging.Error(err, "failed to get subvolumes of %q", fs.Name)
 				continue
@@ -282,7 +318,7 @@ func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, o
 			}
 			// append the subvolume which doesn't have any snapshot attached to it.
 			for _, sv := range subvol {
-				state, err := getSubvolumeState(ctx, clientsets, operatorNamespace, clusterNamespace, fs.Name, sv.Name, svg.Name)
+				state, err := f.getSubvolumeState(fs.Name, sv.Name, svg.Name)
 				// subvolume info returns error in case of pending clone or if it is not ready
 				// it is suggested to delete the pvc before deleting the subvolume.
 				if err != nil {
@@ -316,7 +352,7 @@ func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, o
 						continue
 					}
 					// check if the stale subvolume has snapshots.
-					if checkSnapshot(ctx, clientsets, operatorNamespace, clusterNamespace, fs.Name, sv.Name, svg.Name, snapshotHandles, radosNamespace) {
+					if f.checkSnapshot(fs.Name, sv.Name, svg.Name, snapshotHandles) {
 						status = staleWithSnapshot
 					}
 
@@ -339,17 +375,17 @@ func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, o
 }
 
 // getSubvolumeState returns the state of the subvolume
-func getSubvolumeState(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, fsName, SubVol, SubvolumeGroup string) (string, error) {
+func (f *CephFilesystem) getSubvolumeState(fsName, SubVol, SubvolumeGroup string) (string, error) {
 	cmd := "ceph"
 	args := []string{"fs", "subvolume", "info", fsName, SubVol, SubvolumeGroup, "--format", "json"}
 
-	subVolumeInfo, errvol := runCommand(ctx, clientsets, operatorNamespace, clusterNamespace, cmd, args)
+	subVolumeInfo, errvol := f.runCommand(cmd, args)
 	if errvol != nil {
 		// Avoid fmt EXTRA artifacts by formatting the error ourselves
 		logging.Error(fmt.Errorf("failed to get subvolume info for %s/%s/%s: %v", fsName, SubvolumeGroup, SubVol, errvol))
 		return "", errvol
 	}
-	var info map[string]interface{}
+	var info map[string]any
 	err := json.Unmarshal([]byte(subVolumeInfo), &info)
 	if err != nil {
 		logging.Fatal(fmt.Errorf("failed to unmarshal: %q", err))
@@ -414,13 +450,12 @@ func isSubvolumeNotReady(err error) bool {
 	return false
 }
 
-// gets list of filesystem
-func getFileSystem(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string) ([]fsStruct, error) {
-
+// getFileSystem gets the list of filesystems in the cluster and returns the details as a struct
+func (f *CephFilesystem) getFileSystem() ([]fsStruct, error) {
 	cmd := "ceph"
 	args := []string{"fs", "ls", "--format", "json"}
 
-	fsList, err := runCommand(ctx, clientsets, operatorNamespace, clusterNamespace, cmd, args)
+	fsList, err := f.runCommand(cmd, args)
 	if err != nil {
 		logging.Error(err, "failed to get filesystems")
 		return []fsStruct{}, err
@@ -434,12 +469,11 @@ func getFileSystem(ctx context.Context, clientsets *k8sutil.Clientsets, operator
 
 // checkSnapshot checks if there are any snapshots in the subvolume
 // it also check for the stale snapshot and if found, deletes the snapshot.
-func checkSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, fs, sv, svg string, snapshotHandles map[string]snapshotInfo, radosNamespace string) bool {
-
+func (f *CephFilesystem) checkSnapshot(fs, sv, svg string, snapshotHandles map[string]snapshotInfo) bool {
 	cmd := "ceph"
 	args := []string{"fs", "subvolume", "snapshot", "ls", fs, sv, svg, "--format", "json"}
 
-	snapList, err := runCommand(ctx, clientsets, operatorNamespace, clusterNamespace, cmd, args)
+	snapList, err := f.runCommand(cmd, args)
 	if err != nil {
 		logging.Error(err, "failed to get subvolume snapshots of %q/%q/%q", fs, sv, svg)
 		return false
@@ -455,7 +489,7 @@ func checkSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, operator
 		_, ok := snapshotHandles[snapId]
 		if !ok {
 			// delete stale snapshot
-			deleteSnapshot(ctx, clientsets, operatorNamespace, clusterNamespace, fs, sv, svg, s.Name, radosNamespace)
+			f.deleteSnapshot(fs, sv, svg, s.Name)
 		}
 	}
 	if len(snap) == 0 {
@@ -466,11 +500,11 @@ func checkSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, operator
 }
 
 // gets the list of subvolumegroup for the specified filesystem
-func getSubvolumeGroup(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, fs string) ([]fsStruct, error) {
+func (f *CephFilesystem) getSubvolumeGroup(fs string) ([]fsStruct, error) {
 	cmd := "ceph"
 	args := []string{"fs", "subvolumegroup", "ls", fs, "--format", "json"}
 
-	svgList, err := runCommand(ctx, clientsets, operatorNamespace, clusterNamespace, cmd, args)
+	svgList, err := f.runCommand(cmd, args)
 	if err != nil {
 		logging.Error(err, "failed to get subvolume groups for filesystem %q", fs)
 		return []fsStruct{}, err
@@ -492,27 +526,28 @@ func unMarshaljson(list string) []fsStruct {
 }
 
 // deleteSnapshot deletes the subvolume snapshot
-func deleteSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, cephClusterNamespace, fs, subvol, svg, snap, radosNamespace string) {
+func (f *CephFilesystem) deleteSnapshot(fs, subvol, svg, snap string) {
 
-	deleteOmapForSnapshot(ctx, clientsets, operatorNamespace, cephClusterNamespace, snap, fs, radosNamespace)
+	f.deleteOmapForSnapshot(snap, fs)
 	cmd := "ceph"
 	args := []string{"fs", "subvolume", "snapshot", "rm", fs, subvol, snap, svg}
 
-	_, err := runCommand(ctx, clientsets, operatorNamespace, cephClusterNamespace, cmd, args)
+	_, err := f.runCommand(cmd, args)
 	if err != nil {
 		logging.Fatal(err, "failed to delete subvolume snapshot of %s/%s/%s/%s", fs, svg, subvol, snap)
 	}
 }
 
-func Delete(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, fs, subvol, svg, radosNamespace string) {
-	k8sSubvolume := getK8sRefSubvolume(ctx, clientsets)
+// Delete deletes a stale subvolume after checking it is not referenced by any K8s PV.
+func (f *CephFilesystem) Delete(fs, subvol, svg string) {
+	k8sSubvolume := f.getK8sRefSubvolume()
 	_, check := k8sSubvolume[subvol]
 	if !check {
-		deleteOmapForSubvolume(ctx, clientsets, OperatorNamespace, CephClusterNamespace, subvol, fs, radosNamespace)
+		f.deleteOmapForSubvolume(subvol, fs)
 		cmd := "ceph"
 		args := []string{"fs", "subvolume", "rm", fs, subvol, svg, "--retain-snapshots"}
 
-		_, err := runCommand(ctx, clientsets, OperatorNamespace, CephClusterNamespace, cmd, args)
+		_, err := f.runCommand(cmd, args)
 		if err != nil {
 			logging.Fatal(err, "failed to delete subvolume of %s/%s/%s", fs, svg, subvol)
 		}
@@ -523,8 +558,8 @@ func Delete(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespa
 	}
 }
 
-func getMetadataPoolName(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, fs string) (string, error) {
-	fsstruct, err := getFileSystem(ctx, clientsets, OperatorNamespace, CephClusterNamespace)
+func (f *CephFilesystem) getMetadataPoolName(fs string) (string, error) {
+	fsstruct, err := f.getFileSystem()
 	if err != nil {
 		return "", err
 	}
@@ -537,24 +572,24 @@ func getMetadataPoolName(ctx context.Context, clientsets *k8sutil.Clientsets, Op
 	return "", fmt.Errorf("metadataPool not found for %q filesystem", fs)
 }
 
-// deleteOmap deletes omap object and key for the given subvolume.
-func deleteOmapForSubvolume(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, subVol, fs, radosNamespace string) {
+// deleteOmapForSubvolume deletes omap object and key for the given subvolume.
+func (f *CephFilesystem) deleteOmapForSubvolume(subVol, fs string) {
 	logging.Info("Deleting the omap object and key for subvolume %q", subVol)
-	omapkey := getOmapKey(ctx, clientsets, OperatorNamespace, CephClusterNamespace, subVol, fs, radosNamespace)
+	omapkey := f.getOmapKey(subVol, fs)
 	omapval, subvolId := getOmapVal(subVol)
-	poolName, err := getMetadataPoolName(ctx, clientsets, OperatorNamespace, CephClusterNamespace, fs)
+	poolName, err := f.getMetadataPoolName(fs)
 	if err != nil || poolName == "" {
 		logging.Fatal(fmt.Errorf("pool name not found: %q", err))
 	}
-	nfsClusterName := getNfsClusterName(ctx, clientsets, OperatorNamespace, CephClusterNamespace, subVol, fs, radosNamespace)
+	nfsClusterName := f.getNfsClusterName(subVol, fs)
 	if nfsClusterName != "" {
-		exportPath := getNfsExportPath(ctx, clientsets, OperatorNamespace, CephClusterNamespace, nfsClusterName, subvolId)
+		exportPath := f.getNfsExportPath(nfsClusterName, subvolId)
 		if exportPath == "" {
 			logging.Info("export path not found for subvol %q: %q", subVol, nfsClusterName)
 		} else {
 			cmd := "ceph"
 			args := []string{"nfs", "export", "delete", nfsClusterName, exportPath}
-			_, err := runCommand(ctx, clientsets, OperatorNamespace, CephClusterNamespace, cmd, args)
+			_, err := f.runCommand(cmd, args)
 			if err != nil {
 				logging.Fatal(err, "failed to delete export for subvol %q: %q %q", subVol, nfsClusterName, exportPath)
 			}
@@ -563,10 +598,10 @@ func deleteOmapForSubvolume(ctx context.Context, clientsets *k8sutil.Clientsets,
 	}
 	if omapval != "" {
 		cmd := "rados"
-		args := []string{"rm", omapval, "-p", poolName, "--namespace", radosNamespace}
+		args := []string{"rm", omapval, "-p", poolName, "--namespace", f.RadosNamespace}
 
 		// remove omap object.
-		_, err := runCommand(ctx, clientsets, OperatorNamespace, CephClusterNamespace, cmd, args)
+		_, err := f.runCommand(cmd, args)
 		if err != nil {
 			logging.Warning("failed to remove omap object for subvolume %q: %v", subVol, err)
 		} else {
@@ -575,10 +610,10 @@ func deleteOmapForSubvolume(ctx context.Context, clientsets *k8sutil.Clientsets,
 	}
 	if omapkey != "" {
 		cmd := "rados"
-		args := []string{"rmomapkey", "csi.volumes.default", omapkey, "-p", poolName, "--namespace", radosNamespace}
+		args := []string{"rmomapkey", "csi.volumes.default", omapkey, "-p", poolName, "--namespace", f.RadosNamespace}
 
 		// remove omap key.
-		_, err := runCommand(ctx, clientsets, OperatorNamespace, CephClusterNamespace, cmd, args)
+		_, err := f.runCommand(cmd, args)
 		if err != nil {
 			logging.Warning("failed to remove omap key for subvolume %q: %v", subVol, err)
 		} else {
@@ -588,20 +623,20 @@ func deleteOmapForSubvolume(ctx context.Context, clientsets *k8sutil.Clientsets,
 }
 
 // deleteOmapForSnapshot deletes omap object and key for the given snapshot.
-func deleteOmapForSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, snap, fs, radosNamespace string) {
+func (f *CephFilesystem) deleteOmapForSnapshot(snap, fs string) {
 	logging.Info("Deleting the omap object and key for snapshot %q", snap)
-	snapomapkey := getSnapOmapKey(ctx, clientsets, OperatorNamespace, CephClusterNamespace, snap, fs, radosNamespace)
+	snapomapkey := f.getSnapOmapKey(snap, fs)
 	snapomapval, _ := getSnapOmapVal(snap)
-	poolName, err := getMetadataPoolName(ctx, clientsets, OperatorNamespace, CephClusterNamespace, fs)
+	poolName, err := f.getMetadataPoolName(fs)
 	if err != nil || poolName == "" {
 		logging.Fatal(fmt.Errorf("pool name not found: %q", err))
 	}
 	cmd := "rados"
 	if snapomapval != "" {
-		args := []string{"rm", snapomapval, "-p", poolName, "--namespace", radosNamespace}
+		args := []string{"rm", snapomapval, "-p", poolName, "--namespace", f.RadosNamespace}
 
 		// remove omap object.
-		_, err := runCommand(ctx, clientsets, OperatorNamespace, CephClusterNamespace, cmd, args)
+		_, err := f.runCommand(cmd, args)
 		if err != nil {
 			logging.Warning("failed to remove omap object for snapshot %q: %v", snap, err)
 		} else {
@@ -609,10 +644,10 @@ func deleteOmapForSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, 
 		}
 	}
 	if snapomapkey != "" {
-		args := []string{"rmomapkey", "csi.snaps.default", snapomapkey, "-p", poolName, "--namespace", radosNamespace}
+		args := []string{"rmomapkey", "csi.snaps.default", snapomapkey, "-p", poolName, "--namespace", f.RadosNamespace}
 
 		// remove omap key.
-		_, err := runCommand(ctx, clientsets, OperatorNamespace, CephClusterNamespace, cmd, args)
+		_, err := f.runCommand(cmd, args)
 		if err != nil {
 			logging.Warning("failed to remove omap key for snapshot %q: %v", snap, err)
 		} else {
@@ -627,17 +662,16 @@ func deleteOmapForSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, 
 // deleted.
 // similarly to delete of omap key requires csi.volume.ompakey, where
 // omapkey is the pv name which is extracted the omap object.
-func getOmapKey(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, subVol, fs, radosNamespace string) string {
-
-	poolName, err := getMetadataPoolName(ctx, clientsets, OperatorNamespace, CephClusterNamespace, fs)
+func (f *CephFilesystem) getOmapKey(subVol, fs string) string {
+	poolName, err := f.getMetadataPoolName(fs)
 	if err != nil || poolName == "" {
 		logging.Fatal(fmt.Errorf("pool name not found: %q", err))
 	}
 	omapval, _ := getOmapVal(subVol)
 
-	args := []string{"getomapval", omapval, "csi.volname", "-p", poolName, "--namespace", radosNamespace, "/dev/stdout"}
+	args := []string{"getomapval", omapval, "csi.volname", "-p", poolName, "--namespace", f.RadosNamespace, "/dev/stdout"}
 	cmd := "rados"
-	pvname, err := runCommand(ctx, clientsets, OperatorNamespace, CephClusterNamespace, cmd, args)
+	pvname, err := f.runCommand(cmd, args)
 	if err != nil || pvname == "" {
 		logging.Info("No PV found for subvolume %s: %s", subVol, err)
 		return ""
@@ -654,17 +688,16 @@ func getOmapKey(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNam
 // csi.snap.snapid.
 // similarly to delete of omap key requires csi.snap.ompakey, where
 // omapkey is the snapshotcontent name which is extracted the omap object.
-func getSnapOmapKey(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, cephClusterNamespace, snap, fs, radosNamespace string) string {
-
-	poolName, err := getMetadataPoolName(ctx, clientsets, operatorNamespace, cephClusterNamespace, fs)
+func (f *CephFilesystem) getSnapOmapKey(snap, fs string) string {
+	poolName, err := f.getMetadataPoolName(fs)
 	if err != nil || poolName == "" {
 		logging.Fatal(fmt.Errorf("pool name not found: %q", err))
 	}
 	snapomapval, _ := getSnapOmapVal(snap)
 
-	args := []string{"getomapval", snapomapval, "csi.snapname", "-p", poolName, "--namespace", radosNamespace, "/dev/stdout"}
+	args := []string{"getomapval", snapomapval, "csi.snapname", "-p", poolName, "--namespace", f.RadosNamespace, "/dev/stdout"}
 	cmd := "rados"
-	snapshotcontentname, err := runCommand(ctx, clientsets, operatorNamespace, cephClusterNamespace, cmd, args)
+	snapshotcontentname, err := f.runCommand(cmd, args)
 	if snapshotcontentname == "" && err == nil {
 		logging.Info("No snapshot content found for snapshot")
 		return ""
@@ -685,17 +718,16 @@ func getSnapOmapKey(ctx context.Context, clientsets *k8sutil.Clientsets, operato
 // 00000000  6f 63 73 2d 73 74 6f 72  61 67 65 63 6c 75 73 74  |my-cluster-cephn|
 // 00000010  65 72 2d 63 65 70 68 6e  66 73                    |fs|
 // 0000001a
-func getNfsClusterName(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, subVol, fs, radosNamespace string) string {
-
-	poolName, err := getMetadataPoolName(ctx, clientsets, OperatorNamespace, CephClusterNamespace, fs)
+func (f *CephFilesystem) getNfsClusterName(subVol, fs string) string {
+	poolName, err := f.getMetadataPoolName(fs)
 	if err != nil || poolName == "" {
 		logging.Fatal(fmt.Errorf("pool name not found %q: %q", poolName, err))
 	}
 	omapval, _ := getOmapVal(subVol)
 
-	args := []string{"getomapval", omapval, "csi.nfs.cluster", "-p", poolName, "--namespace", radosNamespace, "/dev/stdout"}
+	args := []string{"getomapval", omapval, "csi.nfs.cluster", "-p", poolName, "--namespace", f.RadosNamespace, "/dev/stdout"}
 	cmd := "rados"
-	nfscluster, err := runCommand(ctx, clientsets, OperatorNamespace, CephClusterNamespace, cmd, args)
+	nfscluster, err := f.runCommand(cmd, args)
 	if err != nil || nfscluster == "" {
 		logging.Info("nfs cluster not found for subvolume %s: %s %s", subVol, poolName, err)
 		return ""
@@ -704,11 +736,10 @@ func getNfsClusterName(ctx context.Context, clientsets *k8sutil.Clientsets, Oper
 	return nfscluster
 }
 
-func getNfsExportPath(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, clusterName, subvolId string) string {
-
+func (f *CephFilesystem) getNfsExportPath(clusterName, subvolId string) string {
 	args := []string{"nfs", "export", "ls", clusterName}
 	cmd := "ceph"
-	exportList, err := runCommand(ctx, clientsets, OperatorNamespace, CephClusterNamespace, cmd, args)
+	exportList, err := f.runCommand(cmd, args)
 	if err != nil || exportList == "" {
 		logging.Info("No export path found for cluster %s: %s", clusterName, err)
 		return ""
