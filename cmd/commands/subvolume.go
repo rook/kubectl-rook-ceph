@@ -37,7 +37,8 @@ var listCmd = &cobra.Command{
 		ctx := cmd.Context()
 		staleSubvol, _ := cmd.Flags().GetBool("stale")
 		svgName, _ := cmd.Flags().GetString("svg")
-		subvolume.List(ctx, clientSets, operatorNamespace, cephClusterNamespace, svgName, staleSubvol)
+		radosNamespace, _ := cmd.Flags().GetString("rados-namespace")
+		subvolume.List(ctx, clientSets, operatorNamespace, cephClusterNamespace, svgName, staleSubvol, radosNamespace)
 	},
 }
 
@@ -54,7 +55,8 @@ var deleteCmd = &cobra.Command{
 		if len(args) > 2 {
 			svg = args[2]
 		}
-		subvolume.Delete(ctx, clientSets, operatorNamespace, cephClusterNamespace, fs, subvol, svg)
+		radosNamespace, _ := cmd.Flags().GetString("rados-namespace")
+		subvolume.Delete(ctx, clientSets, operatorNamespace, cephClusterNamespace, fs, subvol, svg, radosNamespace)
 	},
 }
 
@@ -62,5 +64,6 @@ func init() {
 	SubvolumeCmd.AddCommand(listCmd)
 	SubvolumeCmd.PersistentFlags().Bool("stale", false, "List only stale subvolumes")
 	SubvolumeCmd.PersistentFlags().String("svg", "csi", "The name of the subvolume group")
+	SubvolumeCmd.PersistentFlags().String("rados-namespace", "csi", "The rados namespace for omap operations")
 	SubvolumeCmd.AddCommand(deleteCmd)
 }

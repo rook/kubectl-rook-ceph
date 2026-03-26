@@ -356,6 +356,95 @@ delete_cephfs_snapshot_k8s_resources() {
 }
 
 
+# Create a CephFilesystemSubVolumeGroup, a matching Retain StorageClass
+# (with subvolumeGroup set to the svg name), and a stale subvolume for
+# testing --svg flag.  CephFS CSI stores OMAP entries in the "csi" rados
+# namespace by default (configured at cluster level in the CSI ConfigMap,
+# NOT per-StorageClass).  After this call the subvolume exists in Ceph
+# but has no k8s PVC reference (stale).
+# Args: $1 svg-name  $2 operator-ns  $3 cluster-ns
+create_stale_subvolume_in_svg() {
+    local svg="${1:-test-svg}"
+    local operator_ns="${2:-$DEFAULT_OPERATOR_NS}"
+    local cluster_ns="${3:-$DEFAULT_CLUSTER_NS}"
+    local sc_name="rook-cephfs-${svg}-retain"
+    local pvc_name="cephfs-pvc-${svg}"
+
+    # 1. Create the CephFilesystemSubVolumeGroup CR
+    cat > "svg-${svg}.yaml" <<EOF
+apiVersion: ceph.rook.io/v1
+kind: CephFilesystemSubVolumeGroup
+metadata:
+  name: ${svg}
+  namespace: ${cluster_ns}
+spec:
+  filesystemName: myfs
+EOF
+    kubectl create -f "svg-${svg}.yaml"
+    kubectl wait --for=jsonpath='{.status.phase}'=Ready \
+        CephFilesystemSubVolumeGroup "${svg}" -n "${cluster_ns}" \
+        --timeout="${DEFAULT_TIMEOUT}s"
+
+    # Restart the CephFS CSI provisioner so it immediately reloads the
+    # Rook ConfigMap containing the new clusterID. Without this, the
+    # provisioner relies on the kubelet ConfigMap sync delay (~1-2 min)
+    # plus external-provisioner exponential backoff (max 5 min), causing
+    # PVC binding to stall for ~8 minutes in custom-namespace CI.
+    # The deployment name is "<operator_ns>.cephfs.csi.ceph.com-ctrlplugin".
+    local cephfs_deploy="${operator_ns}.cephfs.csi.ceph.com-ctrlplugin"
+    kubectl rollout restart deployment "${cephfs_deploy}" -n "${operator_ns}"
+    kubectl rollout status deployment "${cephfs_deploy}" \
+        -n "${operator_ns}" --timeout=120s
+
+    # 2. Get the CSI clusterID from the SVG status.
+    # Returns spec.clusterID if set, otherwise the auto-generated one.
+    local cluster_id
+    cluster_id=$(kubectl -n "${cluster_ns}" \
+        get cephfilesystemsubvolumegroup "${svg}" \
+        -o jsonpath="{.status.info.clusterID}")
+
+    # 3. Build a Retain StorageClass for this SVG.
+    # CephFS CSI does not support radosNamespace per-StorageClass;
+    # OMAP is always in the "csi" rados namespace (CSI ConfigMap default).
+    download_and_modify_yaml \
+        "https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/storageclass.yaml" \
+        "storageclass-${svg}.yaml" "$operator_ns" "$cluster_ns"
+    sed -i "s|name: rook-cephfs|name: ${sc_name}|g" \
+        "storageclass-${svg}.yaml"
+    sed -i "s|clusterID: .*|clusterID: ${cluster_id}|g" \
+        "storageclass-${svg}.yaml"
+    sed -i "s|reclaimPolicy: Delete|reclaimPolicy: Retain|g" \
+        "storageclass-${svg}.yaml"
+    if [[ "$operator_ns" != "$DEFAULT_OPERATOR_NS" ]]; then
+        sed -i "s|provisioner: rook-ceph.cephfs.csi.ceph.com|provisioner: ${operator_ns}.cephfs.csi.ceph.com|g" \
+            "storageclass-${svg}.yaml"
+    fi
+    kubectl create -f "storageclass-${svg}.yaml"
+
+    # 4. Create PVC to provision a subvolume in the SVG
+    cat > "pvc-${svg}.yaml" <<EOF
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: ${pvc_name}
+spec:
+  accessModes:
+    - ReadWriteMany
+  resources:
+    requests:
+      storage: 1Gi
+  storageClassName: ${sc_name}
+EOF
+    kubectl create -f "pvc-${svg}.yaml"
+    wait_for_pvc_to_be_bound_state "${pvc_name}" "default"
+
+    # 5. Delete PVC; PV is retained so subvolume becomes stale
+    local pv_name
+    pv_name="$(kubectl get pvc "${pvc_name}" -o=jsonpath='{.spec.volumeName}')"
+    kubectl delete pvc "${pvc_name}"
+    kubectl delete pv "${pv_name}"
+}
+
 #################
 # WAIT FUNCTIONS
 #################
@@ -542,6 +631,47 @@ wait_for_rbd_pvc_clone_to_be_bound() {
 
     echo "Waiting for PVC clone to be bound..."
     kubectl wait --for=jsonpath='{.status.phase}'=Bound pvc rbd-pvc-clone --timeout=600s
+}
+
+# Create a consumer kubeconfig context that aliases the current cluster.
+# Used to test --consumer-context flag with a single Minikube cluster.
+create_consumer_context() {
+    local context_name="${1:-consumer-ctx}"
+    local current_ctx
+    current_ctx="$(kubectl config current-context)"
+
+    local cluster server ca_cert
+    cluster="$(kubectl config view -o jsonpath="{.contexts[?(@.name=='${current_ctx}')].context.cluster}")"
+    server="$(kubectl config view -o jsonpath="{.clusters[?(@.name=='${cluster}')].cluster.server}")"
+    ca_cert="$(kubectl config view --raw -o jsonpath="{.clusters[?(@.name=='${cluster}')].cluster.certificate-authority}")"
+    local ca_data
+    ca_data="$(kubectl config view --raw -o jsonpath="{.clusters[?(@.name=='${cluster}')].cluster.certificate-authority-data}")"
+
+    kubectl config set-cluster "${context_name}-cluster" --server="${server}"
+    if [[ -n "$ca_cert" ]]; then
+        kubectl config set-cluster "${context_name}-cluster" --certificate-authority="${ca_cert}"
+    elif [[ -n "$ca_data" ]]; then
+        kubectl config set clusters."${context_name}-cluster".certificate-authority-data "${ca_data}"
+    fi
+
+    local user
+    user="$(kubectl config view -o jsonpath="{.contexts[?(@.name=='${current_ctx}')].context.user}")"
+    local client_cert client_key client_cert_data client_key_data
+    client_cert="$(kubectl config view --raw -o jsonpath="{.users[?(@.name=='${user}')].user.client-certificate}")"
+    client_key="$(kubectl config view --raw -o jsonpath="{.users[?(@.name=='${user}')].user.client-key}")"
+    client_cert_data="$(kubectl config view --raw -o jsonpath="{.users[?(@.name=='${user}')].user.client-certificate-data}")"
+    client_key_data="$(kubectl config view --raw -o jsonpath="{.users[?(@.name=='${user}')].user.client-key-data}")"
+
+    kubectl config set-credentials "${context_name}-user"
+    if [[ -n "$client_cert" ]]; then
+        kubectl config set-credentials "${context_name}-user" --client-certificate="${client_cert}" --client-key="${client_key}"
+    elif [[ -n "$client_cert_data" ]]; then
+        kubectl config set users."${context_name}-user".client-certificate-data "${client_cert_data}"
+        kubectl config set users."${context_name}-user".client-key-data "${client_key_data}"
+    fi
+
+    kubectl config set-context "${context_name}" --cluster="${context_name}-cluster" --user="${context_name}-user"
+    echo "Created consumer context: ${context_name}"
 }
 
 ########

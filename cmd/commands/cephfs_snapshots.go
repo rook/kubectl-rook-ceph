@@ -53,7 +53,8 @@ var cephFSSnapshotDeleteCmd = &cobra.Command{
 		snap := args[1]
 		fs, _ := cmd.Flags().GetString("filesystem")
 		svg, _ := cmd.Flags().GetString("svg")
-		filesystem.SnapshotDelete(cmd.Context(), clientSets, operatorNamespace, cephClusterNamespace, fs, subvol, snap, svg)
+		radosNamespace, _ := cmd.Flags().GetString("rados-namespace")
+		filesystem.SnapshotDelete(cmd.Context(), clientSets, operatorNamespace, cephClusterNamespace, fs, subvol, snap, svg, radosNamespace)
 	},
 }
 
@@ -62,5 +63,6 @@ func init() {
 	cephFSSnapshotListCmd.PersistentFlags().Bool("orphaned", false, "List only orphaned snapshots")
 	CephFSSnapshotCmd.PersistentFlags().String("svg", "csi", "The name of the subvolume group")
 	CephFSSnapshotCmd.PersistentFlags().String("filesystem", "myfs", "The name of the CephFS filesystem")
+	CephFSSnapshotCmd.PersistentFlags().String("rados-namespace", "csi", "The rados namespace for omap operations")
 	CephFSSnapshotCmd.AddCommand(cephFSSnapshotDeleteCmd)
 }

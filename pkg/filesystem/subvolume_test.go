@@ -18,10 +18,91 @@ package filesystem
 
 import (
 	"fmt"
+	"syscall"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
 )
+
+func TestIsSubvolumeNotReady(t *testing.T) {
+	tests := []struct {
+		name     string
+		err      error
+		expected bool
+	}{
+		{
+			name:     "nil error",
+			err:      nil,
+			expected: false,
+		},
+		{
+			name:     "EAGAIN errno",
+			err:      syscall.EAGAIN,
+			expected: true,
+		},
+		{
+			name:     "string contains EAGAIN",
+			err:      fmt.Errorf("operation failed: EAGAIN"),
+			expected: true,
+		},
+		{
+			name:     "exit code 11 in message",
+			err:      fmt.Errorf("command failed: exit status 11"),
+			expected: true,
+		},
+		{
+			name:     "exit code -11 in message",
+			err:      fmt.Errorf("command failed: exit status -11"),
+			expected: true,
+		},
+		{
+			name:     "exit code 11 text variant",
+			err:      fmt.Errorf("command failed: exit code 11"),
+			expected: true,
+		},
+		{
+			name:     "unrelated error",
+			err:      fmt.Errorf("some other error"),
+			expected: false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.expected, isSubvolumeNotReady(tt.err))
+		})
+	}
+}
+
+func TestExitCodeFromError(t *testing.T) {
+	tests := []struct {
+		name string
+		err  error
+		code int
+		ok   bool
+	}{
+		{
+			name: "errno EAGAIN",
+			err:  syscall.EAGAIN,
+			code: int(syscall.EAGAIN),
+			ok:   true,
+		},
+		{
+			name: "non-errno error",
+			err:  fmt.Errorf("plain error"),
+			code: 0,
+			ok:   false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			code, ok := exitCodeFromError(tt.err)
+			assert.Equal(t, tt.ok, ok)
+			if ok {
+				assert.Equal(t, tt.code, code)
+			}
+		})
+	}
+}
 
 func TestGetOmapVal(t *testing.T) {
 

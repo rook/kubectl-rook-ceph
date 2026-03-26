@@ -89,7 +89,7 @@ func SnapshotList(ctx context.Context, clientsets *k8sutil.Clientsets, operatorN
 }
 
 // SnapshotDelete deletes a CephFS snapshot after verifying it's orphaned
-func SnapshotDelete(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, fs, subvol, snap, subvolgrp string) {
+func SnapshotDelete(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, fs, subvol, snap, subvolgrp, radosNamespace string) {
 	// Get snapshot IDs from Kubernetes VolumeSnapshotContent resources to check if snapshot is orphaned
 	k8sSnapshotHandles := getK8sRefSnapshotHandle(ctx, clientsets)
 
@@ -103,7 +103,7 @@ func SnapshotDelete(ctx context.Context, clientsets *k8sutil.Clientsets, operato
 		return
 	}
 
-	deleteSnapshot(ctx, clientsets, operatorNamespace, clusterNamespace, fs, subvol, subvolgrp, snap)
+	deleteSnapshot(ctx, clientsets, operatorNamespace, clusterNamespace, fs, subvol, subvolgrp, snap, radosNamespace)
 	logging.Info("snapshot %q deleted successfully", snap)
 }
 

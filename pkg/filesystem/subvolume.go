@@ -65,11 +65,11 @@ const (
 	snapshotRetained  = "snapshot-retained"
 )
 
-func List(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, subvolg string, includeStaleOnly bool) {
+func List(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, subvolg string, includeStaleOnly bool, radosNamespace string) {
 
 	subvolumeNames := getK8sRefSubvolume(ctx, clientsets)
 	snapshotHandles := getK8sRefSnapshotHandle(ctx, clientsets)
-	listCephFSSubvolumes(ctx, clientsets, operatorNamespace, clusterNamespace, subvolg, includeStaleOnly, subvolumeNames, snapshotHandles)
+	listCephFSSubvolumes(ctx, clientsets, operatorNamespace, clusterNamespace, subvolg, includeStaleOnly, subvolumeNames, snapshotHandles, radosNamespace)
 }
 
 // checkForExternalStorage checks if the external mode is enabled.
@@ -133,7 +133,7 @@ func getExternalClusterDetails(ctx context.Context, clientsets *k8sutil.Clientse
 
 // getk8sRefSubvolume returns the k8s ref for the subvolumes
 func getK8sRefSubvolume(ctx context.Context, clientsets *k8sutil.Clientsets) map[string]subVolumeInfo {
-	pvList, err := clientsets.Kube.CoreV1().PersistentVolumes().List(ctx, v1.ListOptions{})
+	pvList, err := clientsets.ConsumerKube.CoreV1().PersistentVolumes().List(ctx, v1.ListOptions{})
 	if err != nil {
 		logging.Fatal(fmt.Errorf("Error fetching PVs: %v\n", err))
 	}
@@ -187,7 +187,7 @@ func generateSubvolumeNameFromVolumeHandle(prefix string, volumeHandle string) (
 // getk8sRefSnapshotHandle returns the snapshothandle for k8s ref of the volume snapshots
 func getK8sRefSnapshotHandle(ctx context.Context, clientsets *k8sutil.Clientsets) map[string]snapshotInfo {
 
-	snapConfig, err := snapclient.NewForConfig(clientsets.KubeConfig)
+	snapConfig, err := snapclient.NewForConfig(clientsets.ConsumerConfig)
 	if err != nil {
 		logging.Fatal(err)
 	}
@@ -243,7 +243,7 @@ func runCommand(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNam
 }
 
 // listCephFSSubvolumes list all the subvolumes
-func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, subvolgName string, includeStaleOnly bool, subvolumeNames map[string]subVolumeInfo, snapshotHandles map[string]snapshotInfo) {
+func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, subvolgName string, includeStaleOnly bool, subvolumeNames map[string]subVolumeInfo, snapshotHandles map[string]snapshotInfo, radosNamespace string) {
 
 	// getFilesystem gets the filesystem
 	fsstruct, err := getFileSystem(ctx, clientsets, operatorNamespace, clusterNamespace)
@@ -316,7 +316,7 @@ func listCephFSSubvolumes(ctx context.Context, clientsets *k8sutil.Clientsets, o
 						continue
 					}
 					// check if the stale subvolume has snapshots.
-					if checkSnapshot(ctx, clientsets, operatorNamespace, clusterNamespace, fs.Name, sv.Name, svg.Name, snapshotHandles) {
+					if checkSnapshot(ctx, clientsets, operatorNamespace, clusterNamespace, fs.Name, sv.Name, svg.Name, snapshotHandles, radosNamespace) {
 						status = staleWithSnapshot
 					}
 
@@ -434,7 +434,7 @@ func getFileSystem(ctx context.Context, clientsets *k8sutil.Clientsets, operator
 
 // checkSnapshot checks if there are any snapshots in the subvolume
 // it also check for the stale snapshot and if found, deletes the snapshot.
-func checkSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, fs, sv, svg string, snapshotHandles map[string]snapshotInfo) bool {
+func checkSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, fs, sv, svg string, snapshotHandles map[string]snapshotInfo, radosNamespace string) bool {
 
 	cmd := "ceph"
 	args := []string{"fs", "subvolume", "snapshot", "ls", fs, sv, svg, "--format", "json"}
@@ -455,7 +455,7 @@ func checkSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, operator
 		_, ok := snapshotHandles[snapId]
 		if !ok {
 			// delete stale snapshot
-			deleteSnapshot(ctx, clientsets, operatorNamespace, clusterNamespace, fs, sv, svg, s.Name)
+			deleteSnapshot(ctx, clientsets, operatorNamespace, clusterNamespace, fs, sv, svg, s.Name, radosNamespace)
 		}
 	}
 	if len(snap) == 0 {
@@ -492,9 +492,9 @@ func unMarshaljson(list string) []fsStruct {
 }
 
 // deleteSnapshot deletes the subvolume snapshot
-func deleteSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, cephClusterNamespace, fs, subvol, svg, snap string) {
+func deleteSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, cephClusterNamespace, fs, subvol, svg, snap, radosNamespace string) {
 
-	deleteOmapForSnapshot(ctx, clientsets, operatorNamespace, cephClusterNamespace, snap, fs)
+	deleteOmapForSnapshot(ctx, clientsets, operatorNamespace, cephClusterNamespace, snap, fs, radosNamespace)
 	cmd := "ceph"
 	args := []string{"fs", "subvolume", "snapshot", "rm", fs, subvol, snap, svg}
 
@@ -504,11 +504,11 @@ func deleteSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, operato
 	}
 }
 
-func Delete(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, fs, subvol, svg string) {
+func Delete(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, fs, subvol, svg, radosNamespace string) {
 	k8sSubvolume := getK8sRefSubvolume(ctx, clientsets)
 	_, check := k8sSubvolume[subvol]
 	if !check {
-		deleteOmapForSubvolume(ctx, clientsets, OperatorNamespace, CephClusterNamespace, subvol, fs)
+		deleteOmapForSubvolume(ctx, clientsets, OperatorNamespace, CephClusterNamespace, subvol, fs, radosNamespace)
 		cmd := "ceph"
 		args := []string{"fs", "subvolume", "rm", fs, subvol, svg, "--retain-snapshots"}
 
@@ -538,15 +538,15 @@ func getMetadataPoolName(ctx context.Context, clientsets *k8sutil.Clientsets, Op
 }
 
 // deleteOmap deletes omap object and key for the given subvolume.
-func deleteOmapForSubvolume(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, subVol, fs string) {
+func deleteOmapForSubvolume(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, subVol, fs, radosNamespace string) {
 	logging.Info("Deleting the omap object and key for subvolume %q", subVol)
-	omapkey := getOmapKey(ctx, clientsets, OperatorNamespace, CephClusterNamespace, subVol, fs)
+	omapkey := getOmapKey(ctx, clientsets, OperatorNamespace, CephClusterNamespace, subVol, fs, radosNamespace)
 	omapval, subvolId := getOmapVal(subVol)
 	poolName, err := getMetadataPoolName(ctx, clientsets, OperatorNamespace, CephClusterNamespace, fs)
 	if err != nil || poolName == "" {
 		logging.Fatal(fmt.Errorf("pool name not found: %q", err))
 	}
-	nfsClusterName := getNfsClusterName(ctx, clientsets, OperatorNamespace, CephClusterNamespace, subVol, fs)
+	nfsClusterName := getNfsClusterName(ctx, clientsets, OperatorNamespace, CephClusterNamespace, subVol, fs, radosNamespace)
 	if nfsClusterName != "" {
 		exportPath := getNfsExportPath(ctx, clientsets, OperatorNamespace, CephClusterNamespace, nfsClusterName, subvolId)
 		if exportPath == "" {
@@ -563,34 +563,34 @@ func deleteOmapForSubvolume(ctx context.Context, clientsets *k8sutil.Clientsets,
 	}
 	if omapval != "" {
 		cmd := "rados"
-		args := []string{"rm", omapval, "-p", poolName, "--namespace", "csi"}
+		args := []string{"rm", omapval, "-p", poolName, "--namespace", radosNamespace}
 
 		// remove omap object.
 		_, err := runCommand(ctx, clientsets, OperatorNamespace, CephClusterNamespace, cmd, args)
 		if err != nil {
-			logging.Fatal(err, "failed to remove omap object for subvolume %q", subVol)
+			logging.Warning("failed to remove omap object for subvolume %q: %v", subVol, err)
+		} else {
+			logging.Info("omap object:%q deleted", omapval)
 		}
-		logging.Info("omap object:%q deleted", omapval)
-
 	}
 	if omapkey != "" {
 		cmd := "rados"
-		args := []string{"rmomapkey", "csi.volumes.default", omapkey, "-p", poolName, "--namespace", "csi"}
+		args := []string{"rmomapkey", "csi.volumes.default", omapkey, "-p", poolName, "--namespace", radosNamespace}
 
 		// remove omap key.
 		_, err := runCommand(ctx, clientsets, OperatorNamespace, CephClusterNamespace, cmd, args)
 		if err != nil {
-			logging.Fatal(err, "failed to remove omap key for subvolume %q", subVol)
+			logging.Warning("failed to remove omap key for subvolume %q: %v", subVol, err)
+		} else {
+			logging.Info("omap key:%q deleted", omapkey)
 		}
-		logging.Info("omap key:%q deleted", omapkey)
-
 	}
 }
 
 // deleteOmapForSnapshot deletes omap object and key for the given snapshot.
-func deleteOmapForSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, snap, fs string) {
+func deleteOmapForSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, snap, fs, radosNamespace string) {
 	logging.Info("Deleting the omap object and key for snapshot %q", snap)
-	snapomapkey := getSnapOmapKey(ctx, clientsets, OperatorNamespace, CephClusterNamespace, snap, fs)
+	snapomapkey := getSnapOmapKey(ctx, clientsets, OperatorNamespace, CephClusterNamespace, snap, fs, radosNamespace)
 	snapomapval, _ := getSnapOmapVal(snap)
 	poolName, err := getMetadataPoolName(ctx, clientsets, OperatorNamespace, CephClusterNamespace, fs)
 	if err != nil || poolName == "" {
@@ -598,26 +598,26 @@ func deleteOmapForSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, 
 	}
 	cmd := "rados"
 	if snapomapval != "" {
-		args := []string{"rm", snapomapval, "-p", poolName, "--namespace", "csi"}
+		args := []string{"rm", snapomapval, "-p", poolName, "--namespace", radosNamespace}
 
 		// remove omap object.
 		_, err := runCommand(ctx, clientsets, OperatorNamespace, CephClusterNamespace, cmd, args)
 		if err != nil {
-			logging.Fatal(err, "failed to remove omap object for snapshot %q", snap)
+			logging.Warning("failed to remove omap object for snapshot %q: %v", snap, err)
+		} else {
+			logging.Info("omap object:%q deleted", snapomapval)
 		}
-		logging.Info("omap object:%q deleted", snapomapval)
-
 	}
 	if snapomapkey != "" {
-		args := []string{"rmomapkey", "csi.snaps.default", snapomapkey, "-p", poolName, "--namespace", "csi"}
+		args := []string{"rmomapkey", "csi.snaps.default", snapomapkey, "-p", poolName, "--namespace", radosNamespace}
 
 		// remove omap key.
 		_, err := runCommand(ctx, clientsets, OperatorNamespace, CephClusterNamespace, cmd, args)
 		if err != nil {
-			logging.Fatal(err, "failed to remove omap key for snapshot %q", snap)
+			logging.Warning("failed to remove omap key for snapshot %q: %v", snap, err)
+		} else {
+			logging.Info("omap key:%q deleted", snapomapkey)
 		}
-		logging.Info("omap key:%q deleted", snapomapkey)
-
 	}
 }
 
@@ -627,7 +627,7 @@ func deleteOmapForSnapshot(ctx context.Context, clientsets *k8sutil.Clientsets, 
 // deleted.
 // similarly to delete of omap key requires csi.volume.ompakey, where
 // omapkey is the pv name which is extracted the omap object.
-func getOmapKey(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, subVol, fs string) string {
+func getOmapKey(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, subVol, fs, radosNamespace string) string {
 
 	poolName, err := getMetadataPoolName(ctx, clientsets, OperatorNamespace, CephClusterNamespace, fs)
 	if err != nil || poolName == "" {
@@ -635,7 +635,7 @@ func getOmapKey(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNam
 	}
 	omapval, _ := getOmapVal(subVol)
 
-	args := []string{"getomapval", omapval, "csi.volname", "-p", poolName, "--namespace", "csi", "/dev/stdout"}
+	args := []string{"getomapval", omapval, "csi.volname", "-p", poolName, "--namespace", radosNamespace, "/dev/stdout"}
 	cmd := "rados"
 	pvname, err := runCommand(ctx, clientsets, OperatorNamespace, CephClusterNamespace, cmd, args)
 	if err != nil || pvname == "" {
@@ -654,7 +654,7 @@ func getOmapKey(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNam
 // csi.snap.snapid.
 // similarly to delete of omap key requires csi.snap.ompakey, where
 // omapkey is the snapshotcontent name which is extracted the omap object.
-func getSnapOmapKey(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, cephClusterNamespace, snap, fs string) string {
+func getSnapOmapKey(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, cephClusterNamespace, snap, fs, radosNamespace string) string {
 
 	poolName, err := getMetadataPoolName(ctx, clientsets, operatorNamespace, cephClusterNamespace, fs)
 	if err != nil || poolName == "" {
@@ -662,7 +662,7 @@ func getSnapOmapKey(ctx context.Context, clientsets *k8sutil.Clientsets, operato
 	}
 	snapomapval, _ := getSnapOmapVal(snap)
 
-	args := []string{"getomapval", snapomapval, "csi.snapname", "-p", poolName, "--namespace", "csi", "/dev/stdout"}
+	args := []string{"getomapval", snapomapval, "csi.snapname", "-p", poolName, "--namespace", radosNamespace, "/dev/stdout"}
 	cmd := "rados"
 	snapshotcontentname, err := runCommand(ctx, clientsets, operatorNamespace, cephClusterNamespace, cmd, args)
 	if snapshotcontentname == "" && err == nil {
@@ -685,7 +685,7 @@ func getSnapOmapKey(ctx context.Context, clientsets *k8sutil.Clientsets, operato
 // 00000000  6f 63 73 2d 73 74 6f 72  61 67 65 63 6c 75 73 74  |my-cluster-cephn|
 // 00000010  65 72 2d 63 65 70 68 6e  66 73                    |fs|
 // 0000001a
-func getNfsClusterName(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, subVol, fs string) string {
+func getNfsClusterName(ctx context.Context, clientsets *k8sutil.Clientsets, OperatorNamespace, CephClusterNamespace, subVol, fs, radosNamespace string) string {
 
 	poolName, err := getMetadataPoolName(ctx, clientsets, OperatorNamespace, CephClusterNamespace, fs)
 	if err != nil || poolName == "" {
@@ -693,7 +693,7 @@ func getNfsClusterName(ctx context.Context, clientsets *k8sutil.Clientsets, Oper
 	}
 	omapval, _ := getOmapVal(subVol)
 
-	args := []string{"getomapval", omapval, "csi.nfs.cluster", "-p", poolName, "--namespace", "csi", "/dev/stdout"}
+	args := []string{"getomapval", omapval, "csi.nfs.cluster", "-p", poolName, "--namespace", radosNamespace, "/dev/stdout"}
 	cmd := "rados"
 	nfscluster, err := runCommand(ctx, clientsets, OperatorNamespace, CephClusterNamespace, cmd, args)
 	if err != nil || nfscluster == "" {

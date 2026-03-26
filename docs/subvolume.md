@@ -11,11 +11,15 @@ The subvolume command will require the following sub commands:
 * `ls` : [ls](#ls) lists all the subvolumes
   * `--stale`: lists only stale subvolumes
   * `--svg <subvolumegroupname>`: lists subvolumes in a particular subvolume(default is "csi")
+  * `--consumer-context <context>`: Kubernetes context for PV and VolumeSnapshotContent lookups (default is the current context)
+  * `--rados-namespace <namespace>`: rados namespace used for OMAP lookups (default is "csi")
 * `delete <filesystem> <subvolume> [subvolumegroup]`:
     [delete](#delete) a stale subvolume.
   * subvolume: subvolume name.
   * filesystem: filesystem name to which the subvolume belongs.
   * subvolumegroup: subvolumegroup name to which the subvolume belong(default is "csi")
+  * `--consumer-context <context>`: Kubernetes context for PV and VolumeSnapshotContent lookups (default is the current context)
+  * `--rados-namespace <namespace>`: rados namespace used for OMAP lookups (default is "csi")
 
 ## ls
 
@@ -43,6 +47,28 @@ myfs csi-vol-427774b4-340b-11ed-8d66-0242ac110005 svg01 in-use
 myfs csi-vol-427774b4-340b-11ed-8d66-0242ac110007 svg01 stale
 ```
 
+### Remote Cluster Context
+
+When PVs reside in a different Kubernetes cluster (e.g. stretched or external storage), use `--consumer-context` to look up PVs and VolumeSnapshotContents on the consumer cluster. The default is the current context, which is typically the same cluster where the CephCluster resides:
+
+```bash
+$ kubectl rook-ceph --consumer-context=consumer-cluster subvolume ls
+
+Filesystem  Subvolume  SubvolumeGroup  State
+myfs csi-vol-427774b4-340b-11ed-8d66-0242ac110004 csi in-use
+myfs csi-vol-427774b4-340b-11ed-8d66-0242ac110005 csi in-use
+myfs csi-vol-427774b4-340b-11ed-8d66-0242ac110007 csi stale
+myfs csi-vol-427774b4-340b-11ed-8d66-0242ac110007 csi stale-with-snapshot
+```
+
+```bash
+$ kubectl rook-ceph --consumer-context=consumer-cluster subvolume ls --stale
+
+Filesystem  Subvolume  SubvolumeGroup state
+myfs csi-vol-427774b4-340b-11ed-8d66-0242ac110004 csi stale
+myfs csi-vol-427774b4-340b-11ed-8d66-0242ac110005 csi stale-with-snapshot
+```
+
 ## delete
 
 ```bash
@@ -58,5 +84,27 @@ Info: subvolume "csi-vol-0c91ba82-5a63-4117-88a4-690acd86cbbd" deleted
 $ kubectl rook-ceph subvolume delete myfs csi-vol-427774b4-340b-11ed-8d66-0242ac110005
 
 Info: No omapvals found for subvolume csi-vol-427774b4-340b-11ed-8d66-0242ac110005
+Info: subvolume "csi-vol-427774b4-340b-11ed-8d66-0242ac110005" deleted
+```
+
+To delete using a custom rados namespace:
+
+```bash
+$ kubectl rook-ceph subvolume delete myfs csi-vol-427774b4-340b-11ed-8d66-0242ac110005 svg01 --rados-namespace=svg01
+
+Info: Deleting the omap object and key for subvolume "csi-vol-427774b4-340b-11ed-8d66-0242ac110005"
+Info: omap object:"csi.volume.427774b4-340b-11ed-8d66-0242ac110005" deleted
+Info: omap key:"csi.volume.pvc-78abf81c-5381-42ee-8d75-dc17cd0cf5de" deleted
+Info: subvolume "csi-vol-427774b4-340b-11ed-8d66-0242ac110005" deleted
+```
+
+To delete a stale subvolume when PVs are on a consumer cluster, pass `--consumer-context`:
+
+```bash
+$ kubectl rook-ceph --consumer-context=consumer-cluster subvolume delete myfs csi-vol-427774b4-340b-11ed-8d66-0242ac110005
+
+Info: Deleting the omap object and key for subvolume "csi-vol-427774b4-340b-11ed-8d66-0242ac110005"
+Info: omap object:"csi.volume.427774b4-340b-11ed-8d66-0242ac110005" deleted
+Info: omap key:"csi.volume.pvc-78abf81c-5381-42ee-8d75-dc17cd0cf5de" deleted
 Info: subvolume "csi-vol-427774b4-340b-11ed-8d66-0242ac110005" deleted
 ```

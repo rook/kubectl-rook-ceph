@@ -43,3 +43,13 @@ go: go1.19.10s`
 		})
 	}
 }
+
+func TestConsumerContextFlag(t *testing.T) {
+	flag := RootCmd.PersistentFlags().Lookup("consumer-context")
+	if flag == nil {
+		t.Fatal("expected --consumer-context flag to be registered")
+	}
+	if flag.DefValue != "" {
+		t.Errorf("expected default value \"\", got %q", flag.DefValue)
+	}
+}
