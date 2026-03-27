@@ -16,29 +16,43 @@ limitations under the License.
 package command
 
 import (
-	subvolume "github.com/rook/kubectl-rook-ceph/pkg/filesystem"
+	"github.com/rook/kubectl-rook-ceph/pkg/filesystem"
+	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 	"github.com/spf13/cobra"
 )
 
 var SubvolumeCmd = &cobra.Command{
 	Use:   "subvolume",
 	Short: "manages stale subvolumes",
-	PreRun: func(cmd *cobra.Command, args []string) {
-		verifyOperatorPodIsRunning(cmd.Context(), clientSets)
-	},
-	Args: cobra.ExactArgs(1),
 }
 
 var listCmd = &cobra.Command{
 	Use:     "ls",
 	Short:   "Print the list of subvolumes.",
 	Example: "kubectl rook-ceph subvolume ls",
+	PreRun: func(cmd *cobra.Command, args []string) {
+		pod, _ := cmd.Flags().GetString("pod-name")
+		if pod == "" {
+			verifyOperatorPodIsRunning(cmd.Context(), clientSets)
+		}
+	},
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx := cmd.Context()
 		staleSubvol, _ := cmd.Flags().GetBool("stale")
 		svgName, _ := cmd.Flags().GetString("svg")
 		radosNamespace, _ := cmd.Flags().GetString("rados-namespace")
-		subvolume.List(ctx, clientSets, operatorNamespace, cephClusterNamespace, svgName, staleSubvol, radosNamespace)
+		cfg, err := parseCustomExecConfig(cmd)
+		if err != nil {
+			logging.Fatal(err)
+		}
+		f := &filesystem.CephFilesystem{
+			Ctx:               cmd.Context(),
+			Clientsets:        clientSets,
+			OperatorNamespace: operatorNamespace,
+			ClusterNamespace:  cephClusterNamespace,
+			RadosNamespace:    radosNamespace,
+			CustomExecConfig:  cfg,
+		}
+		f.List(svgName, staleSubvol)
 	},
 }
 
@@ -47,8 +61,13 @@ var deleteCmd = &cobra.Command{
 	Short:   "Deletes a stale subvolume.",
 	Args:    cobra.RangeArgs(2, 3),
 	Example: "kubectl rook-ceph delete <filesystem> <subvolume> [subvolumegroup]",
+	PreRun: func(cmd *cobra.Command, args []string) {
+		pod, _ := cmd.Flags().GetString("pod-name")
+		if pod == "" {
+			verifyOperatorPodIsRunning(cmd.Context(), clientSets)
+		}
+	},
 	Run: func(cmd *cobra.Command, args []string) {
-		ctx := cmd.Context()
 		fs := args[0]
 		subvol := args[1]
 		svg := "csi"
@@ -56,7 +75,19 @@ var deleteCmd = &cobra.Command{
 			svg = args[2]
 		}
 		radosNamespace, _ := cmd.Flags().GetString("rados-namespace")
-		subvolume.Delete(ctx, clientSets, operatorNamespace, cephClusterNamespace, fs, subvol, svg, radosNamespace)
+		cfg, err := parseCustomExecConfig(cmd)
+		if err != nil {
+			logging.Fatal(err)
+		}
+		f := &filesystem.CephFilesystem{
+			Ctx:               cmd.Context(),
+			Clientsets:        clientSets,
+			OperatorNamespace: operatorNamespace,
+			ClusterNamespace:  cephClusterNamespace,
+			RadosNamespace:    radosNamespace,
+			CustomExecConfig:  cfg,
+		}
+		f.Delete(fs, subvol, svg)
 	},
 }
 
@@ -66,4 +97,5 @@ func init() {
 	SubvolumeCmd.PersistentFlags().String("svg", "csi", "The name of the subvolume group")
 	SubvolumeCmd.PersistentFlags().String("rados-namespace", "csi", "The rados namespace for omap operations")
 	SubvolumeCmd.AddCommand(deleteCmd)
+	addCustomExecFlags(SubvolumeCmd)
 }

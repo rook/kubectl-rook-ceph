@@ -674,6 +674,40 @@ create_consumer_context() {
     echo "Created consumer context: ${context_name}"
 }
 
+# Get Ceph credentials for custom pod execution tests
+# Args: $1 cluster-ns  $2 storageclass-name (default: rook-cephfs)
+get_ceph_credentials() {
+    local cluster_ns=$1
+    local sc_name="${2:-rook-cephfs}"
+
+    # Mon IP from configmap (in cluster namespace)
+    MON_IP=$(kubectl -n "$cluster_ns" \
+        get configmap rook-ceph-mon-endpoints \
+        -o jsonpath='{.data.csi-cluster-config-json}' \
+        | python3 -c \
+        "import sys,json; \
+        print(json.load(sys.stdin)[0]['monitors'][0])")
+
+    # Derive secret name and namespace from StorageClass parameters
+    local secret_name secret_ns
+    secret_name=$(kubectl get storageclass "$sc_name" \
+        -o jsonpath='{.parameters.csi\.storage\.k8s\.io/provisioner-secret-name}')
+    secret_ns=$(kubectl get storageclass "$sc_name" \
+        -o jsonpath='{.parameters.csi\.storage\.k8s\.io/provisioner-secret-namespace}')
+
+    # User ID and key from secret
+    USER_ID=$(kubectl -n "$secret_ns" \
+        get secret "$secret_name" \
+        -o jsonpath='{.data.userID}' \
+        | base64 -d)
+    USER_KEY=$(kubectl -n "$secret_ns" \
+        get secret "$secret_name" \
+        -o jsonpath='{.data.userKey}' \
+        | base64 -d)
+
+    echo "$MON_IP $USER_ID $USER_KEY"
+}
+
 ########
 # MAIN #
 ########

@@ -117,6 +117,37 @@ runs:
         subVol=$(kubectl rook-ceph ${NS_OPT} subvolume ls --stale | awk '{print $2}' | grep csi-vol | head -1)
         kubectl rook_ceph ${NS_OPT} subvolume delete myfs $subVol
 
+        # --- Test with custom pod flags ---
+        CLUSTER_NS=${{ inputs.cluster-ns }}
+        OP_NS=${{ inputs.op-ns }}
+        POD_NAME=$(kubectl -n "$OP_NS" get pod \
+            -l "app=${OP_NS}.cephfs.csi.ceph.com-ctrlplugin" \
+            -o jsonpath='{.items[0].metadata.name}')
+        POD_NS="$OP_NS"
+        CONTAINER="csi-cephfsplugin"
+        read MON_IP USER_ID USER_KEY < <( \
+            tests/github-action-helper.sh \
+            get_ceph_credentials "$CLUSTER_NS" rook-cephfs)
+
+        POD_FLAGS="--pod-name $POD_NAME \
+            --pod-namespace $POD_NS \
+            --pod-container $CONTAINER \
+            --mon-ip $MON_IP \
+            --user-id $USER_ID \
+            --user-key $USER_KEY"
+
+        # ls via custom pod
+        kubectl rook-ceph ${NS_OPT} subvolume ls $POD_FLAGS
+
+        # ls --stale via custom pod
+        kubectl rook-ceph ${NS_OPT} subvolume ls --stale $POD_FLAGS
+
+        # create test subvolume, then delete via custom pod
+        kubectl rook-ceph ${NS_OPT} ceph fs subvolume \
+            create myfs test-subvol-custom group-a
+        kubectl rook-ceph ${NS_OPT} subvolume delete \
+            myfs test-subvol-custom group-a $POD_FLAGS
+
     - name: CephFS Snapshot command
       shell: bash --noprofile --norc -eo pipefail -x {0}
       run: |
@@ -135,6 +166,46 @@ runs:
         kubectl rook-ceph ${NS_OPT} cephfs-snap ls --filesystem myfs --orphaned | grep csi-snap
         kubectl rook-ceph ${NS_OPT} cephfs-snap delete $subVol $snap --filesystem myfs
 
+        # --- Test with custom pod flags ---
+        CLUSTER_NS=${{ inputs.cluster-ns }}
+        OP_NS=${{ inputs.op-ns }}
+        POD_NAME=$(kubectl -n "$OP_NS" get pod \
+            -l "app=${OP_NS}.cephfs.csi.ceph.com-ctrlplugin" \
+            -o jsonpath='{.items[0].metadata.name}')
+        POD_NS="$OP_NS"
+        CONTAINER="csi-cephfsplugin"
+        read MON_IP USER_ID USER_KEY < <( \
+            tests/github-action-helper.sh \
+            get_ceph_credentials "$CLUSTER_NS" rook-cephfs)
+
+        POD_FLAGS="--pod-name $POD_NAME \
+            --pod-namespace $POD_NS \
+            --pod-container $CONTAINER \
+            --mon-ip $MON_IP \
+            --user-id $USER_ID \
+            --user-key $USER_KEY"
+
+        # ls via custom pod
+        kubectl rook-ceph ${NS_OPT} cephfs-snap ls \
+            --filesystem myfs $POD_FLAGS
+
+        # ls --orphaned via custom pod
+        kubectl rook-ceph ${NS_OPT} cephfs-snap ls \
+            --filesystem myfs --orphaned $POD_FLAGS
+
+        # delete orphaned snapshot via custom pod
+        tests/github-action-helper.sh \
+            create_cephfs_snapshot \
+            ${{ inputs.op-ns }} ${{ inputs.cluster-ns }}
+        tests/github-action-helper.sh \
+            delete_cephfs_snapshot_k8s_resources
+        snap_line=$(kubectl rook-ceph ${NS_OPT} \
+            cephfs-snap ls --filesystem myfs \
+            --orphaned $POD_FLAGS | grep csi-snap)
+        subVol=$(echo "$snap_line" | awk '{print $2}')
+        snap=$(echo "$snap_line" | awk '{print $4}')
+        kubectl rook-ceph ${NS_OPT} cephfs-snap delete \
+            $subVol $snap --filesystem myfs $POD_FLAGS
     - name: Subvolume with consumer-context
       shell: bash --noprofile --norc -eo pipefail -x {0}
       run: |

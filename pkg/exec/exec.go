@@ -47,7 +47,7 @@ func RunCommandInOperatorPod(ctx context.Context, clientsets *k8sutil.Clientsets
 
 	var stdout, stderr bytes.Buffer
 
-	err = execCmdInPod(ctx, clientsets, cmd, pod.Name, "rook-ceph-operator", pod.Namespace, clusterNamespace, args, &stdout, &stderr, returnOutput)
+	err = execCmdInPod(ctx, clientsets, cmd, pod.Name, "rook-ceph-operator", pod.Namespace, clusterNamespace, args, &stdout, &stderr, returnOutput, false)
 	if err != nil {
 		err = fmt.Errorf("%s. %w", stderr.String(), err)
 	}
@@ -69,7 +69,7 @@ func RunCommandInToolboxPod(ctx context.Context, clientsets *k8sutil.Clientsets,
 
 	var stdout, stderr bytes.Buffer
 
-	err = execCmdInPod(ctx, clientsets, cmd, pod.Name, "rook-ceph-tools", pod.Namespace, clusterNamespace, args, &stdout, &stderr, returnOutput)
+	err = execCmdInPod(ctx, clientsets, cmd, pod.Name, "rook-ceph-tools", pod.Namespace, clusterNamespace, args, &stdout, &stderr, returnOutput, false)
 	if err != nil {
 		err := fmt.Errorf("failed to run command. %w", err)
 		if !returnOutput {
@@ -95,7 +95,7 @@ func RunCommandInLabeledPod(ctx context.Context, clientsets *k8sutil.Clientsets,
 		return "", fmt.Errorf("failed to get rook mon pod where the command could be executed. %w", err)
 	}
 	var stdout, stderr bytes.Buffer
-	err = execCmdInPod(ctx, clientsets, cmd, list.Items[0].Name, container, list.Items[0].Namespace, clusterNamespace, args, &stdout, &stderr, returnOutput)
+	err = execCmdInPod(ctx, clientsets, cmd, list.Items[0].Name, container, list.Items[0].Namespace, clusterNamespace, args, &stdout, &stderr, returnOutput, false)
 	if err != nil {
 		err := fmt.Errorf("failed to run command. %w", err)
 		if !returnOutput {
@@ -111,10 +111,25 @@ func RunCommandInLabeledPod(ctx context.Context, clientsets *k8sutil.Clientsets,
 	return stdout.String(), nil
 }
 
+// RunCommandInPod executes a command in a specific named pod. Skips --conf injection since the target pod may not
+// have rook config files.
+func RunCommandInPod(ctx context.Context, clientsets *k8sutil.Clientsets, cmd string, args []string, podName, containerName, podNamespace string, returnOutput bool) (string, error) {
+	var stdout, stderr bytes.Buffer
+	err := execCmdInPod(ctx, clientsets, cmd, podName, containerName, podNamespace, "", args, &stdout, &stderr, returnOutput, true)
+	if err != nil {
+		err = fmt.Errorf("%s. %w", stderr.String(), err)
+	}
+	var out string
+	if returnOutput {
+		out = stdout.String()
+	}
+	return out, err
+}
+
 // execCmdInPod exec command on specific pod and wait the command's output.
 func execCmdInPod(ctx context.Context, clientsets *k8sutil.Clientsets,
 	command, podName, containerName, podNamespace, clusterNamespace string,
-	args []string, stdout, stderr io.Writer, returnOutput bool) error {
+	args []string, stdout, stderr io.Writer, returnOutput, skipConf bool) error {
 
 	if len(args) < 1 {
 		return fmt.Errorf("no arg passed to exec with %q command", command)
@@ -124,20 +139,24 @@ func execCmdInPod(ctx context.Context, clientsets *k8sutil.Clientsets,
 	cmd = append(cmd, command)
 	cmd = append(cmd, args...)
 
-	if containerName == "rook-ceph-tools" {
-		cmd = append(cmd, "--connect-timeout=10")
-	} else if cmd[0] == "ceph" {
-		if len(cmd) > 1 && cmd[1] == "daemon" {
+	if !skipConf {
+		if containerName == "rook-ceph-tools" {
 			cmd = append(cmd, "--connect-timeout=10")
-		} else {
-			cmd = append(cmd, "--connect-timeout=10", fmt.Sprintf("--conf=/var/lib/rook/%s/%s.config", clusterNamespace, clusterNamespace))
+		} else if cmd[0] == "ceph" {
+			if len(cmd) > 1 && cmd[1] == "daemon" {
+				cmd = append(cmd, "--connect-timeout=10")
+			} else {
+				cmd = append(cmd, "--connect-timeout=10", fmt.Sprintf("--conf=/var/lib/rook/%s/%s.config", clusterNamespace, clusterNamespace))
+			}
+		} else if cmd[0] == "rbd" {
+			cmd = append(cmd, fmt.Sprintf("--conf=/var/lib/rook/%s/%s.config", clusterNamespace, clusterNamespace))
+		} else if cmd[0] == "rados" {
+			cmd = append(cmd, fmt.Sprintf("--conf=/var/lib/rook/%s/%s.config", clusterNamespace, clusterNamespace))
+		} else if cmd[0] == "radosgw-admin" {
+			cmd = append(cmd, fmt.Sprintf("--conf=/var/lib/rook/%s/%s.config", clusterNamespace, clusterNamespace))
 		}
-	} else if cmd[0] == "rbd" {
-		cmd = append(cmd, fmt.Sprintf("--conf=/var/lib/rook/%s/%s.config", clusterNamespace, clusterNamespace))
-	} else if cmd[0] == "rados" {
-		cmd = append(cmd, fmt.Sprintf("--conf=/var/lib/rook/%s/%s.config", clusterNamespace, clusterNamespace))
-	} else if cmd[0] == "radosgw-admin" {
-		cmd = append(cmd, fmt.Sprintf("--conf=/var/lib/rook/%s/%s.config", clusterNamespace, clusterNamespace))
+	} else if cmd[0] == "ceph" {
+		cmd = append(cmd, "--connect-timeout=10")
 	}
 
 	// Prepare the API URL used to execute another process within the Pod.  In

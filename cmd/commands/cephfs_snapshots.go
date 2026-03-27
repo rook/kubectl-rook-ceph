@@ -16,7 +16,8 @@ limitations under the License.
 package command
 
 import (
-	filesystem "github.com/rook/kubectl-rook-ceph/pkg/filesystem"
+	"github.com/rook/kubectl-rook-ceph/pkg/filesystem"
+	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 	"github.com/spf13/cobra"
 )
 
@@ -30,13 +31,27 @@ var cephFSSnapshotListCmd = &cobra.Command{
 	Short:   "Print the list of CephFS snapshots.",
 	Example: "kubectl rook-ceph cephfs-snap ls",
 	PreRun: func(cmd *cobra.Command, args []string) {
-		verifyOperatorPodIsRunning(cmd.Context(), clientSets)
+		pod, _ := cmd.Flags().GetString("pod-name")
+		if pod == "" {
+			verifyOperatorPodIsRunning(cmd.Context(), clientSets)
+		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		orphanedOnly, _ := cmd.Flags().GetBool("orphaned")
 		svg, _ := cmd.Flags().GetString("svg")
 		fs, _ := cmd.Flags().GetString("filesystem")
-		filesystem.SnapshotList(cmd.Context(), clientSets, operatorNamespace, cephClusterNamespace, svg, fs, orphanedOnly)
+		cfg, err := parseCustomExecConfig(cmd)
+		if err != nil {
+			logging.Fatal(err)
+		}
+		f := &filesystem.CephFilesystem{
+			Ctx:               cmd.Context(),
+			Clientsets:        clientSets,
+			OperatorNamespace: operatorNamespace,
+			ClusterNamespace:  cephClusterNamespace,
+			CustomExecConfig:  cfg,
+		}
+		f.SnapshotList(svg, fs, orphanedOnly)
 	},
 }
 
@@ -46,7 +61,10 @@ var cephFSSnapshotDeleteCmd = &cobra.Command{
 	Args:    cobra.ExactArgs(2),
 	Example: "kubectl rook-ceph cephfs-snap delete <subvol> <snapshot>",
 	PreRun: func(cmd *cobra.Command, args []string) {
-		verifyOperatorPodIsRunning(cmd.Context(), clientSets)
+		pod, _ := cmd.Flags().GetString("pod-name")
+		if pod == "" {
+			verifyOperatorPodIsRunning(cmd.Context(), clientSets)
+		}
 	},
 	Run: func(cmd *cobra.Command, args []string) {
 		subvol := args[0]
@@ -54,7 +72,19 @@ var cephFSSnapshotDeleteCmd = &cobra.Command{
 		fs, _ := cmd.Flags().GetString("filesystem")
 		svg, _ := cmd.Flags().GetString("svg")
 		radosNamespace, _ := cmd.Flags().GetString("rados-namespace")
-		filesystem.SnapshotDelete(cmd.Context(), clientSets, operatorNamespace, cephClusterNamespace, fs, subvol, snap, svg, radosNamespace)
+		cfg, err := parseCustomExecConfig(cmd)
+		if err != nil {
+			logging.Fatal(err)
+		}
+		f := &filesystem.CephFilesystem{
+			Ctx:               cmd.Context(),
+			Clientsets:        clientSets,
+			OperatorNamespace: operatorNamespace,
+			ClusterNamespace:  cephClusterNamespace,
+			RadosNamespace:    radosNamespace,
+			CustomExecConfig:  cfg,
+		}
+		f.SnapshotDelete(fs, subvol, snap, svg)
 	},
 }
 
@@ -65,4 +95,5 @@ func init() {
 	CephFSSnapshotCmd.PersistentFlags().String("filesystem", "myfs", "The name of the CephFS filesystem")
 	CephFSSnapshotCmd.PersistentFlags().String("rados-namespace", "csi", "The rados namespace for omap operations")
 	CephFSSnapshotCmd.AddCommand(cephFSSnapshotDeleteCmd)
+	addCustomExecFlags(CephFSSnapshotCmd)
 }

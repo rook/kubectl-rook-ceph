@@ -17,12 +17,10 @@ limitations under the License.
 package filesystem
 
 import (
-	"context"
 	"fmt"
 	"os"
 	"text/tabwriter"
 
-	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 )
 
@@ -31,24 +29,24 @@ const (
 	orphaned = "orphaned"
 )
 
-func SnapshotList(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, subvolgName, fsName string, orphanedOnly bool) {
+func (f *CephFilesystem) SnapshotList(subvolgName, fsName string, orphanedOnly bool) {
 	// Get snapshot IDs from Kubernetes VolumeSnapshotContent resources
-	k8sSnapshotHandles := getK8sRefSnapshotHandle(ctx, clientsets)
+	k8sSnapshotHandles := f.getK8sRefSnapshotHandle()
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 2, ' ', 0)
 	fmt.Fprintln(w, "Filesystem\tSubvolume\tSubvolumeGroup\tSnapshot\tState")
 
-	if err := filesystemExists(ctx, clientsets, operatorNamespace, clusterNamespace, fsName); err != nil {
+	if err := f.filesystemExists(fsName); err != nil {
 		logging.Error(err)
 		return
 	}
 
-	if err := subvolumeGroupExists(ctx, clientsets, operatorNamespace, clusterNamespace, fsName, subvolgName); err != nil {
+	if err := f.subvolumeGroupExists(fsName, subvolgName); err != nil {
 		logging.Error(err)
 		return
 	}
 
-	subvol, err := getSubvolumeNames(ctx, clientsets, operatorNamespace, clusterNamespace, fsName, subvolgName)
+	subvol, err := f.getSubvolumeNames(fsName, subvolgName)
 	if err != nil {
 		logging.Error(fmt.Errorf("failed to get subvolumes when listing snapshots for group %q in filesystem %q: %v", subvolgName, fsName, err))
 		return
@@ -59,7 +57,7 @@ func SnapshotList(ctx context.Context, clientsets *k8sutil.Clientsets, operatorN
 	for _, sv := range subvol {
 		cmd := "ceph"
 		args := []string{"fs", "subvolume", "snapshot", "ls", fsName, sv.Name, subvolgName, "--format", "json"}
-		snapList, err := runCommand(ctx, clientsets, operatorNamespace, clusterNamespace, cmd, args)
+		snapList, err := f.runCommand(cmd, args)
 		if err != nil {
 			logging.Error(fmt.Errorf("failed to list snapshots of subvolume %q in group %q of filesystem %q: %v", sv.Name, subvolgName, fsName, err))
 			continue
@@ -88,10 +86,10 @@ func SnapshotList(ctx context.Context, clientsets *k8sutil.Clientsets, operatorN
 	w.Flush()
 }
 
-// SnapshotDelete deletes a CephFS snapshot after verifying it's orphaned
-func SnapshotDelete(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, fs, subvol, snap, subvolgrp, radosNamespace string) {
+// SnapshotDelete deletes a CephFS snapshot after verifying it's orphaned.
+func (f *CephFilesystem) SnapshotDelete(fs, subvol, snap, subvolgrp string) {
 	// Get snapshot IDs from Kubernetes VolumeSnapshotContent resources to check if snapshot is orphaned
-	k8sSnapshotHandles := getK8sRefSnapshotHandle(ctx, clientsets)
+	k8sSnapshotHandles := f.getK8sRefSnapshotHandle()
 
 	// Check if this snapshot exists in Kubernetes VolumeSnapshotContent
 	// Extract the UUID from the csi-snap-<uuid> name to match the k8s snapshot handle IDs
@@ -103,34 +101,34 @@ func SnapshotDelete(ctx context.Context, clientsets *k8sutil.Clientsets, operato
 		return
 	}
 
-	deleteSnapshot(ctx, clientsets, operatorNamespace, clusterNamespace, fs, subvol, subvolgrp, snap, radosNamespace)
+	f.deleteSnapshot(fs, subvol, subvolgrp, snap)
 	logging.Info("snapshot %q deleted successfully", snap)
 }
 
-func getSubvolumeNames(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, fsName, svgName string) ([]fsStruct, error) {
+func (f *CephFilesystem) getSubvolumeNames(fsName, svgName string) ([]fsStruct, error) {
 	cmd := "ceph"
 	args := []string{"fs", "subvolume", "ls", fsName, svgName, "--format", "json"}
-	svList, err := runCommand(ctx, clientsets, operatorNamespace, clusterNamespace, cmd, args)
+	svList, err := f.runCommand(cmd, args)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get subvolumes of %q: %w", fsName, err)
 	}
 	return unMarshaljson(svList), nil
 }
 
-func filesystemExists(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, fsName string) error {
+func (f *CephFilesystem) filesystemExists(fsName string) error {
 	cmd := "ceph"
 	args := []string{"fs", "get", fsName, "--format", "json"}
-	_, err := runCommand(ctx, clientsets, operatorNamespace, clusterNamespace, cmd, args)
+	_, err := f.runCommand(cmd, args)
 	if err != nil {
 		return fmt.Errorf("filesystem %q does not exist: %w", fsName, err)
 	}
 	return nil
 }
 
-func subvolumeGroupExists(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace, fsName, svgName string) error {
+func (f *CephFilesystem) subvolumeGroupExists(fsName, svgName string) error {
 	cmd := "ceph"
 	args := []string{"fs", "subvolumegroup", "getpath", fsName, svgName}
-	_, err := runCommand(ctx, clientsets, operatorNamespace, clusterNamespace, cmd, args)
+	_, err := f.runCommand(cmd, args)
 	if err != nil {
 		return fmt.Errorf("subvolume group %q does not exist in filesystem %q: %w", svgName, fsName, err)
 	}
