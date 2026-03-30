@@ -3,11 +3,11 @@ module github.com/rook/kubectl-rook-ceph
 go 1.25.0
 
 require (
-	github.com/fatih/color v1.18.0
+	github.com/fatih/color v1.19.0
 	github.com/golang/mock v1.6.0
 	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.4.0
 	github.com/pkg/errors v0.9.1
-	github.com/rook/rook v1.19.2
+	github.com/rook/rook v1.19.3
 	github.com/rook/rook/pkg/apis v0.0.0-20260210155143-d82f6dee9790
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
@@ -104,7 +104,7 @@ require (
 	golang.org/x/net v0.47.0 // indirect
 	golang.org/x/oauth2 v0.32.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
-	golang.org/x/sys v0.38.0 // indirect
+	golang.org/x/sys v0.42.0 // indirect
 	golang.org/x/term v0.37.0 // indirect
 	golang.org/x/text v0.31.0 // indirect
 	golang.org/x/time v0.13.0 // indirect
