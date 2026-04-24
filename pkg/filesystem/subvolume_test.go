@@ -243,11 +243,15 @@ func TestGetSnapshotHandleId(t *testing.T) {
 		},
 		{
 			name: "0001-0009-rook-0000000000000001-17b95621-58e8-4676-bc6a-39e928f19d23",
-			val:  "58e8-4676-bc6a-39e928f19d23",
+			val:  "",
 		},
 		{
 			name: "rook-427774b440b11ed8d660242ac11000",
 			val:  "",
+		},
+		{
+			name: "0001-0024-4b03dbcc-c668-4e13-98a6-d3520acf96ac-0000000000000001-2eba0fba-380e-4c0c-8fc0-ab616e67256a",
+			val:  "2eba0fba-380e-4c0c-8fc0-ab616e67256a",
 		},
 	}
 	for _, tt := range tests {

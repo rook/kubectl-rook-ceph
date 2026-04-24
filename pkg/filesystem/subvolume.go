@@ -18,6 +18,8 @@ package filesystem
 
 import (
 	"context"
+	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -63,6 +65,11 @@ const (
 	stale             = "stale"
 	staleWithSnapshot = "stale-with-snapshot"
 	snapshotRetained  = "snapshot-retained"
+)
+
+const (
+	uuidSize       = 36
+	knownFieldSize = 64
 )
 
 // CustomExecConfig holds configuration for running commands in a
@@ -226,6 +233,10 @@ func (f *CephFilesystem) getK8sRefSnapshotHandle() map[string]snapshotInfo {
 		driverName := snap.Spec.Driver
 		if snap.Status != nil && snap.Status.SnapshotHandle != nil && strings.Contains(driverName, "cephfs.csi.ceph.com") {
 			snapshotHandleId := getSnapshotHandleId(*snap.Status.SnapshotHandle)
+			if snapshotHandleId == "" {
+				logging.Warning("skipping VolumeSnapshotContent %q: could not parse snapshot handle %q", snap.Name, *snap.Status.SnapshotHandle)
+				continue
+			}
 			// map the snapshotHandle id to later lookup for the subvol id and
 			// match the subvolume snapshot.
 			snapshotHandles[snapshotHandleId] = snapshotInfo{}
@@ -235,19 +246,42 @@ func (f *CephFilesystem) getK8sRefSnapshotHandle() map[string]snapshotInfo {
 	return snapshotHandles
 }
 
-// getSnapshotHandleId gets the id from snapshothandle
-// SnapshotHandle: 0001-0009-rook-ceph-0000000000000001-17b95621-
-// 58e8-4676-bc6a-39e928f19d23
-// SnapshotHandleId: 17b95621-58e8-4676-bc6a-39e928f19d23
+// getSnapshotHandleId extracts the ObjectUUID from a CSI snapshot handle.
+// Handle format: <version:4hex>-<clusterIDLen:4hex>-<clusterID:variable>-<poolID:16hex>-<objectUUID:36chars>
 func getSnapshotHandleId(snapshotHandle string) string {
-	// get the snaps id from snapshot handle
-	splitSnapshotHandle := strings.SplitAfterN(snapshotHandle, "-", 6)
-	if len(splitSnapshotHandle) < 6 {
+	bytesToProcess := uint16(len(snapshotHandle))
+	if bytesToProcess < knownFieldSize {
 		return ""
 	}
-	snapshotHandleId := splitSnapshotHandle[len(splitSnapshotHandle)-1]
 
-	return snapshotHandleId
+	buf16, err := hex.DecodeString(snapshotHandle[5:9])
+	if err != nil {
+		return ""
+	}
+	clusterIDLength := binary.BigEndian.Uint16(buf16)
+	// 4 for version encoding + 1 for '-' + 4 for length encoding + 1 for '-'
+	bytesToProcess -= 10
+
+	if bytesToProcess < (clusterIDLength + 1) {
+		return ""
+	}
+	// skip clusterID + 1 for '-' separator
+	bytesToProcess -= (clusterIDLength + 1)
+	nextFieldStartIdx := (10 + clusterIDLength + 1)
+
+	// 16 for poolID encoding and 1 for '-' separator
+	const minLenToDecode = 17
+	if bytesToProcess < minLenToDecode {
+		return ""
+	}
+	bytesToProcess -= 17
+	nextFieldStartIdx += 17
+
+	if bytesToProcess != uuidSize {
+		return ""
+	}
+
+	return snapshotHandle[nextFieldStartIdx : nextFieldStartIdx+uuidSize]
 }
 
 // runCommand checks for the presence of externalcluster and runs the command accordingly.
