@@ -165,7 +165,7 @@ func (f *CephFilesystem) getK8sRefSubvolume() map[string]subVolumeInfo {
 			if strings.Contains(driverName, "cephfs.csi.ceph.com") {
 				volumeHandle := pv.Spec.CSI.VolumeHandle
 				prefix := pv.Spec.CSI.VolumeAttributes["volumeNamePrefix"]
-				name, err := generateSubvolumeNameFromVolumeHandle(prefix, volumeHandle)
+				name, err := generateResourceNameFromCSIHandle(prefix, volumeHandle, "csi-vol-")
 				if err != nil {
 					logging.Error(err, "failed to get subvolume name")
 					continue
@@ -177,17 +177,18 @@ func (f *CephFilesystem) getK8sRefSubvolume() map[string]subVolumeInfo {
 	return subvolumeNames
 }
 
-// generateSubvolumeNameFromVolumeHandle constructs a subvolume name using the given prefix and volume handle.
-// If the prefix is empty, the function extracts the version from the volume handle.
-// When the version is `1`, the prefix is set to `csi-vol-`.
-// Ref: https://github.com/ceph/ceph-csi/blob/72c09d3d8758d058575d34b2da4b09eb0a591f8f/internal/util/volid.go#L65-L77
-// Example:
-// volumeHandle: 0001-0011-openshift-storage-0000000000000001-aac40941-9b54-432f-8a63-3b1614a4e024
-// prefix: ""
-// subvolumeName: csi-vol-aac40941-9b54-432f-8a63-3b1614a4e024
-func generateSubvolumeNameFromVolumeHandle(prefix string, volumeHandle string) (string, error) {
+// generateResourceNameFromCSIHandle constructs a Ceph resource name from a CSI handle.
+// Both volume handles and snapshot handles share the same encoding:
+// <version:4hex>-<clusterIDLen:4hex>-<clusterID:variable>-<poolID:16hex>-<uuid:36chars>
+// Examples:
+// handle: 0001-0011-openshift-storage-0000000000000001-aac40941-9b54-432f-8a63-3b1614a4e024
+// prefix: "", defaultPrefix: "csi-vol-"  →  csi-vol-aac40941-9b54-432f-8a63-3b1614a4e024
+//
+// handle: 0001-0009-rook-ceph-0000000000000001-17b95621-58e8-4676-bc6a-39e928f19d23
+// prefix: "", defaultPrefix: "csi-snap-" →  csi-snap-17b95621-58e8-4676-bc6a-39e928f19d23
+func generateResourceNameFromCSIHandle(prefix, volumeHandle, defaultPrefix string) (string, error) {
 	if len(volumeHandle) < 36 {
-		return "", fmt.Errorf("volume handle too short to extract subvolume name: %s", volumeHandle)
+		return "", fmt.Errorf("CSI handle too short to extract resource name: %s", volumeHandle)
 	}
 	if prefix == "" {
 		version, err := strconv.ParseInt(volumeHandle[:4], 16, 0)
@@ -197,7 +198,7 @@ func generateSubvolumeNameFromVolumeHandle(prefix string, volumeHandle string) (
 		if version != 1 {
 			return "", fmt.Errorf("failed to extract prefix: volume handle %q uses an unsupported version format", volumeHandle)
 		}
-		prefix = "csi-vol-"
+		prefix = defaultPrefix
 	}
 	uuid := volumeHandle[len(volumeHandle)-36:]
 
@@ -225,29 +226,17 @@ func (f *CephFilesystem) getK8sRefSnapshotHandle() map[string]snapshotInfo {
 	for _, snap := range snapList.Items {
 		driverName := snap.Spec.Driver
 		if snap.Status != nil && snap.Status.SnapshotHandle != nil && strings.Contains(driverName, "cephfs.csi.ceph.com") {
-			snapshotHandleId := getSnapshotHandleId(*snap.Status.SnapshotHandle)
-			// map the snapshotHandle id to later lookup for the subvol id and
-			// match the subvolume snapshot.
-			snapshotHandles[snapshotHandleId] = snapshotInfo{}
+			snapshotName, err := generateResourceNameFromCSIHandle("", *snap.Status.SnapshotHandle, "csi-snap-")
+			if err != nil {
+				logging.Warning("skipping VolumeSnapshotContent %q: could not parse snapshot handle %q", snap.Name, *snap.Status.SnapshotHandle)
+				continue
+			}
+			_, snapshotHandleID := getSnapOmapVal(snapshotName)
+			snapshotHandles[snapshotHandleID] = snapshotInfo{}
 		}
 	}
 
 	return snapshotHandles
-}
-
-// getSnapshotHandleId gets the id from snapshothandle
-// SnapshotHandle: 0001-0009-rook-ceph-0000000000000001-17b95621-
-// 58e8-4676-bc6a-39e928f19d23
-// SnapshotHandleId: 17b95621-58e8-4676-bc6a-39e928f19d23
-func getSnapshotHandleId(snapshotHandle string) string {
-	// get the snaps id from snapshot handle
-	splitSnapshotHandle := strings.SplitAfterN(snapshotHandle, "-", 6)
-	if len(splitSnapshotHandle) < 6 {
-		return ""
-	}
-	snapshotHandleId := splitSnapshotHandle[len(splitSnapshotHandle)-1]
-
-	return snapshotHandleId
 }
 
 // runCommand checks for the presence of externalcluster and runs the command accordingly.
