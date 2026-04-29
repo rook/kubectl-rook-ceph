@@ -146,40 +146,51 @@ func TestGetOmapVal(t *testing.T) {
 	}
 }
 
-func TestGenerateSubvolumeNameFromVolumeHandle(t *testing.T) {
+func TestGenerateResourceNameFromCSIHandle(t *testing.T) {
 
 	tests := []struct {
-		prefix       string
-		volumeHandle string
-		name         string
-		err          error
+		prefix        string
+		volumeHandle  string
+		defaultPrefix string
+		name          string
+		err           error
 	}{
 		{
-			prefix:       "myvol-",
-			volumeHandle: "0001-0011-openshift-storage-0000000000000001-aac40941-9b54-432f-8a63-3b1614a4e024",
-			name:         "myvol-aac40941-9b54-432f-8a63-3b1614a4e024",
+			prefix:        "myvol-",
+			volumeHandle:  "0001-0011-openshift-storage-0000000000000001-aac40941-9b54-432f-8a63-3b1614a4e024",
+			defaultPrefix: "csi-vol-",
+			name:          "myvol-aac40941-9b54-432f-8a63-3b1614a4e024",
 		},
 		{
-			volumeHandle: "0001-0011-openshift-storage-0000000000000001-aac40941-9b54-432f-8a63-3b1614a4e024",
-			name:         "csi-vol-aac40941-9b54-432f-8a63-3b1614a4e024",
+			volumeHandle:  "0001-0011-openshift-storage-0000000000000001-aac40941-9b54-432f-8a63-3b1614a4e024",
+			defaultPrefix: "csi-vol-",
+			name:          "csi-vol-aac40941-9b54-432f-8a63-3b1614a4e024",
 		},
 		{
-			volumeHandle: "0001-0009-rook-ceph-0000000000000001-aac40941-9b54-432f-8a63-3b1614a4e024",
-			name:         "csi-vol-aac40941-9b54-432f-8a63-3b1614a4e024",
+			volumeHandle:  "0001-0009-rook-ceph-0000000000000001-aac40941-9b54-432f-8a63-3b1614a4e024",
+			defaultPrefix: "csi-vol-",
+			name:          "csi-vol-aac40941-9b54-432f-8a63-3b1614a4e024",
 		},
 		{
-			prefix:       "",
-			volumeHandle: "0002-0009-rook-ceph-0000000000000001-aac40941-9b54-432f-8a63-3b1614a4e024",
-			err:          fmt.Errorf("failed to extract prefix: volume handle \"0002-0009-rook-ceph-0000000000000001-aac40941-9b54-432f-8a63-3b1614a4e024\" uses an unsupported version format"),
+			volumeHandle:  "0001-0009-rook-ceph-0000000000000001-aac40941-9b54-432f-8a63-3b1614a4e024",
+			defaultPrefix: "csi-snap-",
+			name:          "csi-snap-aac40941-9b54-432f-8a63-3b1614a4e024",
 		},
 		{
-			volumeHandle: "ac40941-9b54-432f-8a63-3b1614a4e024",
-			err:          fmt.Errorf("volume handle too short to extract subvolume name: ac40941-9b54-432f-8a63-3b1614a4e024"),
+			prefix:        "",
+			volumeHandle:  "0002-0009-rook-ceph-0000000000000001-aac40941-9b54-432f-8a63-3b1614a4e024",
+			defaultPrefix: "csi-vol-",
+			err:           fmt.Errorf("failed to extract prefix: volume handle \"0002-0009-rook-ceph-0000000000000001-aac40941-9b54-432f-8a63-3b1614a4e024\" uses an unsupported version format"),
+		},
+		{
+			volumeHandle:  "ac40941-9b54-432f-8a63-3b1614a4e024",
+			defaultPrefix: "csi-vol-",
+			err:           fmt.Errorf("CSI handle too short to extract resource name: ac40941-9b54-432f-8a63-3b1614a4e024"),
 		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.volumeHandle, func(t *testing.T) {
-			name, err := generateSubvolumeNameFromVolumeHandle(tt.prefix, tt.volumeHandle)
+			name, err := generateResourceNameFromCSIHandle(tt.prefix, tt.volumeHandle, tt.defaultPrefix)
 			if err != nil {
 				assert.Error(t, err)
 				assert.Equal(t, tt.err.Error(), err.Error())
@@ -227,34 +238,3 @@ func TestGetSnapOmapVal(t *testing.T) {
 	}
 }
 
-func TestGetSnapshotHandleId(t *testing.T) {
-
-	tests := []struct {
-		name string
-		val  string
-	}{
-		{
-			name: "0001-0009-rook-ceph-0000000000000001-17b95621-58e8-4676-bc6a-39e928f19d23",
-			val:  "17b95621-58e8-4676-bc6a-39e928f19d23",
-		},
-		{
-			name: "",
-			val:  "",
-		},
-		{
-			name: "0001-0009-rook-0000000000000001-17b95621-58e8-4676-bc6a-39e928f19d23",
-			val:  "58e8-4676-bc6a-39e928f19d23",
-		},
-		{
-			name: "rook-427774b440b11ed8d660242ac11000",
-			val:  "",
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if val := getSnapshotHandleId(tt.name); val != tt.val {
-				assert.Equal(t, val, tt.val)
-			}
-		})
-	}
-}

@@ -86,6 +86,14 @@ These are args currently supported:
 - `dr` :
   - `health [ceph status args]`: Print the `ceph status` of a peer cluster in a mirroring-enabled environment thereby validating connectivity between ceph clusters. Ceph status args can be optionally passed, such as to change the log level: `--debug-ms 1`.
 
+- `subvolume` : Identify and clean up stale subvolumes that have no parent PV.
+  - `ls [--stale] [--svg <group>]` : List all subvolumes and their state (in-use, stale, stale-with-snapshot)
+  - `delete <filesystem> <subvolume> [subvolumegroup]` : Delete a stale subvolume and its OMAP metadata
+
+- `cephfs-snap` : Identify and clean up orphaned snapshots that have no corresponding VolumeSnapshotContent.
+  - `ls [--orphaned] [--filesystem <fs>] [--svg <group>]` : List all snapshots and their state (bound, orphaned)
+  - `delete <filesystem> <subvolume> <snapshot> [--svg <group>]` : Delete an orphaned snapshot and its OMAP metadata
+
 - `restore-deleted <CRD> [CRName]`: Restore the ceph resources which are stuck in deleting state due to underlying resources being present in the cluster
 
 - `multus validation` : Validate whether the current Multus and system configurations will support Rook with Multus. See [Validating Multus configuration](https://rook.github.io/docs/rook/latest/CRDs/Cluster/network-providers/?h=valid#validating-multus-configuration) for more details.
@@ -118,6 +126,8 @@ Visit docs below for complete details about each command and their flags uses.
 1. [Destroy cluster](docs/destroy-cluster.md)
 1. [Running rados commands](docs/rados.md)
 1. [Multus validation](docs/multus.md)
+1. [Subvolume cleanup](docs/subvolume.md)
+1. [Snapshot cleanup](docs/cephfs-snapshots.md)
 
 ## Examples
 
