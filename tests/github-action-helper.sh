@@ -160,13 +160,15 @@ deploy_rook() {
     echo "Deploying Custom Resource Definitions (CRDs)..."
     apply_yaml_from_url "https://raw.githubusercontent.com/rook/rook/master/deploy/examples/crds.yaml"
 
-    echo "Deploying Rook operator..."
-    download_and_modify_yaml "https://raw.githubusercontent.com/rook/rook/master/deploy/examples/operator.yaml" "operator.yaml" "$operator_ns" "$cluster_ns"
-    apply_yaml "operator.yaml"
-
     echo "Deploying CSI operator..."
     download_and_modify_yaml "https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi-operator.yaml" "csi-operator.yaml" "$operator_ns" "$cluster_ns"
     apply_yaml "csi-operator.yaml"
+
+    echo "Deploying Rook operator..."
+    download_and_modify_yaml "https://raw.githubusercontent.com/rook/rook/master/deploy/examples/operator.yaml" "operator.yaml" "$operator_ns" "$cluster_ns"
+    # Use custom Rook operator image
+    sed -i "s|image: .*/rook/ceph:.*|image: subham03/rook:cephxamd|g" operator.yaml
+    apply_yaml "operator.yaml"
 
     # Wait for operator to be ready before proceeding
     echo "Waiting for Rook operator to become ready..."
@@ -174,6 +176,7 @@ deploy_rook() {
 
     echo "Deploying Ceph cluster with device filter for $BLOCK..."
     download_and_modify_yaml "https://raw.githubusercontent.com/rook/rook/master/deploy/examples/cluster-test.yaml" "cluster-test.yaml" "$operator_ns" "$cluster_ns"
+    sed -i "s|image: quay.io/ceph/ceph:.*|image: quay.io/rhceph-ci/rhceph:on-pr-v9.1-901659a5a6904932fa59c6f1a5a9ceab5bad34ae|g" cluster-test.yaml
     sed -i "s|#deviceFilter:|deviceFilter: ${BLOCK/\/dev\//}|g" cluster-test.yaml
     sed -i '0,/count: 1/ s/count: 1/count: 3/' cluster-test.yaml
     apply_yaml "cluster-test.yaml"
@@ -630,7 +633,7 @@ wait_for_rbd_pvc_clone_to_be_bound() {
     apply_yaml_from_url "https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/pvc-clone.yaml"
 
     echo "Waiting for PVC clone to be bound..."
-    kubectl wait --for=jsonpath='{.status.phase}'=Bound pvc rbd-pvc-clone --timeout=600s
+   kubectl wait --for=jsonpath='{.status.phase}'=Bound pvc rbd-pvc-clone --timeout=600s
 }
 
 # Create a consumer kubeconfig context that aliases the current cluster.
