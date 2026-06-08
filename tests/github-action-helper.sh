@@ -160,13 +160,13 @@ deploy_rook() {
     echo "Deploying Custom Resource Definitions (CRDs)..."
     apply_yaml_from_url "https://raw.githubusercontent.com/rook/rook/master/deploy/examples/crds.yaml"
 
-    echo "Deploying Rook operator..."
-    download_and_modify_yaml "https://raw.githubusercontent.com/rook/rook/master/deploy/examples/operator.yaml" "operator.yaml" "$operator_ns" "$cluster_ns"
-    apply_yaml "operator.yaml"
-
-    echo "Deploying CSI operator..."
+    echo "Deploying CSI operator CRDs and controller..."
     download_and_modify_yaml "https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi-operator.yaml" "csi-operator.yaml" "$operator_ns" "$cluster_ns"
     apply_yaml "csi-operator.yaml"
+
+    echo "Deploying Rook operator and CSI driver CRs..."
+    download_and_modify_yaml "https://raw.githubusercontent.com/rook/rook/master/deploy/examples/operator.yaml" "operator.yaml" "$operator_ns" "$cluster_ns"
+    apply_yaml "operator.yaml"
 
     # Wait for operator to be ready before proceeding
     echo "Waiting for Rook operator to become ready..."
@@ -216,6 +216,8 @@ deploy_csi_drivers() {
         sed -i "s|provisioner: rook-ceph.cephfs.csi.ceph.com|provisioner: ${operator_ns}.cephfs.csi.ceph.com|g" storageclass-cephfs.yaml
     fi
     apply_yaml "storageclass-cephfs.yaml"
+
+    wait_for_csi_drivers "$operator_ns"
 
     # Deploy PVCs
     apply_yaml_from_url "https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/pvc.yaml"
@@ -531,6 +533,16 @@ wait_for_deployment_to_be_running() {
 
     echo "Waiting for deployment '$deployment' to be available in namespace '$namespace'..."
     kubectl -n "$namespace" wait deployment "$deployment" --for condition=Available=True --timeout=${DEFAULT_TIMEOUT}s
+}
+
+# Wait for RBD and CephFS CSI controller plugins deployed by ceph-csi-operator.
+wait_for_csi_drivers() {
+    local operator_ns="${1:-$DEFAULT_OPERATOR_NS}"
+    local rbd_deploy="${operator_ns}.rbd.csi.ceph.com-ctrlplugin"
+    local cephfs_deploy="${operator_ns}.cephfs.csi.ceph.com-ctrlplugin"
+
+    wait_for_deployment_to_be_running "$rbd_deploy" "$operator_ns"
+    wait_for_deployment_to_be_running "$cephfs_deploy" "$operator_ns"
 }
 
 install_minikube_with_none_driver() {

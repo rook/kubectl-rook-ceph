@@ -13,10 +13,15 @@
 # limitations under the License.
 
 
+# Required for go-ceph rgw/admin account APIs which are gated behind
+# the ceph_preview build tag. Can be removed when go-ceph promotes
+# the account API out of preview.
+GOFLAGS ?= -tags=ceph_preview
+
 build:
 	gofmt -w $(shell find . -type f -name '*.go')
 	@echo
-	env GOOS=$(shell go env GOOS) GOARCH=$(shell go env GOARCH) go build -o bin/kubectl-rook-ceph  cmd/main.go
+	env GOFLAGS="$(GOFLAGS)" GOOS=$(shell go env GOOS) GOARCH=$(shell go env GOARCH) go build -o bin/kubectl-rook-ceph  cmd/main.go
 
 clean:
 	@rm -f bin/kubectl-rook-ceph
