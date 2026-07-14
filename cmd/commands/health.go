@@ -21,15 +21,20 @@ import (
 	"github.com/spf13/cobra"
 )
 
+var healthVerbose bool
+
 var Health = &cobra.Command{
-	Use:                "health",
-	Short:              "check health of the cluster and common configuration issues",
-	DisableFlagParsing: true,
-	Args:               cobra.NoArgs,
+	Use:   "health",
+	Short: "check health of the cluster and common configuration issues",
+	Args:  cobra.NoArgs,
 	PreRun: func(cmd *cobra.Command, args []string) {
 		verifyOperatorPodIsRunning(cmd.Context(), clientSets)
 	},
 	Run: func(cmd *cobra.Command, _ []string) {
-		health.Health(cmd.Context(), clientSets, operatorNamespace, cephClusterNamespace)
+		health.Health(cmd.Context(), clientSets, operatorNamespace, cephClusterNamespace, healthVerbose)
 	},
+}
+
+func init() {
+	Health.Flags().BoolVar(&healthVerbose, "verbose", false, "shows detailed check for pods")
 }
