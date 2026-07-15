@@ -237,4 +237,3 @@ func TestGetSnapOmapVal(t *testing.T) {
 		})
 	}
 }
-
