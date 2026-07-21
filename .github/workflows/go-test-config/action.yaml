@@ -77,18 +77,6 @@ runs:
         set -ex
         kubectl rook-ceph ${NS_OPT} radosgw-admin user create --display-name="johnny rotten" --uid=johnny
 
-    - name: Mon restore
-      shell: bash --noprofile --norc -eo pipefail -x {0}
-      run: |
-        set -ex
-        # test the mon restore to restore to mon a, delete mons b and c, then add d and e
-        kubectl rook-ceph ${NS_OPT} mons restore-quorum a
-        kubectl -n ${{ inputs.cluster-ns }} wait pod -l app=rook-ceph-mon-b --for=delete --timeout=90s
-        kubectl -n ${{ inputs.cluster-ns }} wait pod -l app=rook-ceph-mon-c --for=delete --timeout=90s
-        tests/github-action-helper.sh wait_for_three_mons ${{ inputs.cluster-ns }}
-        kubectl -n ${{ inputs.cluster-ns }} wait deployment rook-ceph-mon-d --for condition=Available=True --timeout=90s
-        kubectl -n ${{ inputs.cluster-ns }} wait deployment rook-ceph-mon-e --for condition=Available=True --timeout=90s
-
     - name: Rbd command
       shell: bash --noprofile --norc -eo pipefail -x {0}
       run: |
@@ -121,7 +109,7 @@ runs:
         CLUSTER_NS=${{ inputs.cluster-ns }}
         OP_NS=${{ inputs.op-ns }}
         POD_NAME=$(kubectl -n "$OP_NS" get pod \
-            -l "app=${OP_NS}.cephfs.csi.ceph.com-ctrlplugin" \
+            -l "app=rook-ceph.cephfs.csi.ceph.com-ctrlplugin" \
             -o jsonpath='{.items[0].metadata.name}')
         POD_NS="$OP_NS"
         CONTAINER="csi-cephfsplugin"
@@ -170,7 +158,7 @@ runs:
         CLUSTER_NS=${{ inputs.cluster-ns }}
         OP_NS=${{ inputs.op-ns }}
         POD_NAME=$(kubectl -n "$OP_NS" get pod \
-            -l "app=${OP_NS}.cephfs.csi.ceph.com-ctrlplugin" \
+            -l "app=rook-ceph.cephfs.csi.ceph.com-ctrlplugin" \
             -o jsonpath='{.items[0].metadata.name}')
         POD_NS="$OP_NS"
         CONTAINER="csi-cephfsplugin"
@@ -300,6 +288,18 @@ runs:
         set -ex
         kubectl -n ${{ inputs.cluster-ns }} scale deployment rook-ceph-osd-0 --replicas 0
         kubectl rook-ceph ${NS_OPT} rook purge-osd 0 --force
+
+    - name: Mon restore
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      run: |
+        set -ex
+        # test the mon restore to restore to mon a, delete mons b and c, then add d and e
+        kubectl rook-ceph ${NS_OPT} mons restore-quorum a
+        kubectl -n ${{ inputs.cluster-ns }} wait pod -l app=rook-ceph-mon-b --for=delete --timeout=90s
+        kubectl -n ${{ inputs.cluster-ns }} wait pod -l app=rook-ceph-mon-c --for=delete --timeout=90s
+        tests/github-action-helper.sh wait_for_three_mons ${{ inputs.cluster-ns }}
+        kubectl -n ${{ inputs.cluster-ns }} wait deployment rook-ceph-mon-d --for condition=Available=True --timeout=90s
+        kubectl -n ${{ inputs.cluster-ns }} wait deployment rook-ceph-mon-e --for condition=Available=True --timeout=90s
 
     - name: Restore CRD without CRName
       shell: bash --noprofile --norc -eo pipefail -x {0}

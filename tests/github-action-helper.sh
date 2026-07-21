@@ -205,16 +205,10 @@ deploy_csi_drivers() {
 
     # Deploy RBD storage class
     download_and_modify_yaml "https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/rbd/storageclass-test.yaml" "storageclass-rbd.yaml" "$operator_ns" "$cluster_ns"
-    if [[ "$operator_ns" != "$DEFAULT_OPERATOR_NS" ]]; then
-        sed -i "s|provisioner: rook-ceph.rbd.csi.ceph.com|provisioner: ${operator_ns}.rbd.csi.ceph.com|g" storageclass-rbd.yaml
-    fi
     apply_yaml "storageclass-rbd.yaml"
 
     # Deploy CephFS storage class
     download_and_modify_yaml "https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/storageclass.yaml" "storageclass-cephfs.yaml" "$operator_ns" "$cluster_ns"
-    if [[ "$operator_ns" != "$DEFAULT_OPERATOR_NS" ]]; then
-        sed -i "s|provisioner: rook-ceph.cephfs.csi.ceph.com|provisioner: ${operator_ns}.cephfs.csi.ceph.com|g" storageclass-cephfs.yaml
-    fi
     apply_yaml "storageclass-cephfs.yaml"
 
     wait_for_csi_drivers "$operator_ns"
@@ -295,9 +289,6 @@ create_sc_with_retain_policy() {
     download_and_modify_yaml "https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/storageclass.yaml" "storageclass-retain.yaml" "$operator_ns" "$cluster_ns"
     sed -i "s|name: rook-cephfs|name: rook-cephfs-retain|g" storageclass-retain.yaml
     sed -i "s|reclaimPolicy: Delete|reclaimPolicy: Retain|g" storageclass-retain.yaml
-    if [[ "$operator_ns" != "$DEFAULT_OPERATOR_NS" ]]; then
-        sed -i "s|provisioner: rook-ceph.cephfs.csi.ceph.com|provisioner: ${operator_ns}.cephfs.csi.ceph.com|g" storageclass-retain.yaml
-    fi
     apply_yaml "storageclass-retain.yaml"
 }
 
@@ -328,9 +319,6 @@ create_cephfs_snapshot() {
     download_and_modify_yaml "https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/snapshotclass.yaml" "snapshotclass-retain.yaml" "$operator_ns" "$cluster_ns"
     sed -i "s|name: csi-cephfsplugin-snapclass|name: csi-cephfsplugin-snapclass-retain|g" snapshotclass-retain.yaml
     sed -i "s|deletionPolicy: Delete|deletionPolicy: Retain|g" snapshotclass-retain.yaml
-    if [[ "$operator_ns" != "$DEFAULT_OPERATOR_NS" ]]; then
-        sed -i "s|driver: rook-ceph.cephfs.csi.ceph.com|driver: ${operator_ns}.cephfs.csi.ceph.com|g" snapshotclass-retain.yaml
-    fi
     apply_yaml "snapshotclass-retain.yaml"
 
     download_file "https://raw.githubusercontent.com/rook/rook/master/deploy/examples/csi/cephfs/pvc.yaml" "pvc-snap.yaml"
@@ -392,8 +380,7 @@ EOF
     # provisioner relies on the kubelet ConfigMap sync delay (~1-2 min)
     # plus external-provisioner exponential backoff (max 5 min), causing
     # PVC binding to stall for ~8 minutes in custom-namespace CI.
-    # The deployment name is "<operator_ns>.cephfs.csi.ceph.com-ctrlplugin".
-    local cephfs_deploy="${operator_ns}.cephfs.csi.ceph.com-ctrlplugin"
+    local cephfs_deploy="rook-ceph.cephfs.csi.ceph.com-ctrlplugin"
     kubectl rollout restart deployment "${cephfs_deploy}" -n "${operator_ns}"
     kubectl rollout status deployment "${cephfs_deploy}" \
         -n "${operator_ns}" --timeout=120s
@@ -417,10 +404,6 @@ EOF
         "storageclass-${svg}.yaml"
     sed -i "s|reclaimPolicy: Delete|reclaimPolicy: Retain|g" \
         "storageclass-${svg}.yaml"
-    if [[ "$operator_ns" != "$DEFAULT_OPERATOR_NS" ]]; then
-        sed -i "s|provisioner: rook-ceph.cephfs.csi.ceph.com|provisioner: ${operator_ns}.cephfs.csi.ceph.com|g" \
-            "storageclass-${svg}.yaml"
-    fi
     kubectl create -f "storageclass-${svg}.yaml"
 
     # 4. Create PVC to provision a subvolume in the SVG
@@ -538,8 +521,8 @@ wait_for_deployment_to_be_running() {
 # Wait for RBD and CephFS CSI controller plugins deployed by ceph-csi-operator.
 wait_for_csi_drivers() {
     local operator_ns="${1:-$DEFAULT_OPERATOR_NS}"
-    local rbd_deploy="${operator_ns}.rbd.csi.ceph.com-ctrlplugin"
-    local cephfs_deploy="${operator_ns}.cephfs.csi.ceph.com-ctrlplugin"
+    local rbd_deploy="rook-ceph.rbd.csi.ceph.com-ctrlplugin"
+    local cephfs_deploy="rook-ceph.cephfs.csi.ceph.com-ctrlplugin"
 
     wait_for_deployment_to_be_running "$rbd_deploy" "$operator_ns"
     wait_for_deployment_to_be_running "$cephfs_deploy" "$operator_ns"
