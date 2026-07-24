@@ -107,6 +107,15 @@ func Health(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespa
 		}},
 	}
 
+	if isOpenShiftCluster(ctx, clientsets.Dynamic) {
+		checks = append(checks, struct {
+			name string
+			run  func() CheckResult
+		}{CheckNetworkMTUConfig, func() CheckResult {
+			return checkNetworkMTUConfig(ctx, clientsets.Dynamic)
+		}})
+	}
+
 	for _, c := range checks {
 		logging.Plain("Checking %s...", c.name)
 		results = append(results, c.run())
