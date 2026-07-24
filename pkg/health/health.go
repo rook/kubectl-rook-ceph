@@ -89,6 +89,9 @@ func Health(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespa
 		{CheckMGRStatus, func() CheckResult {
 			return checkMGRStatus(ctx, clientsets.Kube, clusterNamespace)
 		}},
+		{CheckNetworkMTUConfig, func() CheckResult {
+			return checkNetworkMTUConfig(ctx, clientsets, clusterNamespace)
+		}},
 	}
 
 	for _, c := range checks {
