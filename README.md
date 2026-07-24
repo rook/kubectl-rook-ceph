@@ -65,7 +65,7 @@ These are args currently supported:
 - `mons` : Print mon endpoints
   - `restore-quorum <mon-name>` : Restore the mon quorum based on a single healthy mon since quorum was lost with the other mons
 
-- `health` : check health of the cluster and common configuration issues
+- `health` : [Check health of the cluster and common configuration issues](docs/health.md)
 
 - `operator`
   - `restart` : Restart the Rook-Ceph operator

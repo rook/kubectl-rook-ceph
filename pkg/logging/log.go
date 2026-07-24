@@ -23,6 +23,13 @@ import (
 	"github.com/fatih/color"
 )
 
+func Plain(output string, args ...interface{}) {
+	if output != "" {
+		fmt.Fprintf(os.Stderr, output, args...)
+	}
+	fmt.Fprintf(os.Stderr, "\n")
+}
+
 func Info(output string, args ...interface{}) {
 	blue := color.New(color.FgBlue).SprintFunc()
 	if output != "" {
