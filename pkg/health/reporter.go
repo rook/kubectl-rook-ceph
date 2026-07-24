@@ -118,12 +118,15 @@ func printCheckResult(r CheckResult, verbose bool) {
 	}
 
 	if verbose && len(r.Items) > 0 {
+		logging.Plain("\tItems:")
 		for _, item := range r.Items {
 			label := item.Name
 			if item.Namespace != "" {
 				label = path.Join(item.Namespace, item.Name)
 			}
-			if item.Node != "" {
+			if item.Details != "" {
+				logging.Plain("\t\t- %s: %s", label, item.Details)
+			} else if item.Node != "" {
 				logging.Plain("\t\t- %s -> %s (%s)", label, item.Node, item.Status)
 			} else {
 				logging.Plain("\t\t- %s (%s)", label, item.Status)

@@ -38,6 +38,7 @@ const (
 	CheckAllPodsStatus     = "Pods Status"
 	CheckPGStatus          = "PG Status"
 	CheckMGRStatus         = "MGR Status"
+	CheckNetworkMTUConfig  = "Network MTU Config"
 )
 
 // CheckResult represents the outcome of a single health check.

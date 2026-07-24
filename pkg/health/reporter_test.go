@@ -343,5 +343,45 @@ func TestPrintCheckResultVerboseTrueShowsItems(t *testing.T) {
 		printCheckResult(result, true)
 	})
 
+	assert.Contains(t, output, "Items:")
 	assert.Contains(t, output, "mon-a -> node1 (Running)")
+}
+
+func TestPrintCheckResultItemWithDetails(t *testing.T) {
+	result := CheckResult{
+		Name:    "Network MTU Config",
+		Status:  StatusOK,
+		Message: "Network MTU 9000 consistent",
+		Items: []CheckItem{
+			{Name: "default/public-net", Details: "role=public, MTU 9000"},
+			{Name: "default/private-net", Details: "role=cluster, MTU not specified, inherits from host NIC ens224"},
+		},
+	}
+
+	output := captureOutput(t, func() {
+		printCheckResult(result, true)
+	})
+
+	assert.Contains(t, output, "Items:")
+	assert.Contains(t, output, "default/public-net: role=public, MTU 9000")
+	assert.Contains(t, output, "default/private-net: role=cluster, MTU not specified, inherits from host NIC ens224")
+}
+
+func TestPrintCheckResultItemWithDetailsHiddenInNonVerbose(t *testing.T) {
+	result := CheckResult{
+		Name:    "Network MTU Config",
+		Status:  StatusOK,
+		Message: "Network MTU 9000 consistent",
+		Items: []CheckItem{
+			{Name: "default/public-net", Details: "role=public, MTU 9000"},
+		},
+	}
+
+	output := captureOutput(t, func() {
+		printCheckResult(result, false)
+	})
+
+	assert.Contains(t, output, "Network MTU Config")
+	assert.NotContains(t, output, "Items:")
+	assert.NotContains(t, output, "default/public-net")
 }
