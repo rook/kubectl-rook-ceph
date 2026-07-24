@@ -32,9 +32,18 @@ Any other PG state is flagged as a warning or critical issue.
 ```bash
 kubectl rook-ceph health
 kubectl rook-ceph health --verbose
+kubectl rook-ceph health -o json
+kubectl rook-ceph health -o yaml
 ```
 
 Use `--verbose` to include individual resource details (e.g., pod names, nodes) for each check.
+
+Use `-o`/`--output` to change the output format. Supported values: `text` (default), `json`, `yaml`. JSON and YAML output is printed to stdout so it can be captured separately from progress logs (which go to stderr):
+
+```bash
+kubectl rook-ceph health -o json > report.json
+kubectl rook-ceph health -o json 2>/dev/null | jq .
+```
 
 ## Example Output
 

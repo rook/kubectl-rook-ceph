@@ -61,7 +61,7 @@ type PgStateEntry struct {
 	Count     int    `json:"count"`
 }
 
-func Health(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string, verbose bool) {
+func Health(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string, verbose bool, outputFormat string) {
 	var results []CheckResult
 
 	logging.Plain("Checking Ceph status...")
@@ -96,7 +96,7 @@ func Health(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespa
 		results = append(results, c.run())
 	}
 
-	printReport(clusterNamespace, results, verbose)
+	formatReport(clusterNamespace, results, outputFormat, verbose)
 }
 
 func checkMonDistribution(ctx context.Context, k8sclientset kubernetes.Interface, clusterNamespace string, status cephStatus, statusErr error) CheckResult {
