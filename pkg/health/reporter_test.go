@@ -17,6 +17,7 @@ limitations under the License.
 package health
 
 import (
+	"encoding/json"
 	"io"
 	"os"
 	"strings"
@@ -24,6 +25,8 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
+	"gopkg.in/yaml.v3"
 )
 
 // captureOutput redirects os.Stderr to a pipe, runs fn, and returns what was printed.
@@ -344,4 +347,191 @@ func TestPrintCheckResultVerboseTrueShowsItems(t *testing.T) {
 	})
 
 	assert.Contains(t, output, "mon-a -> node1 (Running)")
+}
+
+func captureStdout(t *testing.T, fn func()) string {
+	t.Helper()
+
+	old := os.Stdout
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatalf("failed to create pipe: %v", err)
+	}
+	os.Stdout = w
+
+	var out []byte
+	done := make(chan struct{})
+	go func() {
+		out, _ = io.ReadAll(r)
+		close(done)
+	}()
+
+	fn()
+	_ = w.Close()
+	<-done
+	_ = r.Close()
+	os.Stdout = old
+
+	return string(out)
+}
+
+func TestCheckStatusMarshalJSON(t *testing.T) {
+	tests := []struct {
+		status   CheckStatus
+		expected string
+	}{
+		{StatusOK, `"ok"`},
+		{StatusWarning, `"warning"`},
+		{StatusCritical, `"critical"`},
+		{StatusError, `"error"`},
+	}
+	for _, tt := range tests {
+		data, err := json.Marshal(tt.status)
+		require.NoError(t, err)
+		assert.Equal(t, tt.expected, string(data))
+	}
+}
+
+func TestCheckStatusUnmarshalJSON(t *testing.T) {
+	tests := []struct {
+		input    string
+		expected CheckStatus
+	}{
+		{`"ok"`, StatusOK},
+		{`"warning"`, StatusWarning},
+		{`"critical"`, StatusCritical},
+		{`"error"`, StatusError},
+	}
+	for _, tt := range tests {
+		var s CheckStatus
+		err := json.Unmarshal([]byte(tt.input), &s)
+		require.NoError(t, err)
+		assert.Equal(t, tt.expected, s)
+	}
+}
+
+func TestCheckStatusUnmarshalJSONInvalid(t *testing.T) {
+	var s CheckStatus
+	err := json.Unmarshal([]byte(`"bogus"`), &s)
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "unknown status")
+}
+
+func TestFormatReportJSON(t *testing.T) {
+	results := []CheckResult{
+		{
+			Name:     "Ceph Cluster Health",
+			Category: "Storage",
+			Status:   StatusOK,
+			Message:  "HEALTH_OK",
+		},
+		{
+			Name:     "Mon Distribution",
+			Category: "K8s Resources",
+			Status:   StatusWarning,
+			Message:  "2 mons on 2 nodes",
+			Details:  []string{"2/3 mons in quorum"},
+			Items: []CheckItem{
+				{Name: "mon-a", Status: "Running", Node: "node1"},
+				{Name: "mon-b", Status: "Running", Node: "node2"},
+			},
+		},
+	}
+
+	stdout := captureStdout(t, func() {
+		formatReport("rook-ceph", results, "json", false)
+	})
+
+	var report HealthReport
+	err := json.Unmarshal([]byte(stdout), &report)
+	require.NoError(t, err)
+
+	assert.Equal(t, "rook-ceph", report.Namespace)
+	assert.False(t, report.Timestamp.IsZero())
+	require.Len(t, report.Checks, 2)
+
+	assert.Equal(t, "Ceph Cluster Health", report.Checks[0].Name)
+	assert.Equal(t, StatusOK, report.Checks[0].Status)
+	assert.Empty(t, report.Checks[0].Details)
+
+	assert.Equal(t, "Mon Distribution", report.Checks[1].Name)
+	assert.Equal(t, StatusWarning, report.Checks[1].Status)
+	assert.Equal(t, []string{"2/3 mons in quorum"}, report.Checks[1].Details)
+	require.Len(t, report.Checks[1].Items, 2)
+	assert.Equal(t, "mon-a", report.Checks[1].Items[0].Name)
+	assert.Equal(t, "node1", report.Checks[1].Items[0].Node)
+
+	assert.Equal(t, 2, report.Summary.Total)
+	assert.Equal(t, 1, report.Summary.OK)
+	assert.Equal(t, 1, report.Summary.Warning)
+	assert.Equal(t, 0, report.Summary.Critical)
+	assert.Equal(t, 0, report.Summary.Error)
+}
+
+func TestFormatReportJSONStatusAsString(t *testing.T) {
+	results := []CheckResult{
+		{Name: "Test", Category: "Storage", Status: StatusWarning, Message: "warn"},
+	}
+
+	stdout := captureStdout(t, func() {
+		formatReport("ns", results, "json", false)
+	})
+
+	assert.Contains(t, stdout, `"status": "warning"`)
+	assert.NotContains(t, stdout, `"status": 1`)
+}
+
+func TestFormatReportJSONOmitsEmptyFields(t *testing.T) {
+	results := []CheckResult{
+		{Name: "Test", Category: "Storage", Status: StatusOK, Message: "ok"},
+	}
+
+	stdout := captureStdout(t, func() {
+		formatReport("ns", results, "json", false)
+	})
+
+	assert.NotContains(t, stdout, `"details"`)
+	assert.NotContains(t, stdout, `"items"`)
+}
+
+func TestFormatReportYAML(t *testing.T) {
+	results := []CheckResult{
+		{
+			Name:     "PG Status",
+			Category: "Storage",
+			Status:   StatusOK,
+			Message:  "128 PGs healthy",
+			Details:  []string{"active+clean: 128"},
+		},
+	}
+
+	stdout := captureStdout(t, func() {
+		formatReport("rook-ceph", results, "yaml", false)
+	})
+
+	var report HealthReport
+	err := yaml.Unmarshal([]byte(stdout), &report)
+	require.NoError(t, err)
+
+	assert.Equal(t, "rook-ceph", report.Namespace)
+	require.Len(t, report.Checks, 1)
+	assert.Equal(t, "PG Status", report.Checks[0].Name)
+	assert.Equal(t, StatusOK, report.Checks[0].Status)
+	assert.Equal(t, 1, report.Summary.Total)
+	assert.Equal(t, 1, report.Summary.OK)
+}
+
+func TestFormatReportTextFallback(t *testing.T) {
+	results := []CheckResult{
+		{Name: "Test", Category: "Storage", Status: StatusOK, Message: "ok"},
+	}
+
+	stderr := captureOutput(t, func() {
+		stdout := captureStdout(t, func() {
+			formatReport("ns", results, "text", false)
+		})
+		assert.Empty(t, stdout)
+	})
+
+	assert.Contains(t, stderr, "CLUSTER HEALTH REPORT")
 }
