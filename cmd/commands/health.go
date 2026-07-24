@@ -21,7 +21,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-var healthVerbose bool
+var (
+	healthVerbose bool
+	healthOutput  string
+)
 
 var Health = &cobra.Command{
 	Use:   "health",
@@ -31,10 +34,11 @@ var Health = &cobra.Command{
 		verifyOperatorPodIsRunning(cmd.Context(), clientSets)
 	},
 	Run: func(cmd *cobra.Command, _ []string) {
-		health.Health(cmd.Context(), clientSets, operatorNamespace, cephClusterNamespace, healthVerbose)
+		health.Health(cmd.Context(), clientSets, operatorNamespace, cephClusterNamespace, healthVerbose, healthOutput)
 	},
 }
 
 func init() {
 	Health.Flags().BoolVar(&healthVerbose, "verbose", false, "shows detailed check for pods")
+	Health.Flags().StringVarP(&healthOutput, "output", "o", "text", "output format: text, json, yaml")
 }
