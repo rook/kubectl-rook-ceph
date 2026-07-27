@@ -61,7 +61,7 @@ type PgStateEntry struct {
 	Count     int    `json:"count"`
 }
 
-func Health(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string, verbose bool) {
+func Health(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string, verbose bool, nodeSelector string) {
 	var results []CheckResult
 
 	logging.Plain("Checking Ceph status...")
@@ -88,6 +88,9 @@ func Health(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespa
 		}},
 		{CheckMGRStatus, func() CheckResult {
 			return checkMGRStatus(ctx, clientsets.Kube, clusterNamespace)
+		}},
+		{CheckNodeResourcePressure, func() CheckResult {
+			return checkNodeResourcePressure(ctx, clientsets.Kube, nodeSelector)
 		}},
 	}
 
