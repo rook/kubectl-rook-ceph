@@ -39,6 +39,7 @@ const (
 	CheckPGStatus             = "PG Status"
 	CheckMGRStatus            = "MGR Status"
 	CheckNodeResourcePressure = "Node Resource Pressure"
+	CheckClusterCapacity      = "Cluster Capacity"
 )
 
 // CheckResult represents the outcome of a single health check.

@@ -17,6 +17,7 @@ limitations under the License.
 package health
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -50,6 +51,63 @@ func TestWorseStatus(t *testing.T) {
 			assert.Equal(t, tt.expected, worseStatus(tt.a, tt.b))
 		})
 	}
+}
+
+func TestCheckCephClusterHealth(t *testing.T) {
+	t.Run("HEALTH_OK no details", func(t *testing.T) {
+		status := cephStatus{Health: healthStatus{Status: "HEALTH_OK"}}
+		result := checkCephClusterHealth(status, nil)
+		assert.Equal(t, StatusOK, result.Status)
+		assert.Equal(t, "HEALTH_OK", result.Message)
+		assert.Empty(t, result.Details)
+	})
+
+	t.Run("HEALTH_WARN with checks", func(t *testing.T) {
+		status := cephStatus{Health: healthStatus{
+			Status: "HEALTH_WARN",
+			Checks: map[string]healthCheckEntry{
+				"TOO_FEW_OSDS": {
+					Severity: "HEALTH_WARN",
+					Summary:  healthCheckSummary{Message: "OSD count 1 < osd_pool_default_size 3"},
+				},
+			},
+		}}
+		result := checkCephClusterHealth(status, nil)
+		assert.Equal(t, StatusWarning, result.Status)
+		assert.Len(t, result.Details, 1)
+		assert.Contains(t, result.Details[0], "[WARN]")
+		assert.Contains(t, result.Details[0], "TOO_FEW_OSDS")
+		assert.Contains(t, result.Details[0], "OSD count 1")
+	})
+
+	t.Run("HEALTH_ERR with checks", func(t *testing.T) {
+		status := cephStatus{Health: healthStatus{
+			Status: "HEALTH_ERR",
+			Checks: map[string]healthCheckEntry{
+				"OSD_DOWN": {
+					Severity: "HEALTH_ERR",
+					Summary:  healthCheckSummary{Message: "1 osds down"},
+				},
+				"PG_DEGRADED": {
+					Severity: "HEALTH_WARN",
+					Summary:  healthCheckSummary{Message: "Degraded data redundancy: 10 pgs degraded"},
+				},
+			},
+		}}
+		result := checkCephClusterHealth(status, nil)
+		assert.Equal(t, StatusCritical, result.Status)
+		assert.Len(t, result.Details, 2)
+
+		joined := fmt.Sprintf("%v", result.Details)
+		assert.Contains(t, joined, "[ERR] OSD_DOWN: 1 osds down")
+		assert.Contains(t, joined, "[WARN] PG_DEGRADED: Degraded data redundancy")
+	})
+
+	t.Run("error fetching status", func(t *testing.T) {
+		result := checkCephClusterHealth(cephStatus{}, fmt.Errorf("connection refused"))
+		assert.Equal(t, StatusError, result.Status)
+		assert.Contains(t, result.Message, "connection refused")
+	})
 }
 
 func TestEvaluateMonQuorum(t *testing.T) {
