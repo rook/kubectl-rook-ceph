@@ -32,12 +32,13 @@ const (
 	CategoryNetwork       = "Network"
 	CategoryObjectStorage = "Object Storage"
 
-	CheckMonDistribution   = "Mon Distribution"
-	CheckCephClusterHealth = "Ceph Cluster Health"
-	CheckOSDDistribution   = "OSD Distribution"
-	CheckAllPodsStatus     = "Pods Status"
-	CheckPGStatus          = "PG Status"
-	CheckMGRStatus         = "MGR Status"
+	CheckMonDistribution      = "Mon Distribution"
+	CheckCephClusterHealth    = "Ceph Cluster Health"
+	CheckOSDDistribution      = "OSD Distribution"
+	CheckAllPodsStatus        = "Pods Status"
+	CheckPGStatus             = "PG Status"
+	CheckMGRStatus            = "MGR Status"
+	CheckNodeResourcePressure = "Node Resource Pressure"
 )
 
 // CheckResult represents the outcome of a single health check.

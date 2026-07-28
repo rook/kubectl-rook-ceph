@@ -31,7 +31,7 @@ var Health = &cobra.Command{
 		verifyOperatorPodIsRunning(cmd.Context(), clientSets)
 	},
 	Run: func(cmd *cobra.Command, _ []string) {
-		health.Health(cmd.Context(), clientSets, operatorNamespace, cephClusterNamespace, healthVerbose)
+		health.Health(cmd.Context(), clientSets, operatorNamespace, cephClusterNamespace, healthVerbose, "")
 	},
 }
 
