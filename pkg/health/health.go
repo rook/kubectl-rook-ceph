@@ -49,7 +49,17 @@ type monEntry struct {
 }
 
 type healthStatus struct {
-	Status string `json:"status"`
+	Status string                      `json:"status"`
+	Checks map[string]healthCheckEntry `json:"checks"`
+}
+
+type healthCheckEntry struct {
+	Severity string             `json:"severity"`
+	Summary  healthCheckSummary `json:"summary"`
+}
+
+type healthCheckSummary struct {
+	Message string `json:"message"`
 }
 
 type pgMap struct {
@@ -91,6 +101,9 @@ func Health(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespa
 		}},
 		{CheckNodeResourcePressure, func() CheckResult {
 			return checkNodeResourcePressure(ctx, clientsets.Kube, nodeSelector)
+		}},
+		{CheckClusterCapacity, func() CheckResult {
+			return checkClusterCapacity(ctx, clientsets, operatorNamespace, clusterNamespace, cephStatus, cephStatusErr)
 		}},
 	}
 
@@ -201,6 +214,14 @@ func checkCephClusterHealth(status cephStatus, statusErr error) CheckResult {
 	default:
 		result.Status = StatusError
 		result.Message = fmt.Sprintf("Unexpected health status: %s", status.Health.Status)
+	}
+
+	for code, check := range status.Health.Checks {
+		tag := "[WARN]"
+		if check.Severity == "HEALTH_ERR" {
+			tag = "[ERR]"
+		}
+		result.Details = append(result.Details, fmt.Sprintf("%s %s: %s", tag, code, check.Summary.Message))
 	}
 
 	return result
