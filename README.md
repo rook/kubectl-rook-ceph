@@ -70,6 +70,7 @@ These are args currently supported:
 - `operator`
   - `restart` : Restart the Rook-Ceph operator
   - `set <property> <value>` : Set the property in the rook-ceph-operator-config configmap.
+  - `logs [-f] [--tail <lines>] [-p] [--since <duration>] [--timestamps]` : Print or stream the logs of the Rook operator pod
 
 - `rook`
   - `version`     : Print the version of Rook
@@ -114,6 +115,7 @@ Visit docs below for complete details about each command and their flags uses.
 1. [Get cluster health status](docs/health.md)
 1. [Update configmap rook-ceph-operator-config](docs/operator.md#set)
 1. [Restart operator pod](docs/operator.md#restart)
+1. [Get operator logs](docs/operator.md#logs)
 1. [Get rook version](docs/rook.md#version)
 1. [Get all CR status](docs/rook.md#status-all)
 1. [Get cephCluster CR status](docs/rook.md#status)
