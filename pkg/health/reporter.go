@@ -18,7 +18,9 @@ package health
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
+	"os"
 	"path"
 	"sort"
 	"strings"
@@ -27,6 +29,7 @@ import (
 
 	"github.com/fatih/color"
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
+	"gopkg.in/yaml.v3"
 )
 
 var categoryOrder = []string{CategoryStorage, CategoryK8sResources, CategoryNetwork, CategoryObjectStorage}
@@ -226,4 +229,41 @@ func groupByCategory(results []CheckResult) map[string][]CheckResult {
 		grouped[r.Category] = append(grouped[r.Category], r)
 	}
 	return grouped
+}
+
+func formatReport(clusterNamespace string, results []CheckResult, format string, verbose bool) {
+	switch format {
+	case "json":
+		report := buildReport(clusterNamespace, results)
+		data, err := json.MarshalIndent(report, "", "  ")
+		if err != nil {
+			logging.Fatal(fmt.Errorf("failed to marshal JSON report: %v", err))
+		}
+		fmt.Fprintln(os.Stdout, string(data))
+	case "yaml":
+		report := buildReport(clusterNamespace, results)
+		data, err := yaml.Marshal(report)
+		if err != nil {
+			logging.Fatal(fmt.Errorf("failed to marshal YAML report: %v", err))
+		}
+		fmt.Fprint(os.Stdout, string(data))
+	default:
+		printReport(clusterNamespace, results, verbose)
+	}
+}
+
+func buildReport(clusterNamespace string, results []CheckResult) HealthReport {
+	ok, warning, critical, errCount := countByStatus(results)
+	return HealthReport{
+		Namespace: clusterNamespace,
+		Timestamp: time.Now().UTC(),
+		Checks:    results,
+		Summary: ReportSummary{
+			Total:    len(results),
+			OK:       ok,
+			Warning:  warning,
+			Critical: critical,
+			Error:    errCount,
+		},
+	}
 }
