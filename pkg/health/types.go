@@ -95,6 +95,7 @@ const (
 	CheckNodeResourcePressure = "Node Resource Pressure"
 	CheckClusterCapacity      = "Cluster Capacity"
 	CheckNetworkMTUConfig     = "Network MTU Config"
+	CheckNooBaaHealth         = "NooBaa Health"
 )
 
 // CheckResult represents the outcome of a single health check.
