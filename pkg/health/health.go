@@ -121,6 +121,10 @@ func Health(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespa
 		results = append(results, c.run())
 	}
 
+	if noobaaResult := checkNooBaaHealth(ctx, clientsets.Dynamic, clientsets.Kube, clusterNamespace); noobaaResult.Name != "" {
+		results = append(results, noobaaResult)
+	}
+
 	formatReport(clusterNamespace, results, outputFormat, verbose)
 }
 
