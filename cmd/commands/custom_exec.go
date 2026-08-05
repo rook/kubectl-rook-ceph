@@ -19,9 +19,22 @@ package command
 import (
 	"fmt"
 
+	"github.com/rook/kubectl-rook-ceph/pkg/exec"
 	"github.com/rook/kubectl-rook-ceph/pkg/filesystem"
+	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 	"github.com/spf13/cobra"
 )
+
+var ToolboxCmd = &cobra.Command{
+	Use:   "toolbox",
+	Short: "Open an interactive shell in the Rook Ceph toolbox pod",
+	Args:  cobra.NoArgs,
+	Run: func(cmd *cobra.Command, _ []string) {
+		if err := exec.RunToolboxShell(cmd.Context(), clientSets, cephClusterNamespace); err != nil {
+			logging.Fatal(err)
+		}
+	},
+}
 
 func addCustomExecFlags(cmd *cobra.Command) {
 	cmd.PersistentFlags().String("pod-name", "", "Pod to execute commands in")
