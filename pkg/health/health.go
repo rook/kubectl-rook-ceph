@@ -71,7 +71,7 @@ type PgStateEntry struct {
 	Count     int    `json:"count"`
 }
 
-func Health(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string, verbose bool, nodeSelector, outputFormat string) {
+func Health(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string, verbose bool, nodeSelector, outputFormat string, customChecks []HealthChecker) {
 	var results []CheckResult
 
 	logging.Plain("Checking Ceph status...")
@@ -119,6 +119,11 @@ func Health(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespa
 	for _, c := range checks {
 		logging.Plain("Checking %s...", c.name)
 		results = append(results, c.run())
+	}
+
+	for _, checker := range customChecks {
+		logging.Plain("Checking %s...", checker.Name())
+		results = append(results, checker.Check())
 	}
 
 	formatReport(clusterNamespace, results, outputFormat, verbose)
