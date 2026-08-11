@@ -36,5 +36,5 @@ var FsTopCmd = &cobra.Command{
 }
 
 func fsTopArgs(args []string, namespace string) []string {
-	return append(args, "--id=admin", "--conffile=/var/lib/rook/"+namespace+"/"+namespace+".config")
+	return append(args, "--id=admin", "--conf=/var/lib/rook/"+namespace+"/"+namespace+".config")
 }

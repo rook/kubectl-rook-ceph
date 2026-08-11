@@ -22,6 +22,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
 
@@ -194,9 +195,14 @@ func execCmdInPod(ctx context.Context, clientsets *k8sutil.Clientsets,
 
 	if tty {
 		stdinFD := int(os.Stdin.Fd())
-		if !term.IsTerminal(stdinFD) {
-			return fmt.Errorf("stdin is not a terminal")
+		stdoutFD := int(os.Stdout.Fd())
+		if !term.IsTerminal(stdinFD) || !term.IsTerminal(stdoutFD) {
+			return fmt.Errorf("interactive mode requires a TTY; avoid stdin/stdout redirection")
 		}
+
+		sizeQueue := newTerminalSizeQueue(stdoutFD)
+		defer sizeQueue.Stop()
+
 		state, err := term.MakeRaw(stdinFD)
 		if err != nil {
 			return fmt.Errorf("failed to set terminal raw mode. %w", err)
@@ -206,10 +212,11 @@ func execCmdInPod(ctx context.Context, clientsets *k8sutil.Clientsets,
 		}()
 
 		err = exec.StreamWithContext(ctx, remotecommand.StreamOptions{
-			Stdin:  os.Stdin,
-			Stdout: os.Stdout,
-			Stderr: os.Stderr,
-			Tty:    true,
+			Stdin:             os.Stdin,
+			Stdout:            os.Stdout,
+			Stderr:            os.Stderr,
+			Tty:               true,
+			TerminalSizeQueue: sizeQueue,
 		})
 	} else if !returnOutput {
 		// Connect this process' std{in,out,err} to the remote shell process.
@@ -230,4 +237,47 @@ func execCmdInPod(ctx context.Context, clientsets *k8sutil.Clientsets,
 		return fmt.Errorf("failed to run command. %w", err)
 	}
 	return nil
+}
+
+type terminalSizeQueue struct {
+	fd          int
+	width       int
+	height      int
+	initialized bool
+	stop        chan struct{}
+}
+
+func newTerminalSizeQueue(fd int) *terminalSizeQueue {
+	return &terminalSizeQueue{
+		fd:   fd,
+		stop: make(chan struct{}),
+	}
+}
+
+func (q *terminalSizeQueue) Next() *remotecommand.TerminalSize {
+	ticker := time.NewTicker(250 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
+		width, height, err := term.GetSize(q.fd)
+		if err != nil {
+			return nil
+		}
+		if !q.initialized || width != q.width || height != q.height {
+			q.width = width
+			q.height = height
+			q.initialized = true
+			return &remotecommand.TerminalSize{Width: uint16(width), Height: uint16(height)}
+		}
+
+		select {
+		case <-q.stop:
+			return nil
+		case <-ticker.C:
+		}
+	}
+}
+
+func (q *terminalSizeQueue) Stop() {
+	close(q.stop)
 }
