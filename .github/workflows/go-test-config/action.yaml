@@ -262,13 +262,19 @@ runs:
         kubectl rook-ceph ${NS_OPT} rook status all
         kubectl rook-ceph ${NS_OPT} rook status cephobjectstores
 
-    - name: Print operator logs
+    - name: Print logs
       shell: bash --noprofile --norc -eo pipefail -x {0}
       run: |
         set -ex
-        kubectl rook-ceph ${NS_OPT} operator logs --tail 20
-        kubectl rook-ceph ${NS_OPT} operator logs --tail 5 --timestamps
-        kubectl rook-ceph ${NS_OPT} operator logs --since 5m --tail 5
+        kubectl rook-ceph ${NS_OPT} logs operator --tail 20
+        kubectl rook-ceph ${NS_OPT} logs operator --tail 5 --timestamps
+        kubectl rook-ceph ${NS_OPT} logs operator --since 5m --tail 5
+        kubectl rook-ceph ${NS_OPT} logs mon --tail 5
+        kubectl rook-ceph ${NS_OPT} logs mon.a --tail 5
+        kubectl rook-ceph ${NS_OPT} logs -l app=rook-ceph-mon --tail 5
+        kubectl rook-ceph ${NS_OPT} logs mon --all-containers --tail 5
+        kubectl rook-ceph ${NS_OPT} __complete logs "" | grep -q '^operator'
+        kubectl rook-ceph ${NS_OPT} __complete logs "mon." | grep -q '^mon\.'
 
     - name: Restart operator pod
       shell: bash --noprofile --norc -eo pipefail -x {0}
