@@ -24,6 +24,7 @@ import (
 	"os"
 
 	"github.com/rook/kubectl-rook-ceph/pkg/k8sutil"
+	"golang.org/x/term"
 
 	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -83,6 +84,74 @@ func RunCommandInToolboxPod(ctx context.Context, clientsets *k8sutil.Clientsets,
 
 	fmt.Println(stderr.String())
 	return stdout.String(), nil
+}
+
+type terminalSizeQueue struct {
+	size *remotecommand.TerminalSize
+}
+
+func (q *terminalSizeQueue) Next() *remotecommand.TerminalSize {
+	size := q.size
+	q.size = nil
+	return size
+}
+
+func RunToolboxShell(ctx context.Context, clientsets *k8sutil.Clientsets, clusterNamespace string) error {
+	pod, err := k8sutil.WaitForPodToRun(ctx, clientsets.Kube, clusterNamespace, "app=rook-ceph-tools")
+	if err != nil {
+		return fmt.Errorf("failed to wait for toolbox pod to run. %w", err)
+	}
+
+	stdin := int(os.Stdin.Fd())
+	if !term.IsTerminal(stdin) {
+		return fmt.Errorf("stdin is not a terminal")
+	}
+
+	terminalState, err := term.MakeRaw(stdin)
+	if err != nil {
+		return fmt.Errorf("failed to configure terminal. %w", err)
+	}
+	defer func() {
+		_ = term.Restore(stdin, terminalState)
+	}()
+
+	width, height, err := term.GetSize(stdin)
+	if err != nil {
+		return fmt.Errorf("failed to get terminal size. %w", err)
+	}
+
+	req := clientsets.Kube.CoreV1().RESTClient().
+		Post().
+		Namespace(pod.Namespace).
+		Resource("pods").
+		Name(pod.Name).
+		SubResource("exec").
+		VersionedParams(&v1.PodExecOptions{
+			Container: "rook-ceph-tools",
+			Command:   []string{"/bin/bash"},
+			Stdin:     true,
+			Stdout:    true,
+			TTY:       true,
+		}, scheme.ParameterCodec)
+
+	executor, err := remotecommand.NewSPDYExecutor(clientsets.KubeConfig, "POST", req.URL())
+	if err != nil {
+		return fmt.Errorf("failed to create SPDYExecutor. %w", err)
+	}
+
+	err = executor.StreamWithContext(ctx, remotecommand.StreamOptions{
+		Stdin:  os.Stdin,
+		Stdout: os.Stdout,
+		Tty:    true,
+		TerminalSizeQueue: &terminalSizeQueue{size: &remotecommand.TerminalSize{
+			Width:  uint16(width),
+			Height: uint16(height),
+		}},
+	})
+	if err != nil {
+		return fmt.Errorf("failed to open toolbox shell. %w", err)
+	}
+	return nil
 }
 
 func RunCommandInLabeledPod(ctx context.Context, clientsets *k8sutil.Clientsets, label, container, cmd string, args []string, clusterNamespace string, returnOutput bool) (string, error) {

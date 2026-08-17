@@ -16,13 +16,20 @@ limitations under the License.
 package main
 
 import (
+	"context"
+	"os/signal"
+	"syscall"
+
 	command "github.com/rook/kubectl-rook-ceph/cmd/commands"
 	"github.com/rook/kubectl-rook-ceph/pkg/logging"
 )
 
 func main() {
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
 	addcommands()
-	err := command.RootCmd.Execute()
+	err := command.RootCmd.ExecuteContext(ctx)
 	if err != nil {
 		logging.Fatal(err)
 	}
@@ -46,5 +53,6 @@ func addcommands() {
 		command.RadosgwCmd,
 		command.MultusCmd,
 		command.CephFSSnapshotCmd,
+		command.ToolboxCmd,
 	)
 }
