@@ -34,6 +34,7 @@ func addcommands() {
 		command.MonCmd,
 		command.RbdCmd,
 		command.OperatorCmd,
+		command.LogsCmd,
 		command.RookCmd,
 		command.MaintenanceCmd,
 		command.Health,

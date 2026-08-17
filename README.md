@@ -67,10 +67,14 @@ These are args currently supported:
 
 - `health` : [Check health of the cluster and common configuration issues](docs/health.md)
 
+- `logs [target] [-f] [-l <selector>] [-c <container>] [--tail <lines>] [-p] [--since <duration>] [--timestamps]` : [Print or stream the logs of Rook-Ceph pods](docs/logs.md)
+  - `logs operator` : Print the logs of the Rook operator pod
+  - `logs mon.a` : Print the logs of a single Ceph daemon
+  - `logs osd -f` : Stream the logs of every OSD, across restarts
+
 - `operator`
   - `restart` : Restart the Rook-Ceph operator
   - `set <property> <value>` : Set the property in the rook-ceph-operator-config configmap.
-  - `logs [-f] [--tail <lines>] [-p] [--since <duration>] [--timestamps]` : Print or stream the logs of the Rook operator pod
 
 - `rook`
   - `version`     : Print the version of Rook
@@ -115,12 +119,12 @@ Visit docs below for complete details about each command and their flags uses.
 1. [Get cluster health status](docs/health.md)
 1. [Update configmap rook-ceph-operator-config](docs/operator.md#set)
 1. [Restart operator pod](docs/operator.md#restart)
-1. [Get operator logs](docs/operator.md#logs)
+1. [Get pod logs](docs/logs.md)
 1. [Get rook version](docs/rook.md#version)
 1. [Get all CR status](docs/rook.md#status-all)
 1. [Get cephCluster CR status](docs/rook.md#status)
 1. [Get specific CR status](docs/rook.md#status-cr-name)
-1. [To purge OSD](docs/rook.md#operator.md)
+1. [To purge OSD](docs/rook.md#purge-osds)
 1. [Perform maintenance for OSDs and Mons](docs/maintenance.md)
 1. [Restore mon quorum](docs/mons.md#restore-quorum)
 1. [Disaster Recovery](docs/dr-health.md)
