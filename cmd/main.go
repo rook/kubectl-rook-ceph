@@ -31,6 +31,7 @@ func main() {
 func addcommands() {
 	command.RootCmd.AddCommand(
 		command.CephCmd,
+		command.FsTopCmd,
 		command.MonCmd,
 		command.RbdCmd,
 		command.OperatorCmd,
