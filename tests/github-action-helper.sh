@@ -53,6 +53,7 @@ DEFAULT_TIMEOUT=600
 # Tool versions
 CRICTL_VERSION="v1.31.1"
 MINIKUBE_VERSION="v1.35.0"
+CRI_DOCKERD_VERSION="v0.3.15"
 CNI_PLUGIN_VERSION="v1.6.0"
 EXTERNAL_SNAPSHOTTER_VERSION="8.2.0"
 
@@ -546,21 +547,22 @@ install_minikube_with_none_driver() {
 
     # Install minikube
     echo "Installing minikube $MINIKUBE_VERSION..."
-    if ! curl -LO "https://storage.googleapis.com/minikube/releases/$MINIKUBE_VERSION/minikube_latest_amd64.deb"; then
-        echo "Failed to download minikube package" >&2
+    if ! curl -LO "https://storage.googleapis.com/minikube/releases/$MINIKUBE_VERSION/minikube-linux-amd64"; then
+        echo "Failed to download minikube binary" >&2
         return 1
     fi
-    sudo dpkg -i minikube_latest_amd64.deb
-    rm -f minikube_latest_amd64.deb
+    sudo install minikube-linux-amd64 /usr/local/bin/minikube
+    rm -f minikube-linux-amd64
 
     # Install container runtime interface
-    echo "Installing cri-dockerd..."
-    if ! curl -LO "https://github.com/Mirantis/cri-dockerd/releases/download/v0.3.15/cri-dockerd_0.3.15.3-0.ubuntu-focal_amd64.deb"; then
+    local cri_dockerd_ver="${CRI_DOCKERD_VERSION#v}"
+    echo "Installing cri-dockerd $CRI_DOCKERD_VERSION..."
+    if ! curl -LO "https://github.com/Mirantis/cri-dockerd/releases/download/${CRI_DOCKERD_VERSION}/cri-dockerd_${cri_dockerd_ver}.3-0.ubuntu-focal_amd64.deb"; then
         echo "Failed to download cri-dockerd" >&2
         return 1
     fi
-    sudo dpkg -i "cri-dockerd_0.3.15.3-0.ubuntu-focal_amd64.deb"
-    rm -f "cri-dockerd_0.3.15.3-0.ubuntu-focal_amd64.deb"
+    sudo dpkg -i "cri-dockerd_${cri_dockerd_ver}.3-0.ubuntu-focal_amd64.deb"
+    rm -f "cri-dockerd_${cri_dockerd_ver}.3-0.ubuntu-focal_amd64.deb"
 
 
     # Install crictl (container runtime CLI)
@@ -592,13 +594,17 @@ install_minikube_with_none_driver() {
     # Start minikube cluster
     echo "Starting minikube cluster..."
     export MINIKUBE_HOME=$HOME CHANGE_MINIKUBE_NONE_USER=true KUBECONFIG=$HOME/.kube/config
-    minikube start \
+    if ! minikube start \
         --kubernetes-version="$kubernetes_version" \
         --driver=none \
+        --container-runtime=docker \
         --memory 6g \
         --cpus=2 \
         --addons ingress \
-        --cni=calico
+        --cni=calico; then
+        echo "ERROR: minikube start failed" >&2
+        return 1
+    fi
 
     echo "Minikube installation completed successfully!"
 }
