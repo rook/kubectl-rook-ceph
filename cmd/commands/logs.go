@@ -17,6 +17,7 @@ limitations under the License.
 package command
 
 import (
+	"context"
 	"fmt"
 	"maps"
 	"math"
@@ -32,6 +33,8 @@ import (
 	"github.com/spf13/cobra"
 
 	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
 )
 
 type logFlags struct {
@@ -88,7 +91,8 @@ namespace named explicitly with --namespace.`,
   kubectl rook-ceph logs osd -f
   kubectl rook-ceph logs osd.0 -c activate
   kubectl rook-ceph logs -n rook-ceph -l "app=rook-ceph.cephfs.csi.ceph.com-ctrlplugin"`,
-	Args: cobra.MaximumNArgs(1),
+	Args:              cobra.MaximumNArgs(1),
+	ValidArgsFunction: completeLogTarget,
 	PreRunE: func(_ *cobra.Command, args []string) error {
 		if err := logs.validate(); err != nil {
 			return err
@@ -213,6 +217,103 @@ func resolveLogTarget(target, selector, operatorNamespace, clusterNamespace stri
 
 func isCephDaemonType(daemonType string) bool {
 	return slices.Contains(cephDaemonTypes, daemonType)
+}
+
+// completionTimeout bounds the cluster lookup a completion makes, so that an unreachable cluster
+// costs the shell a moment rather than hanging on the tab key.
+const completionTimeout = 2 * time.Second
+
+// completeLogTarget completes the positional target. The named components and daemon types are known
+// without asking the cluster; an id is completed from the daemons that actually exist, once the
+// daemon type has been typed.
+func completeLogTarget(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	if len(args) > 0 || logs.selector != "" {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	daemonType, _, hasID := strings.Cut(toComplete, ".")
+	if !hasID {
+		return logTargetCompletions(), cobra.ShellCompDirectiveNoFileComp
+	}
+	if !isCephDaemonType(daemonType) {
+		return nil, cobra.ShellCompDirectiveNoFileComp
+	}
+
+	ctx, cancel := context.WithTimeout(cmd.Context(), completionTimeout)
+	defer cancel()
+
+	return cephDaemonCompletions(ctx, completionKubeClient(), completionNamespace(), daemonType), cobra.ShellCompDirectiveNoFileComp
+}
+
+// completionNamespace resolves the namespace to complete daemons from. It cannot read
+// cephClusterNamespace: a completion request reaches PersistentPreRun before cobra has parsed the
+// command line, so the global still holds the default when --namespace was given.
+func completionNamespace() string {
+	if namespace, _, err := clientConfig.Namespace(); err == nil && namespace != "" {
+		return namespace
+	}
+
+	return cephClusterNamespace
+}
+
+// completionKubeClient builds the client a completion needs, which the setup a completion skips
+// would otherwise have built. It reports no error: a tab that cannot reach the cluster completes
+// nothing rather than printing a failure into the user's prompt. It is a variable so that tests can
+// reach the daemon lookup without a kubeconfig.
+var completionKubeClient = func() kubernetes.Interface {
+	config, err := clientConfig.ClientConfig()
+	if err != nil {
+		return nil
+	}
+	client, err := kubernetes.NewForConfig(config)
+	if err != nil {
+		return nil
+	}
+
+	return client
+}
+
+// logTargetCompletions is the vocabulary a target may start with, as cobra "value\tdescription" pairs.
+func logTargetCompletions() []string {
+	completions := make([]string, 0, len(logTargetAliases)+len(cephDaemonTypes))
+	for _, name := range slices.Sorted(maps.Keys(logTargetAliases)) {
+		completions = append(completions, fmt.Sprintf("%s\t%s", name, logTargetAliases[name].description))
+	}
+	for _, daemonType := range cephDaemonTypes {
+		completions = append(completions, fmt.Sprintf("%[1]s\tevery %[1]s, or %[1]s.<id> for one of them", daemonType))
+	}
+
+	return completions
+}
+
+// cephDaemonCompletions lists the daemons of one type as whole targets rather than bare ids, since
+// the shell replaces the word being completed and not just the text after the dot.
+func cephDaemonCompletions(ctx context.Context, k8sclientset kubernetes.Interface, namespace, daemonType string) []string {
+	if k8sclientset == nil {
+		return nil
+	}
+
+	pods, err := k8sclientset.CoreV1().Pods(namespace).List(ctx, metav1.ListOptions{
+		LabelSelector: fmt.Sprintf("ceph_daemon_type=%s", daemonType),
+	})
+	if err != nil {
+		// a completion has nowhere to report an error, so an unreachable cluster simply completes nothing
+		return nil
+	}
+
+	seen := make(map[string]bool, len(pods.Items))
+	completions := make([]string, 0, len(pods.Items))
+	for _, pod := range pods.Items {
+		id := pod.Labels["ceph_daemon_id"]
+		if id == "" || seen[id] {
+			continue
+		}
+		seen[id] = true
+		completions = append(completions, fmt.Sprintf("%s.%s", daemonType, id))
+	}
+	slices.Sort(completions)
+
+	return completions
 }
 
 func logTargetHelp() string {

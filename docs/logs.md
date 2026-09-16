@@ -174,6 +174,48 @@ Read what a daemon logged before it crashed:
 kubectl rook-ceph logs osd.3 -p
 ```
 
+## Completing targets
+
+Targets complete with the tab key. `logs <TAB>` offers the named components and the daemon types,
+which are known without asking the cluster, and `logs osd.<TAB>` completes the OSDs that exist,
+which is read from the cluster. The cluster lookup gives up after two seconds and completes nothing
+rather than making the shell wait; a kubeconfig that authenticates with a credential plugin runs
+that helper on every completion, which is not covered by those two seconds.
+
+To complete `kubectl rook-ceph ...`, kubectl needs to know the plugin can complete for itself. Put
+an executable named `kubectl_complete-rook_ceph` on `PATH` containing:
+
+```bash
+#!/usr/bin/env sh
+exec kubectl rook-ceph __complete "$@"
+```
+
+Going back through `kubectl` rather than naming the binary is deliberate: krew installs the plugin
+as `kubectl-rook_ceph`, so the binary's name depends on how it was installed while `kubectl
+rook-ceph` does not.
+
+To complete the binary when it is run directly instead, load the script it generates for the shell
+being used. The script registers a command named `rook-ceph`, so a binary installed under any other
+name has to be bound to it.
+
+In bash:
+
+```bash
+source <(kubectl-rook-ceph completion bash)
+complete -o default -o nospace -F __start_rook-ceph kubectl-rook-ceph
+```
+
+In zsh:
+
+```zsh
+source <(kubectl-rook-ceph completion zsh)
+compdef _rook-ceph kubectl-rook-ceph
+```
+
+The generated scripts are shell-specific, and the shell named in the command has to be the shell
+sourcing it: the bash script uses bash-only syntax such as `type -t`, which a zsh sourcing it
+reports as `bad option: -t`.
+
 ## Pods the targets do not reach
 
 The `toolbox` target selects `app=rook-ceph-tools`, which comes from Rook's example toolbox

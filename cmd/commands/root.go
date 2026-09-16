@@ -37,6 +37,10 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
+// completionCommandName is the name cobra gives the command that prints a shell completion script.
+// Cobra does not export it.
+const completionCommandName = "completion"
+
 var (
 	operatorNamespace    string
 	cephClusterNamespace string
@@ -62,9 +66,30 @@ var RootCmd = &cobra.Command{
 		if cephClusterNamespace != "" && operatorNamespace == "" {
 			operatorNamespace = cephClusterNamespace
 		}
+
+		// A shell completion runs on the user's tab key, so it neither waits for a cluster nor fails
+		// when there is none. The completions that do read the cluster build their own client.
+		if isCompletionRequest(cmd) {
+			return
+		}
+
 		clientSets = getClientsets(cmd.Context())
 		preValidationCheck(cmd.Context(), clientSets)
 	},
+}
+
+// isCompletionRequest reports whether the command being run is about shell completion rather than
+// about the cluster: cobra's hidden helper, which the shell invokes on every tab, or the visible
+// command that prints a completion script, which belongs in a shell's startup file.
+func isCompletionRequest(cmd *cobra.Command) bool {
+	for c := cmd; c != nil; c = c.Parent() {
+		// __completeNoDesc is an alias of the same command, so Name() reports __complete for both
+		if c.Name() == cobra.ShellCompRequestCmd || c.Name() == completionCommandName {
+			return true
+		}
+	}
+
+	return false
 }
 
 func init() {
