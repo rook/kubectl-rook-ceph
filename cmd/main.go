@@ -55,5 +55,6 @@ func addcommands() {
 		command.MultusCmd,
 		command.CephFSSnapshotCmd,
 		command.ExecCmd,
+		command.PreflightCmd,
 	)
 }

@@ -256,7 +256,7 @@ func TestPrintReportErrorsOnUnknownCategories(t *testing.T) {
 	}
 
 	output := captureOutput(t, func() {
-		printReport("test-ns", results, true)
+		printReport("CLUSTER HEALTH REPORT", "test-ns", results, true)
 	})
 
 	assert.Contains(t, output, "Storage")
@@ -275,7 +275,7 @@ func TestPrintReportFullOutput(t *testing.T) {
 	}
 
 	output := captureOutput(t, func() {
-		printReport("rook-ceph", results, true)
+		printReport("CLUSTER HEALTH REPORT", "rook-ceph", results, true)
 	})
 
 	assert.Contains(t, output, "CLUSTER HEALTH REPORT")
