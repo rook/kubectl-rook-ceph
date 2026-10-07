@@ -34,8 +34,8 @@ import (
 
 var categoryOrder = []string{CategoryStorage, CategoryK8sResources, CategoryNetwork, CategoryObjectStorage}
 
-func printReport(clusterNamespace string, results []CheckResult, verbose bool) {
-	printHeader(clusterNamespace)
+func printReport(title, clusterNamespace string, results []CheckResult, verbose bool) {
+	printHeader(title, clusterNamespace)
 
 	grouped := groupByCategory(results)
 	for _, category := range categoryOrder {
@@ -51,10 +51,10 @@ func printReport(clusterNamespace string, results []CheckResult, verbose bool) {
 	printSummary(results)
 }
 
-func printHeader(clusterNamespace string) {
+func printHeader(title, clusterNamespace string) {
 	logging.Plain("")
 	logging.Plain("%s", separator())
-	logging.Plain("CLUSTER HEALTH REPORT")
+	logging.Plain("%s", title)
 	logging.Plain("%s", separator())
 	printAligned(
 		fmt.Sprintf("Generated:\t%s", time.Now().UTC().Format("2006-01-02 15:04:05 UTC")),
@@ -235,6 +235,11 @@ func groupByCategory(results []CheckResult) map[string][]CheckResult {
 }
 
 func formatReport(clusterNamespace string, results []CheckResult, format string, verbose bool) {
+	FormatReport("CLUSTER HEALTH REPORT", clusterNamespace, results, format, verbose)
+}
+
+// FormatReport prints check results as a text report with the given title, or as JSON or YAML.
+func FormatReport(title, clusterNamespace string, results []CheckResult, format string, verbose bool) {
 	switch format {
 	case "json":
 		report := buildReport(clusterNamespace, results)
@@ -251,7 +256,7 @@ func formatReport(clusterNamespace string, results []CheckResult, format string,
 		}
 		fmt.Fprint(os.Stdout, string(data))
 	default:
-		printReport(clusterNamespace, results, verbose)
+		printReport(title, clusterNamespace, results, verbose)
 	}
 }
 

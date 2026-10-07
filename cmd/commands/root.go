@@ -52,19 +52,24 @@ var RootCmd = &cobra.Command{
 	Args:             cobra.MinimumNArgs(1),
 	TraverseChildren: true,
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
-		// Get the effective namespace from client config
-		effectiveNamespace, _, err := clientConfig.Namespace()
-		if err != nil {
-			logging.Fatal(err)
-		}
-		cephClusterNamespace = effectiveNamespace
-
-		if cephClusterNamespace != "" && operatorNamespace == "" {
-			operatorNamespace = cephClusterNamespace
-		}
-		clientSets = getClientsets(cmd.Context())
+		setupClients(cmd.Context())
 		preValidationCheck(cmd.Context(), clientSets)
 	},
+}
+
+// setupClients resolves the namespaces and creates the clientsets.
+func setupClients(ctx context.Context) {
+	// Get the effective namespace from client config
+	effectiveNamespace, _, err := clientConfig.Namespace()
+	if err != nil {
+		logging.Fatal(err)
+	}
+	cephClusterNamespace = effectiveNamespace
+
+	if cephClusterNamespace != "" && operatorNamespace == "" {
+		operatorNamespace = cephClusterNamespace
+	}
+	clientSets = getClientsets(ctx)
 }
 
 func init() {
