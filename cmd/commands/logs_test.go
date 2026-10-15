@@ -17,11 +17,18 @@ limitations under the License.
 package command
 
 import (
+	"context"
 	"testing"
 	"time"
 
+	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+
+	corev1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/kubernetes/fake"
 )
 
 func Test_resolveLogTarget(t *testing.T) {
@@ -165,6 +172,152 @@ func Test_isCephDaemonType(t *testing.T) {
 func TestCephDaemonTypesAreSorted(t *testing.T) {
 	// the list is rendered into the unknown-target error, which should read predictably
 	assert.IsIncreasing(t, cephDaemonTypes)
+}
+
+func Test_logTargetCompletions(t *testing.T) {
+	completions := logTargetCompletions()
+
+	// every target the command accepts is offered, and cobra shows the text after the tab as the
+	// description
+	for name := range logTargetAliases {
+		assert.Contains(t, completions, name+"\t"+logTargetAliases[name].description)
+	}
+	for _, daemonType := range cephDaemonTypes {
+		assert.Contains(t, completions, daemonType+"\tevery "+daemonType+", or "+daemonType+".<id> for one of them")
+	}
+	assert.Len(t, completions, len(logTargetAliases)+len(cephDaemonTypes))
+}
+
+func Test_completeLogTarget(t *testing.T) {
+	daemonPod := &corev1.Pod{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      "rook-ceph-osd-0-abc",
+			Namespace: "rook-ceph",
+			Labels:    map[string]string{"ceph_daemon_type": "osd", "ceph_daemon_id": "0"},
+		},
+	}
+
+	restoreClient := completionKubeClient
+	completionKubeClient = func() kubernetes.Interface { return fake.NewSimpleClientset(daemonPod) }
+	defer func() { completionKubeClient = restoreClient }()
+
+	restoreFlags := logs
+	defer func() { logs = restoreFlags }()
+
+	cmd := &cobra.Command{}
+	cmd.SetContext(context.TODO())
+
+	t.Run("a bare word offers the whole vocabulary", func(t *testing.T) {
+		logs = logFlags{}
+
+		completions, directive := completeLogTarget(cmd, nil, "")
+		assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
+		assert.Equal(t, logTargetCompletions(), completions)
+	})
+
+	t.Run("a daemon type and a dot offers the daemons that exist", func(t *testing.T) {
+		logs = logFlags{}
+
+		completions, directive := completeLogTarget(cmd, nil, "osd.")
+		assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
+		assert.Equal(t, []string{"osd.0"}, completions)
+	})
+
+	t.Run("an unknown daemon type offers nothing", func(t *testing.T) {
+		logs = logFlags{}
+
+		completions, directive := completeLogTarget(cmd, nil, "nosuchdaemon.")
+		assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
+		assert.Empty(t, completions)
+	})
+
+	t.Run("a target is already given, so a second one completes nothing", func(t *testing.T) {
+		logs = logFlags{}
+
+		completions, directive := completeLogTarget(cmd, []string{"mon.a"}, "")
+		assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
+		assert.Empty(t, completions)
+	})
+
+	t.Run("a selector excludes a target, so nothing completes", func(t *testing.T) {
+		logs = logFlags{selector: "app=rook-ceph-mon"}
+
+		completions, directive := completeLogTarget(cmd, nil, "")
+		assert.Equal(t, cobra.ShellCompDirectiveNoFileComp, directive)
+		assert.Empty(t, completions)
+	})
+}
+
+func Test_isCompletionRequest(t *testing.T) {
+	root := &cobra.Command{Use: "rook-ceph"}
+	logsCmd := &cobra.Command{Use: "logs"}
+	root.AddCommand(logsCmd)
+
+	completeCmd := &cobra.Command{Use: cobra.ShellCompRequestCmd, Aliases: []string{cobra.ShellCompNoDescRequestCmd}}
+	root.AddCommand(completeCmd)
+
+	completionCmd := &cobra.Command{Use: completionCommandName}
+	bashCmd := &cobra.Command{Use: "bash"}
+	completionCmd.AddCommand(bashCmd)
+	root.AddCommand(completionCmd)
+
+	// the hidden helper the shell runs on every tab
+	assert.True(t, isCompletionRequest(completeCmd))
+	// and the command that prints the script, which belongs in a shell startup file
+	assert.True(t, isCompletionRequest(completionCmd))
+	assert.True(t, isCompletionRequest(bashCmd), "a shell subcommand of completion must not need a cluster")
+
+	// anything that actually talks to the cluster still runs the usual setup
+	assert.False(t, isCompletionRequest(root))
+	assert.False(t, isCompletionRequest(logsCmd))
+}
+
+func Test_cephDaemonCompletions(t *testing.T) {
+	daemonPod := func(name, daemonType, daemonID string) *corev1.Pod {
+		return &corev1.Pod{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      name,
+				Namespace: "rook-ceph",
+				Labels: map[string]string{
+					"ceph_daemon_type": daemonType,
+					"ceph_daemon_id":   daemonID,
+				},
+			},
+		}
+	}
+
+	ctx := context.TODO()
+
+	t.Run("daemons are completed as whole targets, sorted", func(t *testing.T) {
+		client := fake.NewSimpleClientset(
+			daemonPod("rook-ceph-osd-1-b", "osd", "1"),
+			daemonPod("rook-ceph-osd-0-a", "osd", "0"),
+			daemonPod("rook-ceph-mon-a", "mon", "a"),
+		)
+
+		// bare ids would corrupt the command line, since the shell replaces the whole word
+		assert.Equal(t, []string{"osd.0", "osd.1"}, cephDaemonCompletions(ctx, client, "rook-ceph", "osd"))
+		assert.Equal(t, []string{"mon.a"}, cephDaemonCompletions(ctx, client, "rook-ceph", "mon"))
+	})
+
+	t.Run("a daemon whose pod was replaced is offered once", func(t *testing.T) {
+		client := fake.NewSimpleClientset(
+			daemonPod("rook-ceph-mon-a-old", "mon", "a"),
+			daemonPod("rook-ceph-mon-a-new", "mon", "a"),
+		)
+
+		assert.Equal(t, []string{"mon.a"}, cephDaemonCompletions(ctx, client, "rook-ceph", "mon"))
+	})
+
+	t.Run("no daemons of that type", func(t *testing.T) {
+		client := fake.NewSimpleClientset(daemonPod("rook-ceph-mon-a", "mon", "a"))
+
+		assert.Empty(t, cephDaemonCompletions(ctx, client, "rook-ceph", "rgw"))
+	})
+
+	t.Run("without a reachable cluster a tab completes nothing rather than failing", func(t *testing.T) {
+		assert.Nil(t, cephDaemonCompletions(ctx, nil, "rook-ceph", "osd"))
+	})
 }
 
 func TestLogsCmdFlags(t *testing.T) {
