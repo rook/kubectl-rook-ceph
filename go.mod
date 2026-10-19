@@ -5,7 +5,7 @@ go 1.26.4
 require (
 	github.com/fatih/color v1.19.0
 	github.com/golang/mock v1.6.0
-	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.6.0
+	github.com/kubernetes-csi/external-snapshotter/client/v8 v8.7.0
 	github.com/pkg/errors v0.9.1
 	github.com/rook/rook v1.21.0
 	github.com/rook/rook/pkg/apis v0.0.0-20260707190630-b40e86043ad9
