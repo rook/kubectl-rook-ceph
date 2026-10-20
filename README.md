@@ -69,6 +69,8 @@ These are args currently supported:
 
 - `health` : [Check health of the cluster and common configuration issues](docs/health.md)
 
+- `preflight` : [Check whether the nodes can run a Rook Ceph cluster, before creating it](docs/preflight.md)
+
 - `logs [target] [-f] [-l <selector>] [-c <container>] [--tail <lines>] [-p] [--since <duration>] [--timestamps]` : [Print or stream the logs of Rook-Ceph pods](docs/logs.md)
   - `logs operator` : Print the logs of the Rook operator pod
   - `logs mon.a` : Print the logs of a single Ceph daemon
@@ -119,6 +121,7 @@ Visit docs below for complete details about each command and their flags uses.
 1. [Running rbd commands](docs/rbd.md)
 1. [Get mon endpoints](docs/mons.md#print-mon-endpoints)
 1. [Get cluster health status](docs/health.md)
+1. [Check nodes before creating a cluster](docs/preflight.md)
 1. [Update configmap rook-ceph-operator-config](docs/operator.md#set)
 1. [Restart operator pod](docs/operator.md#restart)
 1. [Get pod logs](docs/logs.md)
