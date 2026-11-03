@@ -327,7 +327,8 @@ func TestPrintCheckResultVerboseFalseHidesItems(t *testing.T) {
 
 	assert.Contains(t, output, "Mon Distribution")
 	assert.Contains(t, output, "3 mon pods on 3 nodes")
-	assert.Contains(t, output, "some detail")
+	assert.NotContains(t, output, "Details:")
+	assert.NotContains(t, output, "some detail")
 	assert.NotContains(t, output, "Items:")
 	assert.NotContains(t, output, "mon-a")
 }
