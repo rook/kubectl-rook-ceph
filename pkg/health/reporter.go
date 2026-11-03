@@ -113,7 +113,7 @@ func printCheckResult(r CheckResult, verbose bool) {
 	logging.Plain("%s %s [%s]", icon, r.Name, label)
 	logging.Plain("\tStatus: %s", r.Message)
 
-	if len(r.Details) > 0 {
+	if verbose && len(r.Details) > 0 {
 		logging.Plain("\tDetails:")
 		for _, d := range r.Details {
 			logging.Plain("\t\t- %s", d)
