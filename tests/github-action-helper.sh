@@ -131,7 +131,6 @@ use_local_disk() {
     # it's the hosted runner!
     sudo sgdisk --zap-all -- "$(block_dev)"
     sudo dd if=/dev/zero of="$(block_dev)" bs=1M count=10 oflag=direct,dsync
-    sudo parted -s "$(block_dev)" mklabel gpt
   fi
   sudo lsblk
 }
