@@ -113,6 +113,10 @@ apply_yaml_from_url() {
     kubectl create -f "$url"
 }
 
+block_dev() {
+  echo "/dev/${BLOCK#/dev/}"
+}
+
 # Source: https://github.com/rook/rook
 use_local_disk() {
   BLOCK_DATA_PART="$(block_dev)1"
