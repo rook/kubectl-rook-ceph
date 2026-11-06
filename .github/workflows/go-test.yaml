@@ -41,9 +41,10 @@ jobs:
 
       - name: consider debugging
         if: failure()
-        uses: mxschmitt/action-tmate@v3
+        uses: owenthereal/action-upterm@v1
         with:
-          limit-access-to-actor: false
+          limit-access-to-actor: true
+          wait-timeout-minutes: 1
 
   custom-namespace:
     runs-on: ubuntu-22.04
@@ -73,6 +74,7 @@ jobs:
 
       - name: consider debugging
         if: failure()
-        uses: mxschmitt/action-tmate@v3
+        uses: owenthereal/action-upterm@v1
         with:
-          limit-access-to-actor: false
+          limit-access-to-actor: true
+          wait-timeout-minutes: 1
