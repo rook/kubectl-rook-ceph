@@ -1,0 +1,24 @@
+name: "Upterm debugging tests"
+description: "Setup upterm session if the test fails"
+inputs:
+  use-upterm:
+    description: "boolean for enabling UPTERM"
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: consider debugging
+      shell: bash --noprofile --norc -eo pipefail -x {0}
+      if: runner.debug || contains(github.event.pull_request.labels.*.name, 'debug-ci')
+      run: |
+        # Enable upterm only in the Rook fork, where the USE_UPTERM secret is set in the repo, or if the action is re-run
+        if [ "$GITHUB_REPOSITORY_OWNER" = "rook" ] || [ -n "${{ inputs.use-upterm }}" ] || [ "$GITHUB_RUN_ATTEMPT" -gt 1 ]; then
+          echo USE_UPTERM=1 >> $GITHUB_ENV
+        fi
+
+    - name: set up upterm session for debugging
+      if: env.USE_UPTERM
+      uses: owenthereal/action-upterm@v1
+      with:
+        limit-access-to-actor: true
+        wait-timeout-minutes: 60
