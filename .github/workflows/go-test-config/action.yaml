@@ -273,6 +273,10 @@ runs:
         kubectl rook-ceph ${NS_OPT} logs mon.a --tail 5
         kubectl rook-ceph ${NS_OPT} logs -l app=rook-ceph-mon --tail 5
         kubectl rook-ceph ${NS_OPT} logs mon --all-containers --tail 5
+        targets=$(kubectl rook-ceph __complete logs ${NS_OPT} "")
+        grep -q '^operator' <<<"${targets}"
+        mons=$(kubectl rook-ceph __complete logs ${NS_OPT} "mon.")
+        grep -q '^mon\.' <<<"${mons}"
 
     - name: Restart operator pod
       shell: bash --noprofile --norc -eo pipefail -x {0}
