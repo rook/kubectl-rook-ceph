@@ -115,6 +115,10 @@ func RestoreCrd(ctx context.Context, k8sclientset *k8sutil.Clientsets, operatorN
 	crdResource.SetUID("")
 	crdResource.SetSelfLink("")
 	crdResource.SetCreationTimestamp(v1.Time{})
+	crdResource.SetOwnerReferences(nil)
+	crdResource.SetDeletionTimestamp(nil)
+	unstructured.RemoveNestedField(crdResource.Object, "metadata", "deletionGracePeriodSeconds")
+	crdResource.SetManagedFields(nil)
 	logging.Info("Re-creating the CR %s from dynamic resource", crd)
 	_, err = k8sclientset.CreateResourcesDynamically(ctx, groupName, versionResource, crd, &crdResource, clusterNamespace)
 	if err != nil {
@@ -254,6 +258,46 @@ func removeOwnerRefOfUID(ctx context.Context, k8sclientset *k8sutil.Clientsets, 
 					logging.Fatal(errors.Wrapf(err, "Failed to update ownerReferences for deployemt %s", deploy.Name))
 				}
 				logging.Info("Removed ownerReference for deployment: %s\n", deploy.Name)
+			}
+		}
+	}
+
+	jobs, err := k8sclientset.Kube.BatchV1().Jobs(clusterNamespace).List(ctx, v1.ListOptions{})
+	if err != nil {
+		logging.Fatal(errors.Wrapf(err, "Failed to list jobs"))
+	}
+
+	for _, job := range jobs.Items {
+		for _, owner := range job.OwnerReferences {
+			if string(owner.UID) == targetUID {
+				logging.Info("Removing owner references for job %s", job.Name)
+				job.OwnerReferences = nil
+
+				_, err := k8sclientset.Kube.BatchV1().Jobs(clusterNamespace).Update(ctx, &job, v1.UpdateOptions{})
+				if err != nil {
+					logging.Fatal(errors.Wrapf(err, "Failed to update ownerReferences for job %s", job.Name))
+				}
+				logging.Info("Removed ownerReference for job: %s\n", job.Name)
+			}
+		}
+	}
+
+	cronJobs, err := k8sclientset.Kube.BatchV1().CronJobs(clusterNamespace).List(ctx, v1.ListOptions{})
+	if err != nil {
+		logging.Fatal(errors.Wrapf(err, "Failed to list cronjobs"))
+	}
+
+	for _, cronJob := range cronJobs.Items {
+		for _, owner := range cronJob.OwnerReferences {
+			if string(owner.UID) == targetUID {
+				logging.Info("Removing owner references for cronjob %s", cronJob.Name)
+				cronJob.OwnerReferences = nil
+
+				_, err := k8sclientset.Kube.BatchV1().CronJobs(clusterNamespace).Update(ctx, &cronJob, v1.UpdateOptions{})
+				if err != nil {
+					logging.Fatal(errors.Wrapf(err, "Failed to update ownerReferences for cronjob %s", cronJob.Name))
+				}
+				logging.Info("Removed ownerReference for cronjob: %s\n", cronJob.Name)
 			}
 		}
 	}
