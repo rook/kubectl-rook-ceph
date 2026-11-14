@@ -24,6 +24,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: consider (pre-job) debugging
+        uses: ./.github/workflows/upterm_debug
+        with:
+          debug-ci: ${{ contains(github.event.pull_request.labels.*.name, 'debug-ci') }}
+
       - name: plugin test
         uses: ./.github/workflows/go-test-config
         with:
@@ -39,12 +44,6 @@ jobs:
           operator-namespace: rook-ceph
           cluster-namespace: rook-ceph
 
-      - name: consider debugging
-        if: failure()
-        uses: mxschmitt/action-tmate@v3
-        with:
-          limit-access-to-actor: false
-
   custom-namespace:
     runs-on: ubuntu-22.04
     timeout-minutes: 90
@@ -55,6 +54,11 @@ jobs:
         uses: actions/checkout@v7
         with:
           fetch-depth: 0
+
+      - name: consider (pre-job) debugging
+        uses: ./.github/workflows/upterm_debug
+        with:
+          debug-ci: ${{ contains(github.event.pull_request.labels.*.name, 'debug-ci') }}
 
       - name: plugin test
         uses: ./.github/workflows/go-test-config
@@ -71,8 +75,3 @@ jobs:
           operator-namespace: test-operator
           cluster-namespace: test-cluster
 
-      - name: consider debugging
-        if: failure()
-        uses: mxschmitt/action-tmate@v3
-        with:
-          limit-access-to-actor: false
