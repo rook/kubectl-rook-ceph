@@ -256,7 +256,7 @@ func TestPrintReportErrorsOnUnknownCategories(t *testing.T) {
 	}
 
 	output := captureOutput(t, func() {
-		printReport("test-ns", results, true)
+		printReport("test-ns", results, true, true)
 	})
 
 	assert.Contains(t, output, "Storage")
@@ -275,7 +275,7 @@ func TestPrintReportFullOutput(t *testing.T) {
 	}
 
 	output := captureOutput(t, func() {
-		printReport("rook-ceph", results, true)
+		printReport("rook-ceph", results, true, true)
 	})
 
 	assert.Contains(t, output, "CLUSTER HEALTH REPORT")
@@ -308,6 +308,22 @@ func TestPrintReportFullOutput(t *testing.T) {
 	summaryIdx := strings.Index(output, "SUMMARY")
 	assert.NotEqual(t, -1, summaryIdx, "SUMMARY not found in output")
 	assert.Greater(t, summaryIdx, computeIdx, "Summary should appear after all categories")
+}
+
+func TestPrintReportSkipsHeaderWhenFalse(t *testing.T) {
+	results := []CheckResult{
+		{Name: "Ceph Cluster Health", Category: "Storage", Status: StatusOK, Message: "HEALTH_OK"},
+	}
+
+	output := captureOutput(t, func() {
+		printReport("rook-ceph", results, false, false)
+	})
+
+	assert.NotContains(t, output, "CLUSTER HEALTH REPORT")
+	assert.NotContains(t, output, "Generated:")
+	assert.NotContains(t, output, "Namespace: rook-ceph")
+	assert.Contains(t, output, "Storage")
+	assert.Contains(t, output, "SUMMARY")
 }
 
 func TestPrintCheckResultVerboseFalseHidesItems(t *testing.T) {
@@ -441,7 +457,7 @@ func TestFormatReportJSON(t *testing.T) {
 	}
 
 	stdout := captureStdout(t, func() {
-		formatReport("rook-ceph", results, "json", false)
+		formatReport("rook-ceph", results, "json", false, true)
 	})
 
 	var report HealthReport
@@ -476,7 +492,7 @@ func TestFormatReportJSONStatusAsString(t *testing.T) {
 	}
 
 	stdout := captureStdout(t, func() {
-		formatReport("ns", results, "json", false)
+		formatReport("ns", results, "json", false, true)
 	})
 
 	assert.Contains(t, stdout, `"status": "warning"`)
@@ -489,7 +505,7 @@ func TestFormatReportJSONOmitsEmptyFields(t *testing.T) {
 	}
 
 	stdout := captureStdout(t, func() {
-		formatReport("ns", results, "json", false)
+		formatReport("ns", results, "json", false, true)
 	})
 
 	assert.NotContains(t, stdout, `"details"`)
@@ -508,7 +524,7 @@ func TestFormatReportYAML(t *testing.T) {
 	}
 
 	stdout := captureStdout(t, func() {
-		formatReport("rook-ceph", results, "yaml", false)
+		formatReport("rook-ceph", results, "yaml", false, true)
 	})
 
 	var report HealthReport
@@ -530,7 +546,7 @@ func TestFormatReportTextFallback(t *testing.T) {
 
 	stderr := captureOutput(t, func() {
 		stdout := captureStdout(t, func() {
-			formatReport("ns", results, "text", false)
+			formatReport("ns", results, "text", false, true)
 		})
 		assert.Empty(t, stdout)
 	})

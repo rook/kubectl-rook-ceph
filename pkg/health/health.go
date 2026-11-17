@@ -71,7 +71,11 @@ type PgStateEntry struct {
 	Count     int    `json:"count"`
 }
 
-func Health(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string, verbose bool, nodeSelector, outputFormat string, customChecks []HealthChecker) {
+// Health runs cluster health checks and prints the report.
+// printHeader controls the CLUSTER HEALTH REPORT title block (title, Generated, Namespace).
+// kubectl rook-ceph health passes true so the title still prints. Callers that print
+// that block themselves pass false.
+func Health(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespace, clusterNamespace string, verbose bool, nodeSelector, outputFormat string, customChecks []HealthChecker, printHeader bool) {
 	var results []CheckResult
 
 	logging.Plain("Checking Ceph status...")
@@ -126,7 +130,7 @@ func Health(ctx context.Context, clientsets *k8sutil.Clientsets, operatorNamespa
 		results = append(results, checker.Check())
 	}
 
-	formatReport(clusterNamespace, results, outputFormat, verbose)
+	formatReport(clusterNamespace, results, outputFormat, verbose, printHeader)
 }
 
 func checkMonDistribution(ctx context.Context, k8sclientset kubernetes.Interface, clusterNamespace string, status cephStatus, statusErr error) CheckResult {

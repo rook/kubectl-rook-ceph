@@ -34,8 +34,10 @@ import (
 
 var categoryOrder = []string{CategoryStorage, CategoryK8sResources, CategoryNetwork, CategoryObjectStorage}
 
-func printReport(clusterNamespace string, results []CheckResult, verbose bool) {
-	printHeader(clusterNamespace)
+func printReport(clusterNamespace string, results []CheckResult, verbose, showHeader bool) {
+	if showHeader {
+		printHeader(clusterNamespace)
+	}
 
 	grouped := groupByCategory(results)
 	for _, category := range categoryOrder {
@@ -234,7 +236,7 @@ func groupByCategory(results []CheckResult) map[string][]CheckResult {
 	return grouped
 }
 
-func formatReport(clusterNamespace string, results []CheckResult, format string, verbose bool) {
+func formatReport(clusterNamespace string, results []CheckResult, format string, verbose, printHeader bool) {
 	switch format {
 	case "json":
 		report := buildReport(clusterNamespace, results)
@@ -251,7 +253,7 @@ func formatReport(clusterNamespace string, results []CheckResult, format string,
 		}
 		fmt.Fprint(os.Stdout, string(data))
 	default:
-		printReport(clusterNamespace, results, verbose)
+		printReport(clusterNamespace, results, verbose, printHeader)
 	}
 }
 
